@@ -10,6 +10,15 @@ export const GEMINI_MODEL_ALIASES = {
     '3.1-pro': 'pro',
 };
 
+export const GEMINI_DEEP_THINK_ALIASES = new Set([
+    'deepthink',
+    'deep-think',
+    'deep_think',
+    'deep think',
+    'gemini-deepthink',
+    'gemini-deep-think',
+]);
+
 const MODE_BUTTONS = [
     'button[data-test-id="bard-mode-menu-button"]',
     'button[aria-label="Open mode picker"]',
@@ -28,7 +37,13 @@ export function normalizeGeminiModelChoice(model) {
     return GEMINI_MODEL_ALIASES[key] || null;
 }
 
+export function isGeminiDeepThinkChoice(model) {
+    const key = String(model || '').trim().toLowerCase();
+    return GEMINI_DEEP_THINK_ALIASES.has(key);
+}
+
 export async function selectGeminiModel(page, model) {
+    if (isGeminiDeepThinkChoice(model)) return null;
     const requested = normalizeGeminiModelChoice(model);
     if (!requested) {
         if (model) throw new Error(`unsupported Gemini model selection: ${model}`);

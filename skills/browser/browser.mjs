@@ -1633,7 +1633,7 @@ try {
       Examples:
         agbrowse web-ai render --vendor chatgpt --prompt "hello" --json
         agbrowse web-ai query --vendor grok --inline-only --prompt "Reply OK"
-        agbrowse web-ai query --vendor gemini --model thinking --inline-only --prompt "Reply OK"
+        agbrowse web-ai query --vendor gemini --model deepthink --inline-only --prompt "Reply OK"
         agbrowse web-ai query --vendor chatgpt --context-from-files "src/**/*.ts" --context-transport upload --prompt "Review this"
 
   Vision click:

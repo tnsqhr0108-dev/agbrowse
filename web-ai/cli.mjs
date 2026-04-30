@@ -22,9 +22,10 @@ Commands:
 Provider options:
   --vendor <name>     chatgpt, gemini, or grok (default: chatgpt)
   --url <url>         Navigate or verify the provider URL before mutation
-  --model <alias>     Provider model alias
+  --model <alias>     Provider model alias; Gemini also accepts deepthink tool alias
                        ChatGPT: instant, thinking, pro
-                       Gemini: fast, thinking, pro
+                       Gemini models: fast, thinking, pro
+                       Gemini tool: deepthink
                        Grok: auto, fast, expert, thinking, beta
   --timeout <sec>     Wait timeout for send/query/poll
 
@@ -58,7 +59,7 @@ Output:
 Examples:
   agbrowse web-ai render --vendor chatgpt --prompt "hello" --json
   agbrowse web-ai query --vendor grok --inline-only --prompt "Reply OK"
-  agbrowse web-ai query --vendor gemini --model thinking --inline-only --prompt "Reply OK"
+  agbrowse web-ai query --vendor gemini --model deepthink --inline-only --prompt "Reply OK"
   agbrowse web-ai query --vendor chatgpt --context-from-files "src/**/*.ts" --context-transport upload --prompt "Review this"
 `;
 
@@ -220,7 +221,7 @@ function isSupportedWebAiModel(vendor, model) {
     const key = String(model || '').trim().toLowerCase();
     const byVendor = {
         chatgpt: new Set(['instant', 'fast', 'gpt-5-3', 'gpt-5.3', 'thinking', 'think', 'gpt-5-5-thinking', 'gpt-5.5-thinking', 'pro', 'gpt-5-5-pro', 'gpt-5.5-pro']),
-        gemini: new Set(['fast', 'flash', 'gemini-fast', 'thinking', 'think', 'gemini-thinking', 'pro', 'gemini-pro', '3.1-pro']),
+        gemini: new Set(['fast', 'flash', 'gemini-fast', 'thinking', 'think', 'gemini-thinking', 'pro', 'gemini-pro', '3.1-pro', 'deepthink', 'deep-think', 'deep_think', 'deep think', 'gemini-deepthink', 'gemini-deep-think']),
         grok: new Set(['auto', 'automatic', 'fast', 'quick', 'expert', 'thinking', 'think', 'grok-4.3', 'grok43', 'grok-43', 'beta', 'heavy']),
     };
     return Boolean(byVendor[String(vendor || 'chatgpt')]?.has(key));

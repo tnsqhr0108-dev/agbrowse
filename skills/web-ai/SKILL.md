@@ -168,8 +168,15 @@ ChatGPT:
 Gemini:
 
 - `fast`, `flash`, `gemini-fast`
-- `thinking`, `think`, `gemini-thinking`
+- `thinking`, `think`, `gemini-thinking` selects the Gemini 3 Flash Thinking model
 - `pro`, `gemini-pro`, `3.1-pro`
+
+Gemini Deep Think tool aliases:
+
+- `deepthink`, `deep-think`, `deep_think`, `deep think`
+
+Gemini `deepthink` activates the visible `Deep think` tool before submitting
+the prompt. It is intentionally separate from the `thinking` model alias.
 
 Grok:
 

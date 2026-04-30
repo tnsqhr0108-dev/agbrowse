@@ -329,7 +329,7 @@ treats `Heavy` as active Pro/Heavy and can select the direct DOM fallback
 agbrowse web-ai query \
   --vendor gemini \
   --url https://gemini.google.com/app \
-  --model fast \
+  --model deepthink \
   --inline-only \
   --prompt "Reply exactly GEMINI_OK"
 ```
@@ -337,8 +337,15 @@ agbrowse web-ai query \
 Model aliases:
 
 - `fast`, `flash`, `gemini-fast`
-- `thinking`, `think`, `gemini-thinking`
+- `thinking`, `think`, `gemini-thinking` selects the Gemini 3 Flash Thinking model
 - `pro`, `gemini-pro`, `3.1-pro`
+
+Tool aliases:
+
+- `deepthink`, `deep-think`, `deep_think`, `deep think`
+
+Gemini `deepthink` activates the visible `Deep think` tool before submitting
+the prompt. It is intentionally separate from the `thinking` model alias.
 
 ### Grok
 

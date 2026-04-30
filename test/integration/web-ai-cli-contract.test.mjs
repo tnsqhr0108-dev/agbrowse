@@ -73,6 +73,10 @@ describe('web-ai CLI contract', () => {
         expect(gemini.stderr).not.toContain('unsupported gemini model selection');
         expect(gemini.code).toBe(0);
 
+        const geminiDeepThink = await execBrowser(['web-ai', 'render', '--vendor', 'gemini', '--prompt', 'hello', '--model', 'deepthink']);
+        expect(geminiDeepThink.stderr).not.toContain('unsupported gemini model selection');
+        expect(geminiDeepThink.code).toBe(0);
+
         const grok = await execBrowser(['web-ai', 'render', '--vendor', 'grok', '--prompt', 'hello', '--model', 'expert']);
         expect(grok.stderr).not.toContain('unsupported grok model selection');
         expect(grok.code).toBe(0);
