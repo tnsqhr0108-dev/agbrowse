@@ -4,12 +4,18 @@ import fg from 'fast-glob';
 import { DEFAULT_EXCLUDES, DEFAULT_MAX_FILE_SIZE_BYTES } from './constants.mjs';
 import { estimateTokens } from './token-estimator.mjs';
 import { languageFromPath } from './renderer.mjs';
+import { WebAiError } from '../errors.mjs';
 
 export async function buildContextPack(input = {}) {
     const cwd = resolve(input.cwd || process.cwd());
     const patterns = await collectPatterns(input);
     if (patterns.include.length === 0) {
-        throw new Error('context files required. Pass --context-from-files or --context-file.');
+        throw new WebAiError({
+            errorCode: 'context.over-budget',
+            stage: 'context-preflight',
+            retryHint: 'reduce-files',
+            message: 'context files required. Pass --context-from-files or --context-file.',
+        });
     }
 
     const exclude = [...DEFAULT_EXCLUDES, ...patterns.exclude, ...(input.contextExclude || [])];
@@ -57,14 +63,32 @@ export async function expandContextPaths(includePatterns = [], excludePatterns =
         const absolute = resolve(cwd, pattern);
         const stat = await fs.lstat(absolute).catch(() => null);
         if (stat) {
-            if (stat.isSymbolicLink()) throw new Error(`context path is a symlink and is not allowed: ${pattern}`);
+            if (stat.isSymbolicLink()) throw new WebAiError({
+                errorCode: 'context.symlink-rejected',
+                stage: 'context-preflight',
+                retryHint: 'path-list',
+                message: `context path is a symlink and is not allowed: ${pattern}`,
+                evidence: { pattern },
+            });
             if (stat.isDirectory()) globs.push(`${toPosix(relative(cwd, absolute))}/**/*`);
             else if (stat.isFile()) literals.push(absolute);
-            else throw new Error(`context path is not a regular file or directory: ${pattern}`);
+            else throw new WebAiError({
+                errorCode: 'context.symlink-rejected',
+                stage: 'context-preflight',
+                retryHint: 'path-list',
+                message: `context path is not a regular file or directory: ${pattern}`,
+                evidence: { pattern },
+            });
             continue;
         }
         if (looksLikeGlob(pattern)) globs.push(pattern);
-        else throw new Error(`context path not found: ${pattern}`);
+        else throw new WebAiError({
+            errorCode: 'context.symlink-rejected',
+            stage: 'context-preflight',
+            retryHint: 'path-list',
+            message: `context path not found: ${pattern}`,
+            evidence: { pattern },
+        });
     }
 
     const globbed = globs.length
@@ -93,7 +117,13 @@ export async function readContextFile(path, cwd = process.cwd(), maxFileSize = D
         return excluded(path, relativePath, 'not-a-regular-file');
     }
     if (stat.size > maxFileSize) {
-        if (strict) throw new Error(`context file exceeds max size: ${relativePath} (${stat.size}/${maxFileSize} bytes)`);
+        if (strict) throw new WebAiError({
+            errorCode: 'context.over-budget',
+            stage: 'context-preflight',
+            retryHint: 'reduce-files',
+            message: `context file exceeds max size: ${relativePath} (${stat.size}/${maxFileSize} bytes)`,
+            evidence: { relativePath, size: stat.size, max: maxFileSize },
+        });
         return excluded(path, relativePath, 'max-file-size-exceeded', stat.size);
     }
 

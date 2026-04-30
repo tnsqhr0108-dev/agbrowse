@@ -1,5 +1,6 @@
 const INLINE_CHAR_LIMIT = 50000;
 import { ATTACHMENT_POLICY, WEB_AI_VENDOR } from './types.mjs';
+import { WebAiError } from './errors.mjs';
 
 export const DEFAULT_RESEARCH_INSTRUCTIONS = 'Use web search whenever possible to verify facts and gather up-to-date information. Cite the sources inline in the response body next to the claims they support (for example: [Source: <url-or-title>]).';
 
@@ -13,15 +14,32 @@ const SUPPORTED_ATTACHMENT_POLICIES = new Set([
 export function normalizeEnvelope(input = {}) {
     const vendor = input.vendor || WEB_AI_VENDOR.CHATGPT;
     if (!SUPPORTED_VENDORS.has(vendor)) {
-        throw new Error(`unsupported vendor: ${vendor}`);
+        throw new WebAiError({
+            errorCode: 'provider.runtime-disabled',
+            stage: 'provider-runtime-gate',
+            retryHint: 'enable-or-skip',
+            message: `unsupported vendor: ${vendor}`,
+            evidence: { vendor },
+        });
     }
 
     const prompt = String(input.prompt || input.question || '').trim();
-    if (!prompt) throw new Error('prompt required');
+    if (!prompt) throw new WebAiError({
+        errorCode: 'context.over-budget',
+        stage: 'context-preflight',
+        retryHint: 'reduce-files',
+        message: 'prompt required',
+    });
 
     const attachmentPolicy = input.attachmentPolicy || ATTACHMENT_POLICY.INLINE_ONLY;
     if (!SUPPORTED_ATTACHMENT_POLICIES.has(attachmentPolicy)) {
-        throw new Error(`unsupported attachment policy: ${attachmentPolicy}`);
+        throw new WebAiError({
+            errorCode: 'provider.attachment-preflight',
+            stage: 'attachment-preflight',
+            retryHint: 'inline-only-or-file',
+            message: `unsupported attachment policy: ${attachmentPolicy}`,
+            evidence: { attachmentPolicy },
+        });
     }
 
     return {
@@ -74,7 +92,13 @@ function renderNormalizedEnvelope(envelope) {
 
     const composerText = blocks.join('\n\n');
     if (composerText.length > INLINE_CHAR_LIMIT) {
-        throw new Error(`inline prompt too large: ${composerText.length}/${INLINE_CHAR_LIMIT} chars`);
+        throw new WebAiError({
+            errorCode: 'context.over-budget',
+            stage: 'context-preflight',
+            retryHint: 'reduce-files',
+            message: `inline prompt too large: ${composerText.length}/${INLINE_CHAR_LIMIT} chars`,
+            evidence: { length: composerText.length, limit: INLINE_CHAR_LIMIT },
+        });
     }
 
     return {

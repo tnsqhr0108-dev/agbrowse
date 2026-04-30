@@ -56,4 +56,31 @@ describe('web-ai question envelope', () => {
     it('supports Grok envelopes', () => {
         expect(normalizeEnvelope({ vendor: 'grok', prompt: 'hello' }).vendor).toBe('grok');
     });
+
+    it('throws WebAiError with provider.runtime-disabled for unsupported vendor', () => {
+        let captured;
+        try { normalizeEnvelope({ vendor: 'claude', prompt: 'x' }); } catch (e) { captured = e; }
+        expect(captured?.errorCode).toBe('provider.runtime-disabled');
+        expect(captured?.stage).toBe('provider-runtime-gate');
+        expect(captured?.retryHint).toBe('enable-or-skip');
+    });
+
+    it('throws WebAiError with context.over-budget for empty prompt and oversize prompt', () => {
+        let emptyErr;
+        try { normalizeEnvelope({ vendor: 'chatgpt', prompt: '   ' }); } catch (e) { emptyErr = e; }
+        expect(emptyErr?.errorCode).toBe('context.over-budget');
+        expect(emptyErr?.stage).toBe('context-preflight');
+
+        let bigErr;
+        try { renderQuestionEnvelope({ prompt: 'x'.repeat(50001) }); } catch (e) { bigErr = e; }
+        expect(bigErr?.errorCode).toBe('context.over-budget');
+        expect(bigErr?.evidence?.length).toBeGreaterThan(50000);
+    });
+
+    it('throws WebAiError with provider.attachment-preflight for unknown attachmentPolicy', () => {
+        let captured;
+        try { normalizeEnvelope({ vendor: 'chatgpt', prompt: 'x', attachmentPolicy: 'future-disabled' }); } catch (e) { captured = e; }
+        expect(captured?.errorCode).toBe('provider.attachment-preflight');
+        expect(captured?.stage).toBe('attachment-preflight');
+    });
 });

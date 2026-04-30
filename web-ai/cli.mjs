@@ -3,7 +3,7 @@ import { renderWebAi, statusWebAi, sendWebAi, pollWebAi, queryWebAi, stopWebAi }
 import { geminiStatusWebAi, geminiSendWebAi, geminiPollWebAi, geminiQueryWebAi, geminiStopWebAi } from './gemini-live.mjs';
 import { grokStatusWebAi, grokSendWebAi, grokPollWebAi, grokQueryWebAi, grokStopWebAi } from './grok-live.mjs';
 import { buildContextPackageResult, prepareContextForBrowser, renderContextDryRunReport } from './context-pack/index.mjs';
-import { wrapError } from './errors.mjs';
+import { WebAiError, wrapError } from './errors.mjs';
 
 const COMMANDS = new Set(['render', 'status', 'send', 'poll', 'query', 'stop', 'context-dry-run', 'context-render']);
 export const WEB_AI_USAGE = `
@@ -134,7 +134,12 @@ async function runWebAiCliInner(argv = [], deps) {
     rejectFutureScope(values);
     const hasContextPackage = Boolean(values['context-file'] || (Array.isArray(values['context-from-files']) && values['context-from-files'].length > 0));
     if (['send', 'query'].includes(command) && !values['inline-only'] && !values.file && !hasContextPackage) {
-        throw new Error('web-ai send/query require --inline-only or --file=<path>');
+        throw new WebAiError({
+            errorCode: 'provider.attachment-preflight',
+            stage: 'attachment-preflight',
+            retryHint: 'inline-only-or-file',
+            message: 'web-ai send/query require --inline-only or --file=<path>',
+        });
     }
 
     const input = {
@@ -239,8 +244,25 @@ async function runCommand(command, deps, input) {
 }
 
 function rejectFutureScope(values) {
-    if (values.vendor && !['chatgpt', 'gemini', 'grok'].includes(values.vendor)) throw new Error(`unsupported vendor: ${values.vendor}`);
-    if (values.model && !isSupportedWebAiModel(values.vendor || 'chatgpt', values.model)) throw new Error(`unsupported ${webAiVendorLabel(values.vendor || 'chatgpt')} model selection: ${values.model}`);
+    if (values.vendor && !['chatgpt', 'gemini', 'grok'].includes(values.vendor)) {
+        throw new WebAiError({
+            errorCode: 'provider.runtime-disabled',
+            stage: 'provider-runtime-gate',
+            retryHint: 'enable-or-skip',
+            message: `unsupported vendor: ${values.vendor}`,
+            evidence: { vendor: values.vendor },
+        });
+    }
+    if (values.model && !isSupportedWebAiModel(values.vendor || 'chatgpt', values.model)) {
+        throw new WebAiError({
+            errorCode: 'provider.model-mismatch',
+            stage: 'provider-select-mode',
+            vendor: values.vendor || 'chatgpt',
+            retryHint: 'model-fallback',
+            message: `unsupported ${webAiVendorLabel(values.vendor || 'chatgpt')} model selection: ${values.model}`,
+            evidence: { model: values.model },
+        });
+    }
 }
 
 function isSupportedWebAiModel(vendor, model) {

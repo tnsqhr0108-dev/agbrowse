@@ -6,6 +6,7 @@ import { prepareContextForBrowser } from './context-pack/index.mjs';
 import { captureCopiedResponseText, GEMINI_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
 import { selectGeminiModel } from './gemini-model.mjs';
 import { preflightAttachment } from './chatgpt-attachments.mjs';
+import { WebAiError } from './errors.mjs';
 
 const GEMINI_HOSTS = new Set(['gemini.google.com']);
 const INPUT_SELECTORS = [
@@ -55,16 +56,33 @@ export async function geminiSendWebAi(deps, input = {}) {
     if (input.url) {
         await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     }
-    if (!isGeminiUrl(page.url())) throw new Error(`active tab is not gemini.google.com (${page.url()})`);
+    if (!isGeminiUrl(page.url())) throw new WebAiError({
+        errorCode: 'cdp.target-mismatch',
+        stage: 'connect',
+        vendor: 'gemini',
+        retryHint: 'tab-switch',
+        message: `active tab is not gemini.google.com (${page.url()})`,
+        evidence: { url: page.url() },
+    });
     const envelope = normalizeEnvelope({ ...input, vendor: 'gemini' });
     const contextPack = await prepareContextForBrowser({ ...input, vendor: 'gemini' });
     if (contextPack?.attachments?.[0] && input.filePath) {
-        throw new Error('context package upload and --file upload cannot be combined yet');
+        throw new WebAiError({
+            errorCode: 'provider.attachment-preflight',
+            stage: 'attachment-preflight',
+            vendor: 'gemini',
+            retryHint: 'inline-only-or-file',
+            message: 'context package upload and --file upload cannot be combined yet',
+        });
     }
     if (envelope.attachmentPolicy !== 'inline-only' && !input.filePath && !contextPack?.attachments?.[0]) {
-        const err = new Error('gemini upload requested without a file or context package attachment');
-        err.stage = 'attachment-preflight';
-        throw err;
+        throw new WebAiError({
+            errorCode: 'provider.attachment-preflight',
+            stage: 'attachment-preflight',
+            vendor: 'gemini',
+            retryHint: 'inline-only-or-file',
+            message: 'gemini upload requested without a file or context package attachment',
+        });
     }
     const rendered = contextPack
         ? contextPack.transport === 'inline'
@@ -76,7 +94,14 @@ export async function geminiSendWebAi(deps, input = {}) {
 
     await openFreshGeminiChat(page, warnings);
     const inputSel = await findFirstSelector(page, INPUT_SELECTORS, 10_000);
-    if (!inputSel) throw new Error('gemini composer not visible');
+    if (!inputSel) throw new WebAiError({
+        errorCode: 'provider.composer-not-visible',
+        stage: 'composer-prereq',
+        vendor: 'gemini',
+        retryHint: 're-snapshot',
+        message: 'gemini composer not visible',
+        selectorsTried: INPUT_SELECTORS,
+    });
 
     const selectedModel = await selectGeminiModel(page, input.model);
     if (selectedModel) {
@@ -85,9 +110,13 @@ export async function geminiSendWebAi(deps, input = {}) {
     } else {
         const deepThinkActivated = await ensureDeepThinkMode(page, usedFallbacks, warnings);
         if (!deepThinkActivated) {
-            const err = new Error(`gemini Deep Think requested but active Deep Think chip was not verified; fail closed before prompt submit. ${warnings.join(' | ')}`);
-            err.stage = 'provider-select-mode';
-            throw err;
+            throw new WebAiError({
+                errorCode: 'provider.model-mismatch',
+                stage: 'provider-select-mode',
+                vendor: 'gemini',
+                retryHint: 'model-fallback',
+                message: `gemini Deep Think requested but active Deep Think chip was not verified; fail closed before prompt submit. ${warnings.join(' | ')}`,
+            });
         }
         warnings.push('deep-think activated');
     }
@@ -110,17 +139,39 @@ export async function geminiSendWebAi(deps, input = {}) {
     const uploadPath = input.filePath || contextPack?.attachments?.[0]?.path;
     if (uploadPath) {
         const uploaded = await attachGeminiLocalFileLive(page, fileInfoFromPath(uploadPath));
-        if (!uploaded.ok) throw new Error(uploaded.error);
+        if (!uploaded.ok) throw new WebAiError({
+            errorCode: 'provider.attachment-evidence-missing',
+            stage: 'attachment-verify',
+            vendor: 'gemini',
+            retryHint: 're-upload',
+            message: uploaded.error,
+            mutationAllowed: true,
+        });
         usedFallbacks.push(...uploaded.usedFallbacks);
         warnings.push(...uploaded.warnings);
     }
 
     const sendSel = await findFirstSelector(page, SEND_SELECTORS, 5_000);
-    if (!sendSel) throw new Error('gemini send button not visible');
+    if (!sendSel) throw new WebAiError({
+        errorCode: 'provider.commit-not-verified',
+        stage: 'commit-verify',
+        vendor: 'gemini',
+        retryHint: 're-snapshot',
+        message: 'gemini send button not visible',
+        selectorsTried: SEND_SELECTORS,
+        mutationAllowed: true,
+    });
     await page.locator(sendSel).first().click({ timeout: 5_000 });
     if (uploadPath) {
         const sentAttachment = await verifyGeminiSentTurnAttachment(page, fileInfoFromPath(uploadPath));
-        if (!sentAttachment.ok) throw new Error(sentAttachment.error);
+        if (!sentAttachment.ok) throw new WebAiError({
+            errorCode: 'provider.attachment-evidence-missing',
+            stage: 'attachment-verify',
+            vendor: 'gemini',
+            retryHint: 're-upload',
+            message: sentAttachment.error,
+            mutationAllowed: true,
+        });
     }
 
     const baseline = saveBaseline({
@@ -230,9 +281,22 @@ function stripExtension(name) {
 
 export async function geminiPollWebAi(deps, input = {}) {
     const page = await deps.getPage();
-    if (!isGeminiUrl(page.url())) throw new Error(`active tab is not gemini.google.com (${page.url()})`);
+    if (!isGeminiUrl(page.url())) throw new WebAiError({
+        errorCode: 'cdp.target-mismatch',
+        stage: 'connect',
+        vendor: 'gemini',
+        retryHint: 'tab-switch',
+        message: `active tab is not gemini.google.com (${page.url()})`,
+        evidence: { url: page.url() },
+    });
     const baseline = getBaseline('gemini', page.url()) || getLatestBaseline('gemini');
-    if (!baseline) throw new Error('baseline required. Run web-ai send --vendor gemini first.');
+    if (!baseline) throw new WebAiError({
+        errorCode: 'provider.poll-timeout',
+        stage: 'poll',
+        vendor: 'gemini',
+        retryHint: 'poll-or-resume',
+        message: 'baseline required. Run web-ai send --vendor gemini first.',
+    });
     const timeout = Math.max(1, Number(input.timeout || input.thinkingTime || 1200)) * 1000;
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
@@ -363,7 +427,14 @@ async function openFreshGeminiChat(page, warnings) {
     const newChatSel = await findFirstSelector(page, NEW_CHAT_SELECTORS, 5_000);
     if (!newChatSel) {
         if ((await countResponses(page)) === 0) return;
-        throw new Error('gemini new chat control not visible');
+        throw new WebAiError({
+            errorCode: 'provider.composer-not-visible',
+            stage: 'composer-prereq',
+            vendor: 'gemini',
+            retryHint: 're-snapshot',
+            message: 'gemini new chat control not visible',
+            selectorsTried: NEW_CHAT_SELECTORS,
+        });
     }
     await page.locator(newChatSel).first().click({ timeout: 5_000 });
     await page.waitForTimeout(1_000).catch(() => undefined);

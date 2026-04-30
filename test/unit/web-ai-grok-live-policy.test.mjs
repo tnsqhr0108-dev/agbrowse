@@ -45,6 +45,18 @@ describe('web-ai grok live policy', () => {
         expect(grokLiveSrc).toMatch(/hasContextPackaging\(input\) && input\.allowGrokContextPack !== true/);
         expect(grokLiveSrc).toMatch(/grok context-pack disabled by default/);
         expect(grokLiveSrc).toMatch(/'grok-context-pack-not-allowed'/);
+        expect(grokLiveSrc).toMatch(/errorCode: 'grok\.context-pack-not-allowed'/);
+        expect(grokLiveSrc).toMatch(/retryHint: 'inline-only-or-allow-flag'/);
+    });
+
+    it('uses WebAiError for every Node-side public throw site', () => {
+        expect(grokLiveSrc).toMatch(/import \{ WebAiError \}/);
+        // The only remaining `throw new Error(` is inside a page.evaluate browser-side callback,
+        // where WebAiError cannot be serialized across the CDP boundary.
+        const browserSideEvaluate = /page\.evaluate\([^]*?if \(!el\) throw new Error/;
+        expect(grokLiveSrc).toMatch(browserSideEvaluate);
+        // Provider preflight, baseline, composer, attachment, and submit throws all use WebAiError.
+        expect(grokLiveSrc.match(/errorCode:/g)?.length || 0).toBeGreaterThanOrEqual(8);
     });
 
     it('only pushes the soft warning when the override flag is set', () => {

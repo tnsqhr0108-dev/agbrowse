@@ -1,5 +1,6 @@
 import { renderQuestionEnvelope, renderQuestionEnvelopeWithContext, normalizeEnvelope } from './question.mjs';
 import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
+import { WebAiError } from './errors.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
     attachLocalFileLive,
@@ -94,12 +95,25 @@ export async function sendWebAi(deps, input = {}) {
     let usedFallbacks = [];
     const contextAttachmentPath = contextPack?.attachments?.[0]?.path;
     if (contextAttachmentPath && input.filePath) {
-        throw new Error('context package upload and --file upload cannot be combined yet');
+        throw new WebAiError({
+            errorCode: 'provider.attachment-preflight',
+            stage: 'attachment-preflight',
+            vendor: 'chatgpt',
+            retryHint: 'inline-only-or-file',
+            message: 'context package upload and --file upload cannot be combined yet',
+        });
     }
     const uploadPath = input.filePath || contextAttachmentPath;
     if (uploadPath) {
         const upload = await attachLocalFileLive(page, fileInfoFromPath(uploadPath));
-        if (!upload.ok) throw new Error(upload.error);
+        if (!upload.ok) throw new WebAiError({
+            errorCode: 'provider.attachment-evidence-missing',
+            stage: 'attachment-verify',
+            vendor: 'chatgpt',
+            retryHint: 're-upload',
+            message: upload.error,
+            mutationAllowed: true,
+        });
         attachmentWarnings = upload.warnings || [];
         usedFallbacks = upload.usedFallbacks || [];
     }
@@ -107,7 +121,14 @@ export async function sendWebAi(deps, input = {}) {
     await adapter.verifyPromptCommitted(rendered.composerText, commitBaseline);
     if (uploadPath) {
         const sentAttachment = await verifySentTurnAttachmentLive(page, fileInfoFromPath(uploadPath));
-        if (!sentAttachment.ok) throw new Error(sentAttachment.error);
+        if (!sentAttachment.ok) throw new WebAiError({
+            errorCode: 'provider.attachment-evidence-missing',
+            stage: 'attachment-verify',
+            vendor: 'chatgpt',
+            retryHint: 're-upload',
+            message: sentAttachment.error,
+            mutationAllowed: true,
+        });
     }
     return {
         ok: true,
@@ -135,7 +156,13 @@ export async function pollWebAi(deps, input = {}) {
     const baseline = getBaseline(vendor, url)
         || getLatestBaseline(vendor, { sameHostUrl: url })
         || getLatestBaseline(vendor);
-    if (!baseline) throw new Error('baseline required. Run web-ai send or query first.');
+    if (!baseline) throw new WebAiError({
+        errorCode: 'provider.poll-timeout',
+        stage: 'poll',
+        vendor: 'chatgpt',
+        retryHint: 'poll-or-resume',
+        message: 'baseline required. Run web-ai send or query first.',
+    });
 
     const deadline = Date.now() + timeout * 1000;
     let stableText = '';
@@ -247,10 +274,24 @@ async function requireChatGptPage(deps) {
     try {
         host = new URL(url).hostname.replace(/^www\./, '');
     } catch {
-        throw new Error(`active tab has invalid URL: ${url}`);
+        throw new WebAiError({
+            errorCode: 'cdp.target-mismatch',
+            stage: 'connect',
+            vendor: 'chatgpt',
+            retryHint: 'tab-switch',
+            message: `active tab has invalid URL: ${url}`,
+            evidence: { url },
+        });
     }
     if (!CHATGPT_HOSTS.has(host)) {
-        throw new Error(`active tab is not ChatGPT: ${url}. Use tabs then tab-switch before web-ai.`);
+        throw new WebAiError({
+            errorCode: 'cdp.target-mismatch',
+            stage: 'connect',
+            vendor: 'chatgpt',
+            retryHint: 'tab-switch',
+            message: `active tab is not ChatGPT: ${url}. Use tabs then tab-switch before web-ai.`,
+            evidence: { url, host },
+        });
     }
     return page;
 }

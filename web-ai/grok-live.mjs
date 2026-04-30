@@ -1,6 +1,7 @@
 import { normalizeEnvelope, renderQuestionEnvelope, renderQuestionEnvelopeWithContext } from './question.mjs';
 import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
 import { hasContextPackaging, prepareContextForBrowser } from './context-pack/index.mjs';
+import { WebAiError } from './errors.mjs';
 
 export const GROK_CONTEXT_PACK_WARNING = 'grok-context-pack-not-recommended: prefer inline prompts plus optional --file uploads for Grok; ChatGPT or Gemini handle context packages more reliably.';
 import { attachLocalFileLive, fileInfoFromPath } from './chatgpt-attachments.mjs';
@@ -41,22 +42,43 @@ export async function grokStatusWebAi(deps) {
 export async function grokSendWebAi(deps, input = {}) {
     const page = await deps.getPage();
     if (input.url) await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    if (!isGrokUrl(page.url())) throw new Error(`active tab is not grok.com (${page.url()})`);
+    if (!isGrokUrl(page.url())) throw new WebAiError({
+        errorCode: 'cdp.target-mismatch',
+        stage: 'connect',
+        vendor: 'grok',
+        retryHint: 'tab-switch',
+        message: `active tab is not grok.com (${page.url()})`,
+        evidence: { url: page.url() },
+    });
 
     const envelope = normalizeEnvelope({ ...input, vendor: 'grok' });
     if (hasContextPackaging(input) && input.allowGrokContextPack !== true) {
-        const err = new Error('grok context-pack disabled by default; pass --allow-grok-context-pack to override');
-        err.stage = 'grok-context-pack-not-allowed';
-        throw err;
+        throw new WebAiError({
+            errorCode: 'grok.context-pack-not-allowed',
+            stage: 'grok-context-pack-not-allowed',
+            vendor: 'grok',
+            retryHint: 'inline-only-or-allow-flag',
+            message: 'grok context-pack disabled by default; pass --allow-grok-context-pack to override',
+        });
     }
     const contextPack = await prepareContextForBrowser({ ...input, vendor: 'grok' });
     if (contextPack?.attachments?.[0] && input.filePath) {
-        throw new Error('context package upload and --file upload cannot be combined yet');
+        throw new WebAiError({
+            errorCode: 'provider.attachment-preflight',
+            stage: 'attachment-preflight',
+            vendor: 'grok',
+            retryHint: 'inline-only-or-file',
+            message: 'context package upload and --file upload cannot be combined yet',
+        });
     }
     if (envelope.attachmentPolicy !== 'inline-only' && !input.filePath && !contextPack?.attachments?.[0]) {
-        const err = new Error('grok upload requested without a file or context package attachment');
-        err.stage = 'attachment-preflight';
-        throw err;
+        throw new WebAiError({
+            errorCode: 'provider.attachment-preflight',
+            stage: 'attachment-preflight',
+            vendor: 'grok',
+            retryHint: 'inline-only-or-file',
+            message: 'grok upload requested without a file or context package attachment',
+        });
     }
     const rendered = contextPack
         ? contextPack.transport === 'inline'
@@ -70,7 +92,14 @@ export async function grokSendWebAi(deps, input = {}) {
 
     await openFreshGrokChat(page, warnings);
     const composerSel = await findFirstSelector(page, COMPOSER_SELECTORS, 10_000);
-    if (!composerSel) throw new Error('grok composer not visible');
+    if (!composerSel) throw new WebAiError({
+        errorCode: 'provider.composer-not-visible',
+        stage: 'composer-prereq',
+        vendor: 'grok',
+        retryHint: 're-snapshot',
+        message: 'grok composer not visible',
+        selectorsTried: COMPOSER_SELECTORS,
+    });
     const selectedModel = await selectGrokModel(page, input.model);
 
     const assistantCount = await countResponses(page);
@@ -78,13 +107,27 @@ export async function grokSendWebAi(deps, input = {}) {
     const uploadPath = input.filePath || contextPack?.attachments?.[0]?.path;
     if (uploadPath) {
         const uploaded = await attachLocalFileLive(page, fileInfoFromPath(uploadPath));
-        if (!uploaded.ok) throw new Error(uploaded.error);
+        if (!uploaded.ok) throw new WebAiError({
+            errorCode: 'provider.attachment-evidence-missing',
+            stage: 'attachment-verify',
+            vendor: 'grok',
+            retryHint: 're-upload',
+            message: uploaded.error,
+            mutationAllowed: true,
+        });
         warnings.push(...uploaded.warnings);
     }
     await clickGrokSubmit(page);
     if (uploadPath) {
         const sentAttachment = await verifyGrokSentTurnAttachment(page, fileInfoFromPath(uploadPath));
-        if (!sentAttachment.ok) throw new Error(sentAttachment.error);
+        if (!sentAttachment.ok) throw new WebAiError({
+            errorCode: 'provider.attachment-evidence-missing',
+            stage: 'attachment-verify',
+            vendor: 'grok',
+            retryHint: 're-upload',
+            message: sentAttachment.error,
+            mutationAllowed: true,
+        });
     }
 
     const baseline = saveBaseline({
@@ -112,9 +155,22 @@ export async function grokSendWebAi(deps, input = {}) {
 
 export async function grokPollWebAi(deps, input = {}) {
     const page = await deps.getPage();
-    if (!isGrokUrl(page.url())) throw new Error(`active tab is not grok.com (${page.url()})`);
+    if (!isGrokUrl(page.url())) throw new WebAiError({
+        errorCode: 'cdp.target-mismatch',
+        stage: 'connect',
+        vendor: 'grok',
+        retryHint: 'tab-switch',
+        message: `active tab is not grok.com (${page.url()})`,
+        evidence: { url: page.url() },
+    });
     const baseline = getBaseline('grok', page.url()) || getLatestBaseline('grok');
-    if (!baseline) throw new Error('baseline required. Run web-ai send --vendor grok first.');
+    if (!baseline) throw new WebAiError({
+        errorCode: 'provider.poll-timeout',
+        stage: 'poll',
+        vendor: 'grok',
+        retryHint: 'poll-or-resume',
+        message: 'baseline required. Run web-ai send --vendor grok first.',
+    });
     const timeout = Math.max(1, Number(input.timeout || input.thinkingTime || 600)) * 1000;
     const deadline = Date.now() + timeout;
     let stableText = '';
@@ -182,7 +238,14 @@ async function openFreshGrokChat(page, warnings) {
     const existingTurns = await countResponses(page);
     if (existingTurns === 0) return;
     const newChatSel = await findFirstSelector(page, NEW_CHAT_SELECTORS, 5_000);
-    if (!newChatSel) throw new Error('grok new chat control not visible');
+    if (!newChatSel) throw new WebAiError({
+        errorCode: 'provider.composer-not-visible',
+        stage: 'composer-prereq',
+        vendor: 'grok',
+        retryHint: 're-snapshot',
+        message: 'grok new chat control not visible',
+        selectorsTried: NEW_CHAT_SELECTORS,
+    });
     const beforeUrl = page.url();
     await page.locator(newChatSel).first().click({ timeout: 5_000 });
     await findFirstSelector(page, COMPOSER_SELECTORS, 10_000);
@@ -221,7 +284,14 @@ async function clickGrokSubmit(page) {
         }
         await page.waitForTimeout(250).catch(() => undefined);
     }
-    throw new Error('grok submit button not visible');
+    throw new WebAiError({
+        errorCode: 'provider.commit-not-verified',
+        stage: 'commit-verify',
+        vendor: 'grok',
+        retryHint: 're-snapshot',
+        message: 'grok submit button not visible',
+        mutationAllowed: true,
+    });
 }
 
 async function verifyGrokSentTurnAttachment(page, expectedFile) {

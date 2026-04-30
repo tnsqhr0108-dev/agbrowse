@@ -1,9 +1,15 @@
 import { extname } from 'node:path';
 import { buildBudgetReport } from './token-estimator.mjs';
+import { WebAiError } from '../errors.mjs';
 
 export function renderContextComposerText(input = {}, files = []) {
     const prompt = String(input.prompt || '').trim();
-    if (!prompt) throw new Error('prompt required');
+    if (!prompt) throw new WebAiError({
+        errorCode: 'context.over-budget',
+        stage: 'context-preflight',
+        retryHint: 'reduce-files',
+        message: 'prompt required',
+    });
     const attachmentText = renderContextAttachmentText(files);
     if (!attachmentText) return prompt;
     return [attachmentText, '[USER REQUEST]', prompt].join('\n').trim();
