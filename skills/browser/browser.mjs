@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * browser.mjs — Standalone browser control for AI agents
+ * agbrowse — agent-first browser automation and web-ai CLI
  * Extracted from cli-jaw browser. Zero external dependencies beyond playwright-core.
  *
  * Usage:  agbrowse <command> [args] [--flags]
@@ -29,12 +29,16 @@
  *   network [--duration ms] [--filter text] [--reload]  Inspect network requests
  *   evaluate <js>                    Execute JavaScript
  *   reset [--force]                  Clear profile + screenshots
+ *   skills get core --full           Print agent operating guide + bundled skills
+ *   skills install --target <dir>    Install bundled SKILL.md directories
+ *   install-skills --target <dir>    Legacy alias for skills install
  */
 
 import { parseArgs } from 'node:util';
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import {
@@ -44,9 +48,13 @@ import {
     filterRequests,
     dedupeRequests,
 } from './browser-core.mjs';
+import { runInstallSkillsCli, runSkillsCli } from './skill-install.mjs';
 import { runWebAiCli } from '../../web-ai/cli.mjs';
 
 // ─── Config ──────────────────────────────────────
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PACKAGE_ROOT = join(__dirname, '..', '..');
+const SKILLS_ROOT = join(PACKAGE_ROOT, 'skills');
 const DATA_DIR = process.env.BROWSER_AGENT_HOME || join(homedir(), '.browser-agent');
 const PROFILE_DIR = join(DATA_DIR, 'browser-profile');
 const SCREENSHOTS_DIR = join(DATA_DIR, 'screenshots');
@@ -1087,6 +1095,48 @@ const browserDeps = {
 
 try {
     switch (sub) {
+        case 'skills': {
+            const result = runSkillsCli(process.argv.slice(3), { sourceRoot: SKILLS_ROOT });
+            if (result.type === 'json') {
+                console.log(JSON.stringify(result.skills, null, 2));
+            } else if (result.type === 'list') {
+                for (const skill of result.skills) {
+                    const status = skill.available ? 'available' : 'missing';
+                    console.log(`${skill.name.padEnd(12)} ${status.padEnd(9)} ${skill.description}`);
+                    console.log(`             ${skill.path}`);
+                }
+            } else if (result.type === 'install') {
+                if (result.result.help) {
+                    console.log(result.result.usage);
+                } else if (result.result.json) {
+                    console.log(JSON.stringify(result.result, null, 2));
+                } else {
+                    console.log(`installed ${result.result.installed.length} skills to ${result.result.targetRoot}`);
+                    for (const item of result.result.installed) {
+                        console.log(`  ${item.action.padEnd(6)} ${item.name} -> ${item.path}`);
+                    }
+                }
+            } else {
+                console.log(result.text);
+            }
+            break;
+        }
+        case 'install-skills': {
+            const result = runInstallSkillsCli(process.argv.slice(3), { sourceRoot: SKILLS_ROOT });
+            if (result.help) {
+                console.log(result.usage);
+                break;
+            }
+            if (result.json) {
+                console.log(JSON.stringify(result, null, 2));
+            } else {
+                console.log(`installed ${result.installed.length} skills to ${result.targetRoot}`);
+                for (const item of result.installed) {
+                    console.log(`  ${item.action.padEnd(6)} ${item.name} -> ${item.path}`);
+                }
+            }
+            break;
+        }
         case 'web-ai':
             await runWebAiCli(process.argv.slice(3), browserDeps);
             break;
@@ -1450,18 +1500,67 @@ try {
         }
         default:
             console.log(`
-  🌐 browser.mjs — Standalone browser control for AI agents
+  🌐 agbrowse — agent-first browser automation and web-ai CLI
 
-  Prerequisites:
-    cd <project-root> && npm install playwright-core
+  Usage:
+    agbrowse <command> [args] [--flags]
 
-  Commands:
+  Start here:
+    npm install -g agbrowse
+    agbrowse skills get core --full
+    agbrowse skills install --target ~/.cli-jaw-3460/skills
+    agbrowse start
+    agbrowse navigate "https://example.com"
+    agbrowse snapshot --interactive --max-nodes 120
+
+  Agent decision loop:
+    1. Observe before acting: status → tabs/open/navigate → snapshot --interactive.
+    2. Prefer snapshot refs for actions: click e3, type e5 "text" --submit.
+    3. Re-run snapshot after navigation, reload, submit, or any major UI change.
+    4. Use screenshot/mouse-click only when no DOM ref exists and coordinates are visible.
+    5. Use --json on automation commands when another tool will parse the result.
+    6. Stop on errors, inspect state, then choose the narrow next command.
+
+  Skill installation:
+    skills list [--json]
+      List bundled agent skills and their package paths.
+
+    skills get core [--full]
+      Print the recommended agent operating guide. --full includes all bundled SKILL.md files.
+
+    skills get <browser|web-ai|vision-click>
+      Print one bundled SKILL.md so an agent can load exact workflow rules.
+
+    skills path [skill]
+      Print the package skills directory or one bundled skill directory.
+
+    skills install --target <dir> [--link] [--force] [--json]
+      Install bundled SKILL.md directories into an explicit agent skill root.
+
+    install-skills --target <dir> [--link] [--force] [--json]
+      Legacy alias for "skills install".
+
+      Examples:
+        agbrowse skills list
+        agbrowse skills get core --full
+        agbrowse skills path web-ai
+        agbrowse skills install --target ~/.cli-jaw-3460/skills
+        agbrowse skills install --target ~/.codex/skills --link
+        agbrowse install-skills --target ./tmp-skills --force --json
+
+      Installs:
+        browser       Chrome/CDP browser control skill
+        web-ai        ChatGPT, Gemini, and Grok browser web-ai workflow skill
+        vision-click  Screenshot-to-coordinate click helper skill
+
+  Browser lifecycle:
     start [--port <9222>] [--headless] [--chrome-path PATH]
                            Start Chrome (headless for WSL/CI/Docker)
     stop                   Stop Chrome
     status                 Connection status
     reset [--force]        Reset (clear profile + screenshots)
 
+  Observe:
     snapshot               Page snapshot with ref IDs
       --interactive        Interactive elements only
       --max-nodes <N>      Limit output nodes (token budget)
@@ -1470,28 +1569,39 @@ try {
       --ref <ref>          Specific element only
       --clip x y w h       Capture a clipped region in CSS pixels
       --json               Output JSON (path, dpr, viewport)
-    mouse-click <x> <y>    Click at pixel coordinates [--double]
-    move-mouse <x> <y>     Move mouse without clicking
-    mouse-down             Hold mouse button [--right]
-    mouse-up               Release mouse button [--right]
+    text                   Page text [--format text|html]
+    get-dom                Get current DOM [--selector CSS] [--max-chars N]
+
+      Agent rule:
+        Use snapshot first for actions. Use get-dom only for selector debugging or content not exposed in refs.
+
+  Interact:
     click <ref>            Click element [--double] [--right]
     type <ref> <text>      Type text [--submit]
     press <key>            Press key (Enter, Tab, Escape…)
     hover <ref>            Hover element
     select <ref> <value>   Select dropdown option
     drag <from> <to>       Drag element to another
-    scroll <dir>           Scroll up|down|left|right [--amount N] [--ref eN]
+    mouse-click <x> <y>    Click at pixel coordinates [--double]
+    move-mouse <x> <y>     Move mouse without clicking
+    mouse-down             Hold mouse button [--right]
+    mouse-up               Release mouse button [--right]
+
+  Navigation:
     navigate <url>         Go to URL
     reload                 Reload current page
     resize <w> <h>         Resize browser window / viewport [--fullscreen]
     tabs                   List tabs
-    tab-switch <target>    Switch to tab index or target id
+    tab-switch <target>    Switch to tab index or CDP target id
+    scroll <dir>           Scroll up|down|left|right [--amount N] [--ref eN]
+
+  Wait:
     wait <ms>              Wait milliseconds
-    wait-for <ref>         Wait for last-snapshot ref (deprecated) [--timeout ms]
     wait-for-selector <s>  Wait for CSS selector [--timeout ms]
     wait-for-text <text>   Wait for visible text [--timeout ms]
-    text                   Page text [--format text|html]
-    get-dom                Get current DOM [--selector CSS] [--max-chars N]
+    wait-for <ref>         Deprecated: wait for last-snapshot ref [--timeout ms]
+
+  Diagnostics:
     console                Read buffered console logs [--clear] [--reload]
                            [--duration ms] [--limit N]
                            [--expression "console.log('hi')"]
@@ -1499,12 +1609,55 @@ try {
                            [--clear] [--reload] [--live-only]
     evaluate <js>          Execute JavaScript
 
+  Web AI:
+    web-ai render          Render the provider prompt without a browser
+    web-ai status          Check active provider tab state
+    web-ai send            Send a prompt and save a polling session
+    web-ai poll            Poll the saved session for completion
+    web-ai query           Send and poll in one command
+    web-ai stop            Stop a saved session
+    web-ai context-dry-run Build a context package without sending
+    web-ai context-render  Render full prompt/context package text
+
+      Common flags:
+        --vendor <chatgpt|gemini|grok>
+        --model <alias>
+        --url <conversation-or-provider-url>
+        --inline-only
+        --file <path>
+        --context-from-files <path-or-glob>
+        --context-transport <upload|inline>
+        --allow-copy-markdown-fallback
+        --json
+
+      Examples:
+        agbrowse web-ai render --vendor chatgpt --prompt "hello" --json
+        agbrowse web-ai query --vendor grok --inline-only --prompt "Reply OK"
+        agbrowse web-ai query --vendor gemini --model thinking --inline-only --prompt "Reply OK"
+        agbrowse web-ai query --vendor chatgpt --context-from-files "src/**/*.ts" --context-transport upload --prompt "Review this"
+
+  Vision click:
+    agbrowse-vision-click "<target description>" [--double] [--prepare-stable]
+
   Environment:
     BROWSER_AGENT_HOME     Data directory (default: ~/.browser-agent)
     CDP_PORT               Default CDP port (default: 9222)
     CHROME_HEADLESS=1      Force headless mode
     CHROME_NO_SANDBOX=1    Disable sandbox (Docker/CI)
     CHROME_BINARY_PATH     Custom Chrome/Chromium binary path
+
+  Configuration model:
+    npm package files include bin/, skills/, and web-ai/.
+    Browser state lives under BROWSER_AGENT_HOME, defaulting to ~/.browser-agent.
+    Default CDP port is stable at 9222 unless --port or CDP_PORT is set.
+    Skills are not installed implicitly; agents must choose a target with skills install --target.
+
+  Notes:
+    - Help output is intended to be enough for an agent to pick the next command.
+    - Use tab-switch with a target id when multiple tabs are open.
+    - install-skills never overwrites existing skills unless --force is passed.
+    - Prefer "agbrowse skills get core --full" before long or risky UI automation.
+    - Run "agbrowse web-ai --help" for provider-specific web-ai flags.
 `);
     }
     // Force exit — playwright CDP WebSocket keeps event loop alive

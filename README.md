@@ -123,6 +123,36 @@ later commands.
 
 Do not commit or share `~/.browser-agent`; it contains browser session state.
 
+## Install Skills
+
+`npm install -g agbrowse` installs the `agbrowse` and
+`agbrowse-vision-click` commands immediately. To register the bundled skills
+with an agent runtime, install them into that runtime's skill directory:
+
+```bash
+agbrowse skills install --target ~/.cli-jaw-3460/skills
+```
+
+For Codex:
+
+```bash
+agbrowse skills install --target ~/.codex/skills
+```
+
+The default mode copies the bundled `browser`, `web-ai`, and `vision-click`
+skill directories. Use `--link` if you want the target skill directories to
+track the globally installed npm package:
+
+```bash
+agbrowse skills install --target ~/.cli-jaw-3460/skills --link
+```
+
+Existing target skills are preserved by default. Replace them explicitly with:
+
+```bash
+agbrowse skills install --target ~/.cli-jaw-3460/skills --force
+```
+
 ## Core Browser Commands
 
 ```bash

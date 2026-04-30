@@ -16,12 +16,20 @@ describe.sequential('CLI help', () => {
         expect(result.stdout).toContain('mouse-up');
         expect(result.stdout).toContain('wait-for-selector');
         expect(result.stdout).toContain('wait-for-text');
+        expect(result.stdout).toContain('Start here:');
+        expect(result.stdout).toContain('Agent decision loop:');
+        expect(result.stdout).toContain('skills get core --full');
+        expect(result.stdout).toContain('skills path [skill]');
+        expect(result.stdout).toContain('Common flags:');
+        expect(result.stdout).toContain('Configuration model:');
+        expect(result.stdout).toContain('install-skills --target <dir>');
     });
 
     it('shows browser help for unknown commands', async () => {
         const result = await execBrowser(['does-not-exist']);
         expect(result.code).toBe(0);
-        expect(result.stdout).toContain('Commands:');
+        expect(result.stdout).toContain('Usage:');
+        expect(result.stdout).toContain('Browser lifecycle:');
     });
 
     it('shows vision-click help when no target is given', async () => {
