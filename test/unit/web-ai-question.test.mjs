@@ -3,7 +3,7 @@ import { normalizeEnvelope, renderQuestionEnvelope } from '../../web-ai/question
 import { ATTACHMENT_POLICY, WEB_AI_STATUS, WEB_AI_VENDOR } from '../../web-ai/types.mjs';
 
 describe('web-ai question envelope', () => {
-    it('renders Oracle-style sections', () => {
+    it('renders structured sections', () => {
         const rendered = renderQuestionEnvelope({
             vendor: 'chatgpt',
             project: 'cli-jaw',

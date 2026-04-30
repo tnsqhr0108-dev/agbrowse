@@ -1,8 +1,8 @@
-export const ORACLE_CONTEXT_REFERENCE = {
-    package: '@steipete/oracle',
-    version: '0.9.0',
+export const CONTEXT_PACKAGE_REFERENCE = {
+    package: 'agbrowse',
+    version: '0.1.3',
     license: 'MIT',
-    note: 'Context packaging behavior is locally adapted from Oracle browser dry-run/file packaging semantics.',
+    note: 'Context packaging behavior is implemented locally by agbrowse web-ai.',
 };
 
 export const DEFAULT_MAX_FILE_SIZE_BYTES = 1_000_000;

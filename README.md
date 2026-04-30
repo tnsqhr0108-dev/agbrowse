@@ -1,6 +1,6 @@
 # agbrowse
 
-Standalone Chrome/CDP browser automation for AI agents.
+Standalone Chrome/CDP browser automation and web-ai CLI for AI agents.
 
 `agbrowse` is a serverless extraction of the cli-jaw / 30_browser browser
 workflow. It gives an agent a small CLI surface for:
@@ -8,12 +8,38 @@ workflow. It gives an agent a small CLI surface for:
 - DOM/ref based browser control
 - screenshots and coordinate clicks
 - console/network/DOM diagnostics
-- Oracle-style web-ai prompt rendering
+- structured web-ai prompt rendering
 - live ChatGPT, Gemini, and Grok web UI execution
 - file upload and context-package upload for implemented providers
 
 It does not require a long-running MCP server. Each command is a short-lived
 Node process that reconnects to the same Chrome DevTools Protocol endpoint.
+
+## Quick Start
+
+```bash
+npm install -g agbrowse
+agbrowse --help
+agbrowse skills get core --full
+agbrowse start
+agbrowse navigate "https://chatgpt.com/"
+agbrowse snapshot --interactive --max-nodes 120
+```
+
+For web-ai smoke tests after logging in to the provider:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --url https://chatgpt.com/ \
+  --model pro \
+  --inline-only \
+  --allow-copy-markdown-fallback \
+  --prompt "Reply exactly AGBROWSE_OK"
+```
+
+Agent rule: observe before acting. Use `status`, `tabs`, `snapshot
+--interactive`, and `web-ai status` before mutating a page.
 
 ## Status
 
@@ -41,9 +67,9 @@ What remains intentionally out of scope for the standalone runtime:
 Provider UIs change frequently. Live web-ai flows are smoke-tested behavior, not
 a contractual API from the providers.
 
-## Install
+## Install CLI
 
-From npm or GitHub once published:
+From npm:
 
 ```bash
 npm install -g agbrowse
@@ -123,11 +149,12 @@ later commands.
 
 Do not commit or share `~/.browser-agent`; it contains browser session state.
 
-## Install Skills
+## Install Bundled Skills
 
 `npm install -g agbrowse` installs the `agbrowse` and
-`agbrowse-vision-click` commands immediately. To register the bundled skills
-with an agent runtime, install them into that runtime's skill directory:
+`agbrowse-vision-click` commands immediately. It does not automatically mutate
+any agent runtime. To register the bundled skills, choose the target skill root
+explicitly:
 
 ```bash
 agbrowse skills install --target ~/.cli-jaw-3460/skills
@@ -140,8 +167,14 @@ agbrowse skills install --target ~/.codex/skills
 ```
 
 The default mode copies the bundled `browser`, `web-ai`, and `vision-click`
-skill directories. Use `--link` if you want the target skill directories to
-track the globally installed npm package:
+skill directories. Use `--json` when another agent will parse the result:
+
+```bash
+agbrowse skills install --target ~/.cli-jaw-3460/skills --json
+```
+
+Use `--link` if you want the target skill directories to track the globally
+installed npm package:
 
 ```bash
 agbrowse skills install --target ~/.cli-jaw-3460/skills --link
@@ -215,6 +248,8 @@ The vision path handles device-pixel-ratio correction before sending
 ## Web AI
 
 The `web-ai` command drives provider websites through the same browser session.
+It uses provider UIs, so it is intentionally smoke-test oriented and fails
+closed when required selectors or capabilities are not observed.
 
 Supported commands:
 
@@ -249,7 +284,7 @@ agbrowse web-ai render \
   --prompt "Find the riskiest edge case."
 ```
 
-The envelope is Oracle-style:
+The envelope is structured and stable:
 
 ```text
 [SYSTEM]
@@ -342,7 +377,7 @@ exposes it.
 ## Context Packages
 
 Use context packages when the prompt plus files would be too large or when you
-want Oracle-style untrusted file separation.
+want untrusted file content separated from the main instruction block.
 
 Dry run:
 

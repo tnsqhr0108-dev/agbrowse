@@ -9,7 +9,7 @@ import {
 } from '../../web-ai/chatgpt-composer.mjs';
 
 describe('web-ai ChatGPT composer hardening', () => {
-    it('uses Oracle-style selectors and send-button-first submission', () => {
+    it('uses structured composer selectors and send-button-first submission', () => {
         expect(INPUT_SELECTORS).toContain('.ProseMirror');
         expect(INPUT_SELECTORS).toContain('[contenteditable="true"][data-virtualkeyboard="true"]');
         expect(SEND_BUTTON_SELECTORS).toContain('button[data-testid="send-button"]');

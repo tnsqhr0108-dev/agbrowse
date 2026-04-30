@@ -1,6 +1,6 @@
 ---
 name: web-ai
-description: "Standalone agbrowse web-ai workflow for ChatGPT, Gemini, and Grok with Oracle-style prompt envelopes, file/context uploads, model selection, polling, and opt-in copy-markdown fallback."
+description: "Standalone agbrowse web-ai workflow for ChatGPT, Gemini, and Grok with structured prompt envelopes, file/context uploads, model selection, polling, and opt-in copy-markdown fallback."
 ---
 
 # Web AI
@@ -49,7 +49,7 @@ mutation.
 
 ## Render First
 
-Use render to inspect the exact Oracle-style prompt shape:
+Use render to inspect the exact structured prompt shape:
 
 ```bash
 agbrowse web-ai render \

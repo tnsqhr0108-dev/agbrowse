@@ -46,7 +46,7 @@ describe('web-ai context pack', () => {
         await expect(expandContextPaths(['link.mjs'], [], dir)).rejects.toThrow(/symlink/);
     });
 
-    it('renders Oracle-style untrusted context package with file report metadata', async () => {
+    it('renders structured untrusted context package with file report metadata', async () => {
         const dir = await mkdtemp(join(tmpdir(), 'ctx-pack-'));
         await mkdir(join(dir, 'web-ai'), { recursive: true });
         await writeFile(join(dir, 'web-ai', 'question.mjs'), 'export function ask() { return "ok"; }\n');
