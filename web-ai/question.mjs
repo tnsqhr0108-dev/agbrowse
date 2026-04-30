@@ -1,6 +1,8 @@
 const INLINE_CHAR_LIMIT = 50000;
 import { ATTACHMENT_POLICY, WEB_AI_VENDOR } from './types.mjs';
 
+export const DEFAULT_RESEARCH_INSTRUCTIONS = 'Use web search whenever possible to verify facts and gather up-to-date information. Cite the sources inline in the response body next to the claims they support (for example: [Source: <url-or-title>]).';
+
 const SUPPORTED_VENDORS = new Set([WEB_AI_VENDOR.CHATGPT, WEB_AI_VENDOR.GEMINI, WEB_AI_VENDOR.GROK]);
 const SUPPORTED_ATTACHMENT_POLICIES = new Set([
     ATTACHMENT_POLICY.INLINE_ONLY,
@@ -64,6 +66,7 @@ function renderNormalizedEnvelope(envelope) {
         field('Output', envelope.output),
         field('Constraints', envelope.constraints),
     ].filter(Boolean).join('\n\n')));
+    blocks.push(section('[INSTRUCTIONS]', DEFAULT_RESEARCH_INSTRUCTIONS));
 
     if (!envelope.project) warnings.push('project omitted');
     if (!envelope.goal) warnings.push('goal omitted');

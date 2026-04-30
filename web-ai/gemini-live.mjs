@@ -233,7 +233,7 @@ export async function geminiPollWebAi(deps, input = {}) {
     if (!isGeminiUrl(page.url())) throw new Error(`active tab is not gemini.google.com (${page.url()})`);
     const baseline = getBaseline('gemini', page.url()) || getLatestBaseline('gemini');
     if (!baseline) throw new Error('baseline required. Run web-ai send --vendor gemini first.');
-    const timeout = Math.max(1, Number(input.timeout || input.thinkingTime || 900)) * 1000;
+    const timeout = Math.max(1, Number(input.timeout || input.thinkingTime || 1200)) * 1000;
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
         const responses = await readResponses(page);

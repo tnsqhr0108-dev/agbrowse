@@ -268,6 +268,11 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
             });
             if (resp.ok) {
                 const previousState = readPersistedState();
+                const isStaleState = previousState?.startedAt
+                    && Date.now() - Date.parse(previousState.startedAt) > 60 * 60 * 1000;
+                if (!previousState || previousState.port !== port || isStaleState) {
+                    console.warn(`[browser] warning: CDP port ${port} appears foreign or stale — agbrowse is attaching to an existing Chrome it did not start; verify --user-data-dir matches if you depend on profile state`);
+                }
                 clearPersistedSnapshot();
                 writePersistedState({
                     pid: previousState?.port === port ? previousState.pid ?? null : null,

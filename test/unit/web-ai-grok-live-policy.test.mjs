@@ -40,4 +40,16 @@ describe('web-ai grok live policy', () => {
         expect(grokLiveSrc).toMatch(/selectGrokModel/);
         expect(grokLiveSrc).toMatch(/model selected:/);
     });
+
+    it('hard-gates Grok context packaging unless --allow-grok-context-pack is passed', () => {
+        expect(grokLiveSrc).toMatch(/hasContextPackaging\(input\) && input\.allowGrokContextPack !== true/);
+        expect(grokLiveSrc).toMatch(/grok context-pack disabled by default/);
+        expect(grokLiveSrc).toMatch(/'grok-context-pack-not-allowed'/);
+    });
+
+    it('only pushes the soft warning when the override flag is set', () => {
+        expect(grokLiveSrc).toMatch(/grok-context-pack-not-recommended/);
+        expect(grokLiveSrc).toMatch(/hasContextPackaging\(input\) && input\.allowGrokContextPack === true/);
+        expect(grokLiveSrc).toMatch(/warnings\.push\(GROK_CONTEXT_PACK_WARNING\)/);
+    });
 });

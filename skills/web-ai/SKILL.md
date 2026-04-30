@@ -42,10 +42,46 @@ node skills/browser/browser.mjs web-ai query ...
 | --- | ---: | ---: | ---: | ---: | ---: |
 | ChatGPT | yes | yes | yes | yes | yes |
 | Gemini | yes | yes | yes | yes | yes |
-| Grok | yes | yes | yes | yes | yes |
+| Grok | yes | yes | avoid (see below) | yes | yes |
 
 Unsupported vendors or unsupported model aliases must fail before browser
 mutation.
+
+### Grok: do not use context packaging
+
+Do not package files for Grok. The runtime still allows it for parity, but
+agents must prefer inline prompts and per-call `--file <path>` uploads instead
+of `--context-from-files` / `--context-file` / `--context-transport upload`
+when `--vendor grok`.
+
+Why: Grok's web composer attachment surface is less predictable than ChatGPT
+and Gemini, the package upload path frequently degrades response quality, and
+Grok already accepts long inline prompts well. Use ChatGPT or Gemini when the
+prompt genuinely needs a packaged context bundle.
+
+Grok context packages fail closed by default. If `web-ai send/query --vendor grok`
+is invoked with `--context-from-files` / `--context-file` /
+`--context-transport upload` and `--allow-grok-context-pack` is not passed,
+the runtime throws with `stage: 'grok-context-pack-not-allowed'`. Pass
+`--allow-grok-context-pack` to override deliberately; the runtime still
+emits the `grok-context-pack-not-recommended` warning when the override is
+used.
+
+## Polling Timeouts
+
+`web-ai poll` and `web-ai query` accept `--timeout <seconds>`. When omitted,
+the runtime uses these defaults so heavy reasoning models (ChatGPT Pro/Heavy,
+Gemini Deep Think, Grok Expert/Heavy) have room to finish:
+
+| Vendor | Default `--timeout` | Roughly |
+| --- | ---: | --- |
+| ChatGPT | 1200 | 20 minutes |
+| Gemini | 1200 | 20 minutes |
+| Grok | 600 | 10 minutes |
+
+Pass `--timeout 1800` (30 min) or higher for unusually long Pro/Deep Think
+runs. The provider tab and the agbrowse Chrome process stay open across a
+poll timeout — only the polling loop gives up.
 
 ## Render First
 
@@ -128,10 +164,14 @@ provider exposes it. Input-only success is not enough.
 
 ## Context Package Upload
 
+Use ChatGPT or Gemini for context packaging. Do not pick `--vendor grok`
+here; Grok should use inline prompts plus optional single `--file` uploads
+only.
+
 ```bash
 agbrowse web-ai query \
-  --vendor grok \
-  --url https://grok.com/ \
+  --vendor chatgpt \
+  --url https://chatgpt.com/ \
   --context-from-files "web-ai/*.mjs" \
   --context-transport upload \
   --prompt "Reply exactly CONTEXT_OK if the package contains question.mjs."

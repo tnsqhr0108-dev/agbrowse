@@ -134,8 +134,11 @@ BROWSER_AGENT_HOME="$HOME/.browser-agent-work" CDP_PORT=9333 agbrowse web-ai sta
 ```
 
 If Chrome is already listening on the selected CDP port and responds to
-`/json/version`, `agbrowse` reuses it. If another non-CDP process owns the
-port, startup fails instead of silently choosing a different port.
+`/json/version`, `agbrowse` reuses it and emits a stderr warning when the
+running CDP endpoint appears to differ from agbrowse's persisted browser
+state (no prior state, port mismatch, or `startedAt` more than an hour old).
+If another non-CDP process owns the port, startup fails instead of silently
+choosing a different port.
 
 ## First Login
 
@@ -274,9 +277,25 @@ Supported providers:
 | --- | ---: | ---: | ---: | ---: | ---: |
 | ChatGPT | yes | yes | yes | yes | yes |
 | Gemini | yes | yes | yes | yes | yes |
-| Grok | yes | yes | yes | yes | yes |
+| Grok | yes | yes | avoid (see Context Packages) | yes | yes |
 
 Unsupported provider requests fail closed before browser mutation.
+
+### Polling Timeouts
+
+`web-ai poll` and `web-ai query` accept `--timeout <seconds>`. When omitted,
+the runtime uses these defaults so heavy reasoning models (ChatGPT Pro/Heavy,
+Gemini Deep Think, Grok Expert/Heavy) have room to finish:
+
+| Vendor | Default `--timeout` | Roughly |
+| --- | ---: | --- |
+| ChatGPT | 1200 | 20 minutes |
+| Gemini | 1200 | 20 minutes |
+| Grok | 600 | 10 minutes |
+
+Pass `--timeout 1800` (30 min) or higher for unusually long Pro/Deep Think
+runs. The provider tab and the agbrowse Chrome process stay open across a
+poll timeout — only the polling loop gives up.
 
 ### Render First
 
@@ -390,6 +409,13 @@ exposes it.
 Use context packages when the prompt plus files would be too large or when you
 want untrusted file content separated from the main instruction block.
 
+> Use ChatGPT or Gemini for context packaging. Grok context packages **fail
+> closed** by default — `web-ai send/query --vendor grok` with
+> `--context-from-files` / `--context-file` / `--context-transport upload`
+> throws with `stage: 'grok-context-pack-not-allowed'`. Pass
+> `--allow-grok-context-pack` to override deliberately; the runtime still
+> emits `grok-context-pack-not-recommended` when the override is used.
+
 Dry run:
 
 ```bash
@@ -404,8 +430,8 @@ Live upload:
 
 ```bash
 agbrowse web-ai query \
-  --vendor grok \
-  --url https://grok.com/ \
+  --vendor chatgpt \
+  --url https://chatgpt.com/ \
   --context-from-files "web-ai/*.mjs" \
   --context-transport upload \
   --prompt "Reply exactly CONTEXT_OK if the package contains question.mjs."

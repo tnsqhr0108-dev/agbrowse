@@ -47,10 +47,22 @@ export function getBaseline(vendor, url) {
     return baselines.get(makeBaselineKey(vendor, url)) || null;
 }
 
-export function getLatestBaseline(vendor) {
+export function getLatestBaseline(vendor, options = {}) {
     loadStore();
-    const matches = Array.from(baselines.values()).filter(baseline => baseline.vendor === vendor);
+    const sameHost = normalizeHost(options.sameHostUrl);
+    const matches = Array.from(baselines.values())
+        .filter(baseline => baseline.vendor === vendor)
+        .filter(baseline => !sameHost || normalizeHost(baseline.url) === sameHost)
+        .sort((a, b) => String(a.capturedAt).localeCompare(String(b.capturedAt)));
     return matches.at(-1) || null;
+}
+
+function normalizeHost(url) {
+    try {
+        return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+        return '';
+    }
 }
 
 export function clearBaseline(vendor, url) {

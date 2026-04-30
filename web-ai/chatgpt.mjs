@@ -1,5 +1,5 @@
 import { renderQuestionEnvelope, renderQuestionEnvelopeWithContext, normalizeEnvelope } from './question.mjs';
-import { getBaseline, saveBaseline } from './session.mjs';
+import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
     attachLocalFileLive,
@@ -129,9 +129,12 @@ export async function sendWebAi(deps, input = {}) {
 
 export async function pollWebAi(deps, input = {}) {
     const vendor = input.vendor || 'chatgpt';
-    const timeout = Math.max(1, Number(input.timeout || 600));
+    const timeout = Math.max(1, Number(input.timeout || 1200));
     const page = await requireChatGptPage(deps);
-    const baseline = getBaseline(vendor, page.url());
+    const url = page.url();
+    const baseline = getBaseline(vendor, url)
+        || getLatestBaseline(vendor, { sameHostUrl: url })
+        || getLatestBaseline(vendor);
     if (!baseline) throw new Error('baseline required. Run web-ai send or query first.');
 
     const deadline = Date.now() + timeout * 1000;

@@ -50,6 +50,7 @@ Attachments and context:
   --max-file-size <bytes>           Per-file context budget
   --files-report                    Include file report metadata
   --allow-copy-markdown-fallback    Capture provider Copy button output after DOM response
+  --allow-grok-context-pack         Override Grok context-pack hard-gate (Grok prefers inline)
 
 Output:
   --json             Print JSON
@@ -89,6 +90,7 @@ export async function runWebAiCli(argv = [], deps) {
             timeout: { type: 'string' },
             'inline-only': { type: 'boolean', default: false },
             'allow-copy-markdown-fallback': { type: 'boolean', default: false },
+            'allow-grok-context-pack': { type: 'boolean', default: false },
             file: { type: 'string' },
             model: { type: 'string' },
             'thinking-time': { type: 'string' },
@@ -137,6 +139,7 @@ export async function runWebAiCli(argv = [], deps) {
         contextTransport: values['context-transport'],
         inlineOnly: values['inline-only'],
         allowCopyMarkdownFallback: values['allow-copy-markdown-fallback'] === true,
+        allowGrokContextPack: values['allow-grok-context-pack'] === true,
     };
 
     const result = isContextCommand(command)

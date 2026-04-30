@@ -1,6 +1,8 @@
 import { normalizeEnvelope, renderQuestionEnvelope, renderQuestionEnvelopeWithContext } from './question.mjs';
 import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
-import { prepareContextForBrowser } from './context-pack/index.mjs';
+import { hasContextPackaging, prepareContextForBrowser } from './context-pack/index.mjs';
+
+export const GROK_CONTEXT_PACK_WARNING = 'grok-context-pack-not-recommended: prefer inline prompts plus optional --file uploads for Grok; ChatGPT or Gemini handle context packages more reliably.';
 import { attachLocalFileLive, fileInfoFromPath } from './chatgpt-attachments.mjs';
 import { captureCopiedResponseText, GROK_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
 import { selectGrokModel } from './grok-model.mjs';
@@ -42,6 +44,11 @@ export async function grokSendWebAi(deps, input = {}) {
     if (!isGrokUrl(page.url())) throw new Error(`active tab is not grok.com (${page.url()})`);
 
     const envelope = normalizeEnvelope({ ...input, vendor: 'grok' });
+    if (hasContextPackaging(input) && input.allowGrokContextPack !== true) {
+        const err = new Error('grok context-pack disabled by default; pass --allow-grok-context-pack to override');
+        err.stage = 'grok-context-pack-not-allowed';
+        throw err;
+    }
     const contextPack = await prepareContextForBrowser({ ...input, vendor: 'grok' });
     if (contextPack?.attachments?.[0] && input.filePath) {
         throw new Error('context package upload and --file upload cannot be combined yet');
@@ -57,6 +64,9 @@ export async function grokSendWebAi(deps, input = {}) {
             : renderQuestionEnvelope(envelope)
         : renderQuestionEnvelope(envelope);
     const warnings = [...rendered.warnings, ...(contextPack?.warnings || [])];
+    if (hasContextPackaging(input) && input.allowGrokContextPack === true) {
+        warnings.push(GROK_CONTEXT_PACK_WARNING);
+    }
 
     await openFreshGrokChat(page, warnings);
     const composerSel = await findFirstSelector(page, COMPOSER_SELECTORS, 10_000);
