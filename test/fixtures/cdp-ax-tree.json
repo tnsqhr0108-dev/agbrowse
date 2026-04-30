@@ -1,0 +1,32 @@
+[
+  {
+    "nodeId": "1",
+    "role": { "value": "RootWebArea" },
+    "name": { "value": "Fixture Root" }
+  },
+  {
+    "nodeId": "2",
+    "parentId": "1",
+    "role": { "value": "textbox" },
+    "name": { "value": "Search" },
+    "value": { "value": "hello" }
+  },
+  {
+    "nodeId": "3",
+    "parentId": "1",
+    "role": { "value": "button" },
+    "name": { "value": "Submit" },
+    "ignored": true
+  },
+  {
+    "nodeId": "4",
+    "parentId": "1",
+    "role": { "value": "generic" }
+  },
+  {
+    "nodeId": "5",
+    "parentId": "4",
+    "role": { "value": "link" },
+    "name": { "value": "Nested Link" }
+  }
+]

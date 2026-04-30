@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smoke Browser</title>
+  <script>
+    function markProbe(which) {
+      document.body.dataset.lastProbe = which;
+      console.log('probe-clicked:' + which);
+    }
+
+    window.addEventListener('load', async () => {
+      console.log('loaded');
+      try {
+        await fetch('/ping.txt?ts=' + Date.now());
+        console.log('fetched ping');
+      } catch (error) {
+        console.error('fetch failed', error?.message || String(error));
+      }
+
+      setTimeout(async () => {
+        try {
+          await fetch('/late-ping.txt?ts=' + Date.now());
+          console.log('fetched late ping');
+        } catch (error) {
+          console.error('late fetch failed', error?.message || String(error));
+        }
+      }, 300);
+    });
+  </script>
+</head>
+<body>
+  <main>
+    <h1>Smoke Browser</h1>
+    <input aria-label="Name" value="">
+    <button aria-label="Probe Button" onclick="markProbe('first')">Probe Button</button>
+    <button aria-label="Probe Button" onclick="markProbe('second')">Probe Button</button>
+    <select aria-label="Pick One">
+      <option value="a">Alpha</option>
+      <option value="b">Beta</option>
+    </select>
+    <div id="delayed-status" aria-live="polite"></div>
+  </main>
+  <script>
+    setTimeout(() => {
+      const el = document.getElementById('delayed-status');
+      if (el) el.textContent = 'Delayed Ready';
+    }, 350);
+  </script>
+</body>
+</html>

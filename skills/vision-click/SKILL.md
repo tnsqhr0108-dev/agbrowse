@@ -1,116 +1,111 @@
 ---
 name: vision-click
-description: "Vision-based coordinate click: screenshot → AI coordinate extraction → mouse click. Codex CLI only."
+description: "Vision-based coordinate click: screenshot → Codex CLI (NDJSON) → DPR correction → mouse click. Codex CLI only."
 ---
 
-# Vision Click (Codex Only)
+# Vision Click (Codex CLI)
 
-Click non-DOM elements by screenshot analysis.
-Uses `codex exec -i` for vision-based coordinate extraction.
+Click non-DOM elements by screenshot analysis using Codex CLI.
 
 ## Quick Start
 
 ```bash
-node vision-click.mjs "Submit button"
-# → screenshot → codex vision → DPR correction → click → verify
-# 🖱️ vision-clicked "Submit button" at (400, 276) via codex
-```
-
-With options:
-```bash
-node vision-click.mjs "Login" --double          # double-click
-node vision-click.mjs "Menu" --port 9333        # custom CDP port
+agent-browser-vision-click "Submit button"
+agent-browser-vision-click "Play icon" --double
+agent-browser-vision-click "first search result row" --prepare-stable --region left-panel --verify-before-click
 ```
 
 ## Prerequisites
 
-- **Codex CLI** installed and authenticated
-- **browser.mjs** (browser-standalone skill) with Chrome running
-- `playwright-core` installed
-
-```bash
-npm install playwright-core
-node ../browser-standalone/browser.mjs start
-```
+- **agent-browser** running Chrome (`agent-browser start`)
+- **Codex CLI** installed (`npm install -g @openai/codex`)
 
 ## When to Use
 
-Use when `browser.mjs snapshot` returns **NO ref** for target:
-- Canvas elements, iframes, Shadow DOM
+Use when `agent-browser snapshot` returns **NO ref** for target:
+- Canvas elements, cross-origin iframes, Shadow DOM
 - Dynamically rendered content (WebGL, SVG)
 - Elements behind overlays or custom web components
 
-> **Always try `snapshot` first.** Only fall back to vision-click if no ref exists.
+> **Always try `snapshot --interactive` first.** Only fall back to vision-click if no usable ref exists.
 
 ## Pipeline
 
 ```
-1. browser.mjs snapshot        → Check if target has a ref ID
-2. If ref exists → browser.mjs click <ref>  (normal path)
+1. agent-browser snapshot --interactive  → Check if target has a ref ID
+2. If ref exists → agent-browser click <ref>  (normal path, preferred)
 3. If NO ref → vision-click fallback:
-   a. browser.mjs screenshot --json  → path + DPR
-   b. codex exec -i <path> --json    → { found, x, y }
-   c. DPR correction: image px → CSS px
-   d. browser.mjs mouse-click <x> <y>
-   e. browser.mjs snapshot           → verify
+   a. agent-browser screenshot --json     → { path, dpr, viewport }
+   b. optional stable viewport / clip   → more deterministic framing
+   c. codex exec -i <path> --json       → NDJSON events → { found, x, y }
+   d. optional verify crop              → second-pass confirmation near center
+   e. DPR correction: x/dpr, y/dpr      → CSS pixels
+   f. agent-browser mouse-click <x> <y>   → click
+   g. agent-browser snapshot              → verify
 ```
 
-## Manual Workflow
+## How It Works
+
+`codex exec --json` emits NDJSON (newline-delimited JSON) events:
+
+```jsonl
+{"type":"thread.started","thread_id":"..."}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"type":"agent_message","text":"{\"found\":true,\"x\":522,\"y\":82,\"description\":\"search button\"}"}}
+{"type":"turn.completed","usage":{"input_tokens":16964,"output_tokens":542}}
+```
+
+The coordinate JSON is extracted from the `item.completed` event's `item.text` field.
+
+## Examples
 
 ```bash
-# 1. Take screenshot
-node ../browser-standalone/browser.mjs screenshot --json
-# Output: {"path":"...screenshot_123.png","dpr":2,"viewport":{"width":1280,"height":720}}
+# Basic click
+agent-browser-vision-click "Login button"
 
-# 2. Extract coordinates with Codex vision
-codex exec -i /path/to/screenshot.png --json \
-  --dangerously-bypass-approvals-and-sandbox \
-  --skip-git-repo-check \
-  'Find "Submit" button center pixel coordinate.
-   Return ONLY JSON: {"found":true,"x":640,"y":400,"description":"blue submit button"}'
+# Double-click
+agent-browser-vision-click "Canvas play icon" --double
 
-# 3. Click at coordinates (DPR-corrected)
-node ../browser-standalone/browser.mjs mouse-click 320 200
+# Custom CDP port
+agent-browser-vision-click "Submit" --port 9333
 
-# 4. Verify
-node ../browser-standalone/browser.mjs snapshot
+# Custom browser script path
+agent-browser-vision-click "Menu" --browser-script /path/to/browser.mjs
+
+# Accuracy-first mode for dense UIs
+agent-browser-vision-click "first search result row" --prepare-stable --region left-panel --verify-before-click
+
+# Manual clip when you know the rough area
+agent-browser-vision-click "zoom button" --clip 980 120 220 220
 ```
 
-## Parsing Codex Response
+## Accuracy Tips
 
-Codex `--json` outputs NDJSON. The script scans all events for coordinate JSON:
-
-```javascript
-const lines = stdout.split('\n').filter(l => l.trim());
-for (const line of lines) {
-    const event = JSON.parse(line);
-    if (event.item?.text) {
-        const coords = JSON.parse(event.item.text);
-        // coords = { found: true, x: 640, y: 400, description: "..." }
-    }
-}
-```
-
-## Accuracy
-
-Verified via smoke test (2026-02-24):
-
-| Target                  | Actual     | Codex Result | Error |
-| ----------------------- | ---------- | ------------ | ----- |
-| LOGIN button (800×600)  | (400, 275) | (400, 276)   | ±1px  |
-| SIGNUP button (800×600) | (400, 345) | (400, 345)   | ±0px  |
+- Start with `--prepare-stable` to normalize the viewport before capture.
+- Use `--region left-panel` for search result panels and `--region center-map` for map canvas targets.
+- Use `--verify-before-click` on dense UIs where a wrong click is expensive.
+- If you already know the rough target area, `--clip x y w h` is more reliable than full-screen analysis.
 
 ## Environment Variables
 
-| Variable         | Default                             | Description         |
-| ---------------- | ----------------------------------- | ------------------- |
-| `BROWSER_SCRIPT` | `../browser-standalone/browser.mjs` | Path to browser.mjs |
-| `CDP_PORT`       | `9222`                              | Default CDP port    |
+| Variable           | Default                  | Description          |
+| ------------------ | ------------------------ | -------------------- |
+| `BROWSER_SCRIPT`   | `../browser/browser.mjs` | Path to browser.mjs  |
+| `CDP_PORT`         | `9222`                   | Chrome CDP port      |
+
+## DPR (Device Pixel Ratio) Correction
+
+Retina displays (DPR=2) produce screenshots at 2x resolution.
+Codex returns coordinates in image pixel space.
+`vision-click` auto-divides by DPR before passing to `mouse-click`.
+
+```
+raw: (600, 200)  DPR=2  →  css: (300, 100)  →  mouse-click 300 100
+```
 
 ## Limitations
 
-- **Codex CLI only** — Gemini/Claude REST planned for future
-- Latency: 2-5 seconds per vision call
-- Cost: ~$0.005-0.01 per call (~18K input tokens)
-- Complex UIs may need confidence check + retry
-- DPR auto-correction included
+- Requires codex CLI (GPT vision) — no other providers
+- Latency: 3-10 seconds per call (model inference)
+- English target descriptions work best; Korean can fail on some elements
+- Complex dense UIs may need `--region`, `--clip`, or `--verify-before-click`

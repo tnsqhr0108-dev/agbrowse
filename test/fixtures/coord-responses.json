@@ -1,0 +1,32 @@
+[
+  {
+    "name": "messy-valid",
+    "text": "Found it here: {\"found\":true,\"x\":400,\"y\":276,\"description\":\"submit button\"}",
+    "expected": { "found": true, "x": 400, "y": 276, "description": "submit button" }
+  },
+  {
+    "name": "not-found",
+    "text": "{\"found\":false,\"x\":0,\"y\":0,\"description\":\"not found\"}",
+    "expected": { "found": false, "x": 0, "y": 0, "description": "not found" }
+  },
+  {
+    "name": "markdown-wrapped",
+    "text": "Here is the result:\n```json\n{\"found\":true,\"x\":120,\"y\":340,\"description\":\"link\"}\n```\nDone.",
+    "expected": { "found": true, "x": 120, "y": 340, "description": "link" }
+  },
+  {
+    "name": "multiple-json-picks-last-valid",
+    "text": "Draft: {\"found\":false,\"x\":0,\"y\":0,\"description\":\"old\"}\nFinal answer:\n{\"found\":true,\"x\":512,\"y\":144,\"description\":\"final button\"}",
+    "expected": { "found": true, "x": 512, "y": 144, "description": "final button" }
+  },
+  {
+    "name": "missing-coordinates",
+    "text": "{\"found\":true,\"description\":\"bad json without x y\"}",
+    "expected": null
+  },
+  {
+    "name": "truncated-json",
+    "text": "{\"found\":true,\"x\":240",
+    "expected": null
+  }
+]

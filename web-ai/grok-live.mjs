@@ -1,0 +1,315 @@
+import { normalizeEnvelope, renderQuestionEnvelope, renderQuestionEnvelopeWithContext } from './question.mjs';
+import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
+import { prepareContextForBrowser } from './context-pack/index.mjs';
+import { attachLocalFileLive, fileInfoFromPath } from './chatgpt-attachments.mjs';
+import { captureCopiedResponseText, GROK_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
+import { selectGrokModel } from './grok-model.mjs';
+
+const GROK_HOSTS = new Set(['grok.com']);
+const COMPOSER_SELECTORS = ['.ProseMirror[contenteditable="true"]', '[contenteditable="true"].ProseMirror'];
+const NEW_CHAT_SELECTORS = ['[data-testid="new-chat"]'];
+const ASSISTANT_SELECTOR = '[data-testid="assistant-message"]';
+const USER_SELECTOR = '[data-testid="user-message"]';
+const RESPONSE_TEXT_SELECTOR = '.response-content-markdown, .markdown, [class*="response-content"]';
+const STOP_SELECTORS = ['button[aria-label*="Stop" i]', 'button:has-text("Stop")'];
+const ATTACHMENT_EVIDENCE_SELECTORS = [
+    '[data-testid*="attachment" i]',
+    '[data-testid*="file" i]',
+    '[aria-label*="attachment" i]',
+    '[aria-label*="file" i]',
+    '[role="img"]',
+];
+
+export async function grokStatusWebAi(deps) {
+    const page = await deps.getPage();
+    if (!isGrokUrl(page.url())) {
+        return { ok: false, vendor: 'grok', status: 'blocked', url: page.url(), warnings: [`active tab is not grok.com (${page.url()})`], error: 'not grok' };
+    }
+    const composerSel = await findFirstSelector(page, COMPOSER_SELECTORS, 5_000);
+    return {
+        ok: Boolean(composerSel),
+        vendor: 'grok',
+        status: composerSel ? 'ready' : 'blocked',
+        url: page.url(),
+        warnings: composerSel ? ['grok composer visible'] : ['grok composer not visible'],
+        ...(composerSel ? {} : { error: 'grok composer not visible' }),
+    };
+}
+
+export async function grokSendWebAi(deps, input = {}) {
+    const page = await deps.getPage();
+    if (input.url) await page.goto(input.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    if (!isGrokUrl(page.url())) throw new Error(`active tab is not grok.com (${page.url()})`);
+
+    const envelope = normalizeEnvelope({ ...input, vendor: 'grok' });
+    const contextPack = await prepareContextForBrowser({ ...input, vendor: 'grok' });
+    if (contextPack?.attachments?.[0] && input.filePath) {
+        throw new Error('context package upload and --file upload cannot be combined yet');
+    }
+    if (envelope.attachmentPolicy !== 'inline-only' && !input.filePath && !contextPack?.attachments?.[0]) {
+        const err = new Error('grok upload requested without a file or context package attachment');
+        err.stage = 'attachment-preflight';
+        throw err;
+    }
+    const rendered = contextPack
+        ? contextPack.transport === 'inline'
+            ? renderQuestionEnvelopeWithContext(envelope, contextPack.composerText)
+            : renderQuestionEnvelope(envelope)
+        : renderQuestionEnvelope(envelope);
+    const warnings = [...rendered.warnings, ...(contextPack?.warnings || [])];
+
+    await openFreshGrokChat(page, warnings);
+    const composerSel = await findFirstSelector(page, COMPOSER_SELECTORS, 10_000);
+    if (!composerSel) throw new Error('grok composer not visible');
+    const selectedModel = await selectGrokModel(page, input.model);
+
+    const assistantCount = await countResponses(page);
+    await insertGrokPrompt(page, composerSel, rendered.composerText);
+    const uploadPath = input.filePath || contextPack?.attachments?.[0]?.path;
+    if (uploadPath) {
+        const uploaded = await attachLocalFileLive(page, fileInfoFromPath(uploadPath));
+        if (!uploaded.ok) throw new Error(uploaded.error);
+        warnings.push(...uploaded.warnings);
+    }
+    await clickGrokSubmit(page);
+    if (uploadPath) {
+        const sentAttachment = await verifyGrokSentTurnAttachment(page, fileInfoFromPath(uploadPath));
+        if (!sentAttachment.ok) throw new Error(sentAttachment.error);
+    }
+
+    const baseline = saveBaseline({
+        vendor: 'grok',
+        url: page.url(),
+        envelope,
+        assistantCount,
+        textHash: String((await page.innerText('body').catch(() => '')).length),
+    });
+    return {
+        ok: true,
+        vendor: 'grok',
+        status: 'sent',
+        url: page.url(),
+        baseline,
+        contextPack: contextPack ? summarizeContextPack(contextPack) : undefined,
+        usedFallbacks: selectedModel?.usedFallbacks || [],
+        warnings: [
+            ...warnings,
+            ...(selectedModel ? [`model selected: ${selectedModel.selected}${selectedModel.alreadySelected ? ' (already selected)' : ''}`] : []),
+            ...(contextPack?.attachments?.[0] ? [`context package attached: ${contextPack.attachments[0].displayPath}`] : []),
+        ],
+    };
+}
+
+export async function grokPollWebAi(deps, input = {}) {
+    const page = await deps.getPage();
+    if (!isGrokUrl(page.url())) throw new Error(`active tab is not grok.com (${page.url()})`);
+    const baseline = getBaseline('grok', page.url()) || getLatestBaseline('grok');
+    if (!baseline) throw new Error('baseline required. Run web-ai send --vendor grok first.');
+    const timeout = Math.max(1, Number(input.timeout || input.thinkingTime || 600)) * 1000;
+    const deadline = Date.now() + timeout;
+    let stableText = '';
+    let stableSince = 0;
+    while (Date.now() < deadline) {
+        const answers = await readResponses(page);
+        const latest = answers.slice(baseline.assistantCount).at(-1) || '';
+        const streaming = await isStreaming(page);
+        if (latest && !streaming) {
+            if (latest === stableText) {
+                if (Date.now() - stableSince >= 1500) {
+                    let answerText = latest;
+                    const usedFallbacks = [];
+                    const warnings = [];
+                    if (input.allowCopyMarkdownFallback === true) {
+                        const copied = await captureCopiedResponseText(page, GROK_COPY_SELECTORS);
+                        const copiedText = preferCopiedText(latest, copied);
+                        if (copiedText) {
+                            answerText = cleanGrokResponseText(copiedText);
+                            usedFallbacks.push('copy-markdown');
+                        } else {
+                            warnings.push(`copy-markdown-fallback-unavailable:${copied.status || 'unknown'}`);
+                        }
+                    }
+                    return { ok: true, vendor: 'grok', status: 'complete', url: page.url(), answerText, baseline, usedFallbacks, warnings };
+                }
+            } else {
+                stableText = latest;
+                stableSince = Date.now();
+            }
+        } else {
+            stableText = '';
+            stableSince = 0;
+        }
+        await page.waitForTimeout(500).catch(() => undefined);
+    }
+    return { ok: false, vendor: 'grok', status: 'timeout', url: page.url(), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for grok response' };
+}
+
+export async function grokQueryWebAi(deps, input = {}) {
+    const sent = await grokSendWebAi(deps, input);
+    const result = await grokPollWebAi(deps, {
+        timeout: input.timeout || input.thinkingTime,
+        allowCopyMarkdownFallback: input.allowCopyMarkdownFallback === true,
+    });
+    return {
+        ...result,
+        usedFallbacks: [...(sent.usedFallbacks || []), ...(result.usedFallbacks || [])],
+        warnings: [...(sent.warnings || []), ...(result.warnings || [])],
+    };
+}
+
+export async function grokStopWebAi(deps) {
+    const page = await deps.getPage();
+    await page.keyboard.press('Escape').catch(() => undefined);
+    return { ok: true, vendor: 'grok', status: 'blocked', url: page.url(), warnings: ['sent Escape'] };
+}
+
+function isGrokUrl(url) {
+    try { return GROK_HOSTS.has(new URL(url).hostname.replace(/^www\./, '')); }
+    catch { return false; }
+}
+
+async function openFreshGrokChat(page, warnings) {
+    const existingTurns = await countResponses(page);
+    if (existingTurns === 0) return;
+    const newChatSel = await findFirstSelector(page, NEW_CHAT_SELECTORS, 5_000);
+    if (!newChatSel) throw new Error('grok new chat control not visible');
+    const beforeUrl = page.url();
+    await page.locator(newChatSel).first().click({ timeout: 5_000 });
+    await findFirstSelector(page, COMPOSER_SELECTORS, 10_000);
+    const remainingTurns = await countResponses(page);
+    if (page.url() === beforeUrl && remainingTurns > 0) {
+        warnings.push('grok new chat URL did not change; continuing because composer is visible');
+    }
+}
+
+async function insertGrokPrompt(page, composerSel, text) {
+    const composer = page.locator(composerSel).first();
+    await composer.click({ timeout: 5_000 }).catch(() => composer.click({ timeout: 2_000, force: true }));
+    await page.evaluate(({ selector, value }) => {
+        const el = document.querySelector(selector);
+        if (!el) throw new Error(`selector not found: ${selector}`);
+        el.focus();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('insertText', false, value);
+        el.dispatchEvent(new InputEvent('input', { data: value, inputType: 'insertText', bubbles: true }));
+    }, { selector: composerSel, value: text });
+}
+
+async function clickGrokSubmit(page) {
+    const deadline = Date.now() + 8_000;
+    while (Date.now() < deadline) {
+        const buttons = await page.locator('button').all().catch(() => []);
+        for (const button of buttons) {
+            if (!await button.isVisible().catch(() => false)) continue;
+            const text = (await button.innerText().catch(() => '')).trim();
+            const aria = (await button.getAttribute('aria-label').catch(() => '') || '').trim();
+            const disabled = await button.isDisabled().catch(() => false);
+            if (!disabled && (/^Submit$/i.test(text) || /^Submit$/i.test(aria))) {
+                await button.click({ timeout: 3_000 });
+                return;
+            }
+        }
+        await page.waitForTimeout(250).catch(() => undefined);
+    }
+    throw new Error('grok submit button not visible');
+}
+
+async function verifyGrokSentTurnAttachment(page, expectedFile) {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+        const result = await readGrokSentTurnAttachmentEvidence(page, expectedFile);
+        if (result.ok || result.error !== 'Grok sent turn has no attachment evidence') return result;
+        await page.waitForTimeout(250).catch(() => undefined);
+    }
+    return readGrokSentTurnAttachmentEvidence(page, expectedFile);
+}
+
+async function readGrokSentTurnAttachmentEvidence(page, expectedFile) {
+    const turn = page.locator(USER_SELECTOR).last();
+    if ((await turn.count().catch(() => 0)) === 0) {
+        return { ok: false, error: 'no Grok user turn visible after send' };
+    }
+    const text = await turn.innerText().catch(() => '');
+    if (text.includes(expectedFile.basename) || text.includes(stripExtension(expectedFile.basename))) {
+        return { ok: true };
+    }
+    const siblingEvidence = await turn.evaluate((el, selectors) => {
+        const root = el.closest('[id^="response-"]') || el.parentElement;
+        if (!root) return false;
+        const selectorList = selectors.join(',');
+        const matches = Array.from(root.querySelectorAll(selectorList));
+        return matches.some((node) => {
+            const text = String(node.innerText || node.textContent || '').trim();
+            const aria = String(node.getAttribute('aria-label') || '');
+            return Boolean(text || aria);
+        });
+    }, ATTACHMENT_EVIDENCE_SELECTORS).catch(() => false);
+    if (siblingEvidence) return { ok: true };
+    for (const selector of ATTACHMENT_EVIDENCE_SELECTORS) {
+        if (await turn.locator(selector).count().catch(() => 0) > 0) return { ok: true };
+    }
+    return { ok: false, error: 'Grok sent turn has no attachment evidence' };
+}
+
+async function findFirstSelector(page, selectors, timeoutMs = 10_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        for (const sel of selectors) {
+            const loc = page.locator(sel).first();
+            if (await loc.count().catch(() => 0) > 0 && await loc.isVisible().catch(() => false)) return sel;
+        }
+        await page.waitForTimeout(250).catch(() => undefined);
+    }
+    return null;
+}
+
+async function countResponses(page) {
+    return (await readResponses(page)).length;
+}
+
+async function readResponses(page) {
+    return await page.locator(ASSISTANT_SELECTOR).evaluateAll((turns, textSelector) => {
+        return turns
+            .map((turn) => {
+                const textNodes = Array.from(turn.querySelectorAll(String(textSelector)));
+                const candidates = textNodes.length ? textNodes : [turn];
+                return candidates
+                    .map((el) => String(el.innerText || el.textContent || '').trim())
+                    .find(Boolean) || '';
+            })
+            .filter(Boolean);
+    }, RESPONSE_TEXT_SELECTOR).then(items => items.map(cleanGrokResponseText).filter(Boolean)).catch(() => []);
+}
+
+async function isStreaming(page) {
+    for (const selector of STOP_SELECTORS) {
+        if (await page.locator(selector).first().isVisible().catch(() => false)) return true;
+    }
+    return false;
+}
+
+function cleanGrokResponseText(text) {
+    return String(text || '')
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !/^Thought for\s+\d+s$/i.test(line) && !/^\d+(?:\.\d+)?(?:ms|s)$/i.test(line))
+        .join('\n')
+        .trim();
+}
+
+function stripExtension(name) {
+    const idx = name.lastIndexOf('.');
+    return idx < 0 ? name : name.slice(0, idx);
+}
+
+function summarizeContextPack(contextPack) {
+    if (!contextPack) return undefined;
+    return {
+        transport: contextPack.transport,
+        totalBytes: contextPack.totalBytes,
+        totalEstimatedTokens: contextPack.totalEstimatedTokens,
+        includedFiles: contextPack.includedFiles?.length || 0,
+        truncatedFiles: contextPack.truncatedFiles?.length || 0,
+        attachments: contextPack.attachments?.map(attachment => ({ path: attachment.displayPath || attachment.path, bytes: attachment.bytes })) || [],
+    };
+}

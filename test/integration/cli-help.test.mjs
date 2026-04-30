@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest';
+import { execBrowser } from '../helpers/exec-browser.mjs';
+import { execVisionClick } from '../helpers/exec-vision-click.mjs';
+
+describe.sequential('CLI help', () => {
+    it('shows browser help with new PLAN_2 commands', async () => {
+        const result = await execBrowser([]);
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('reload');
+        expect(result.stdout).toContain('resize <w> <h>');
+        expect(result.stdout).toContain('get-dom');
+        expect(result.stdout).toContain('console');
+        expect(result.stdout).toContain('network');
+        expect(result.stdout).toContain('move-mouse');
+        expect(result.stdout).toContain('mouse-down');
+        expect(result.stdout).toContain('mouse-up');
+        expect(result.stdout).toContain('wait-for-selector');
+        expect(result.stdout).toContain('wait-for-text');
+    });
+
+    it('shows browser help for unknown commands', async () => {
+        const result = await execBrowser(['does-not-exist']);
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('Commands:');
+    });
+
+    it('shows vision-click help when no target is given', async () => {
+        const result = await execVisionClick([]);
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain('agent-browser-vision-click');
+        expect(result.stdout).toContain('--browser-script <path>');
+        expect(result.stdout).toContain('--prepare-stable');
+        expect(result.stdout).toContain('--verify-before-click');
+        expect(result.stdout).toContain('--region <name>');
+        expect(result.stdout).toContain('--clip <x y w h>');
+        expect(result.stdout).toContain('Codex CLI');
+    });
+});

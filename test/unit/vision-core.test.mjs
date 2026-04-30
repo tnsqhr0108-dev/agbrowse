@@ -1,0 +1,156 @@
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import {
+    buildCoordPrompt,
+    clipAroundPoint,
+    describeRegion,
+    extractCoordJson,
+    assertCodexCli,
+    applyDprCorrection,
+    parseVisionClickCliArgs,
+    parseViewportSpec,
+    resolveRegionClip,
+} from '../../skills/vision-click/vision-core.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const coordFixtures = JSON.parse(
+    readFileSync(join(__dirname, '..', 'fixtures', 'coord-responses.json'), 'utf8')
+);
+
+describe('vision-core', () => {
+    it('buildCoordPrompt includes the target and JSON contract', () => {
+        const prompt = buildCoordPrompt('Submit button');
+        expect(prompt).toContain('Submit button');
+        expect(prompt).toContain('"found"');
+    });
+
+    it('buildCoordPrompt includes region and verification hints when provided', () => {
+        const prompt = buildCoordPrompt('first result row', {
+            regionHint: 'Focus only on the left-side results panel.',
+            centerBias: true,
+            preferContainer: true,
+        });
+        expect(prompt).toContain('left-side results panel');
+        expect(prompt).toContain('close to the center');
+        expect(prompt).toContain('Prefer the clickable row or container center');
+    });
+
+    it('extractCoordJson parses noisy provider responses', () => {
+        const parsed = extractCoordJson(coordFixtures[0].text);
+        expect(parsed).toEqual(coordFixtures[0].expected);
+    });
+
+    it('extractCoordJson handles found:false responses', () => {
+        const parsed = extractCoordJson(coordFixtures[1].text);
+        expect(parsed).toEqual(coordFixtures[1].expected);
+    });
+
+    it('extractCoordJson handles json wrapped in markdown', () => {
+        const parsed = extractCoordJson(coordFixtures[2].text);
+        expect(parsed).toEqual(coordFixtures[2].expected);
+    });
+
+    it('extractCoordJson prefers the last valid object when multiple are present', () => {
+        const parsed = extractCoordJson(coordFixtures[3].text);
+        expect(parsed).toEqual(coordFixtures[3].expected);
+    });
+
+    it('extractCoordJson returns null for missing x/y', () => {
+        const parsed = extractCoordJson(coordFixtures[4].text);
+        expect(parsed).toBeNull();
+    });
+
+    it('extractCoordJson returns null for truncated json', () => {
+        const parsed = extractCoordJson(coordFixtures[5].text);
+        expect(parsed).toBeNull();
+    });
+
+    it('assertCodexCli accepts an injected exec implementation', () => {
+        const execFn = () => 'codex';
+        expect(() => assertCodexCli({ execFn, binary: 'which' })).not.toThrow();
+    });
+
+    it('assertCodexCli throws a helpful error when the binary is missing', () => {
+        const execFn = () => {
+            throw new Error('not found');
+        };
+        expect(() => assertCodexCli({ execFn, binary: 'which' })).toThrow('codex CLI not found');
+    });
+
+    it('applyDprCorrection converts image pixels to CSS pixels', () => {
+        expect(applyDprCorrection(400, 276, 2)).toEqual({ x: 200, y: 138 });
+    });
+
+    it('parseVisionClickCliArgs keeps option values out of the target', () => {
+        const parsed = parseVisionClickCliArgs([
+            'Submit',
+            'button',
+            '--port', '9333',
+            '--double',
+            '--prepare-stable',
+            '--verify-before-click',
+            '--viewport', '1440x900',
+            '--region', 'left-panel',
+            '--clip', '10', '20', '300', '180',
+        ], {
+            port: '9222',
+            browserScript: '/tmp/browser.mjs',
+        });
+        expect(parsed.target).toBe('Submit button');
+        expect(parsed.opts).toEqual({
+            doubleClick: true,
+            port: '9333',
+            browserScript: '/tmp/browser.mjs',
+            prepareStable: true,
+            verifyBeforeClick: true,
+            viewport: { width: 1440, height: 900 },
+            region: 'left-panel',
+            clip: { x: 10, y: 20, width: 300, height: 180 },
+            help: false,
+        });
+    });
+
+    it('parseVisionClickCliArgs reads browser-script explicitly', () => {
+        const parsed = parseVisionClickCliArgs(['Target', '--browser-script', '/tmp/custom-browser.mjs'], {
+            port: '9222',
+            browserScript: '/tmp/default-browser.mjs',
+        });
+        expect(parsed.target).toBe('Target');
+        expect(parsed.opts.browserScript).toBe('/tmp/custom-browser.mjs');
+    });
+
+    it('parseViewportSpec parses WIDTHxHEIGHT', () => {
+        expect(parseViewportSpec('1600x900')).toEqual({ width: 1600, height: 900 });
+    });
+
+    it('describeRegion returns a concrete hint for named regions', () => {
+        expect(describeRegion('left-panel')).toContain('left-side results panel');
+        expect(describeRegion('center-map')).toContain('center map canvas');
+    });
+
+    it('resolveRegionClip returns deterministic clips for known regions', () => {
+        expect(resolveRegionClip('left-panel', { width: 1440, height: 900 })).toEqual({
+            x: 0,
+            y: 0,
+            width: 440,
+            height: 900,
+        });
+        expect(resolveRegionClip('top-bar', { width: 1440, height: 900 })).toEqual({
+            x: 0,
+            y: 0,
+            width: 1440,
+            height: 180,
+        });
+    });
+
+    it('clipAroundPoint keeps the verification clip inside viewport bounds', () => {
+        expect(clipAroundPoint({ x: 20, y: 20 }, { width: 1200, height: 800 }, { width: 280, height: 200 })).toEqual({
+            x: 0,
+            y: 0,
+            width: 280,
+            height: 200,
+        });
+    });
+});

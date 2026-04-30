@@ -1,0 +1,115 @@
+import { describe, expect, it } from 'vitest';
+import { queryWebAi } from '../../web-ai/chatgpt.mjs';
+
+describe('web-ai fake ChatGPT fixture', () => {
+    it('fills composer, stores baseline, filters placeholder, and returns final answer', async () => {
+        const page = createFakeChatGptPage();
+        const result = await queryWebAi({
+            getPage: async () => page,
+            getCdpSession: async () => ({
+                send: async (method, payload) => {
+                    if (method === 'Input.insertText') {
+                        page.insertedText = payload.text;
+                        page.composerValue = payload.text;
+                    }
+                },
+                detach: async () => undefined,
+            }),
+        }, {
+            vendor: 'chatgpt',
+            prompt: 'Reply exactly: OK',
+            project: 'cli-jaw',
+            goal: 'fixture test',
+            output: 'one line',
+            constraints: 'inline only',
+            timeout: 2,
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.status).toBe('complete');
+        expect(result.answerText).toBe('OK');
+        expect(result.baseline.assistantCount).toBe(1);
+        expect(result.baseline.promptHash).toMatch(/^[a-f0-9]{64}$/);
+        expect(page.insertedText).toContain('## Question\nReply exactly: OK');
+        expect(page.clickedSend).toBe(true);
+        expect(page.keys).not.toContain('Enter');
+    });
+});
+
+function createFakeChatGptPage() {
+    const page = {
+        composerValue: '',
+        insertedText: '',
+        keys: [],
+        assistantTexts: ['old answer'],
+        turnTexts: ['old answer'],
+        clickedSend: false,
+        url: () => 'https://chatgpt.com/c/fake',
+        keyboard: {
+            insertText: async text => {
+                page.insertedText = text;
+                page.composerValue = text;
+            },
+            press: async key => {
+                page.keys.push(key);
+                if (key === 'Enter') commitPrompt(page);
+            },
+        },
+        innerText: async selector => selector === 'body' ? page.assistantTexts.join('\n') : '',
+        waitForTimeout: async () => {
+            if (page.assistantTexts.at(-1) === 'Pro thinking...') {
+                page.assistantTexts[page.assistantTexts.length - 1] = 'OK';
+            }
+        },
+        evaluate: async (_fn, arg, legacySendSelectors) => {
+            const sendSelectors = Array.isArray(legacySendSelectors) ? legacySendSelectors : arg?.sendSelectors;
+            if (!Array.isArray(sendSelectors)) return null;
+            commitPrompt(page);
+            return 'clicked';
+        },
+        locator: selector => createFakeLocator(page, selector),
+    };
+    return page;
+}
+
+function createFakeLocator(page, selector) {
+    const isComposer = selector.includes('prompt-textarea') || selector.includes('ProseMirror') || selector.includes('contenteditable');
+    const isSendButton = selector.includes('send-button') || selector.includes('composer-send') || selector.includes('button[type="submit"]') || selector.includes('aria-label*="Send"');
+    const isTurn = selector.includes('conversation-turn') || selector.includes('data-message-author-role') || selector.includes('data-turn');
+    const isAssistant = selector.includes('assistant');
+    return {
+        first: () => createFakeLocator(page, selector),
+        count: async () => {
+            if (isComposer || isSendButton) return 1;
+            if (isAssistant) return page.assistantTexts.length;
+            if (isTurn) return page.turnTexts.length;
+            return 0;
+        },
+        waitFor: async () => undefined,
+        fill: async value => { page.composerValue = value; },
+        click: async () => {
+            if (isSendButton) commitPrompt(page);
+        },
+        evaluate: async fn => {
+            if (isSendButton) return false;
+            if (isComposer && page.composerValue) return undefined;
+            if (typeof fn === 'function') return undefined;
+            return undefined;
+        },
+        inputValue: async () => page.composerValue,
+        innerText: async () => isComposer ? page.composerValue : '',
+        all: async () => {
+            if (isAssistant) return page.assistantTexts.map(text => ({ innerText: async () => text }));
+            if (isTurn) return page.turnTexts.map(text => ({ innerText: async () => text }));
+            return [];
+        },
+    };
+}
+
+function commitPrompt(page) {
+    page.clickedSend = true;
+    page.turnTexts.push(page.composerValue);
+    page.composerValue = '';
+    page.assistantTexts.push('Pro thinking...');
+    page.turnTexts.push('Pro thinking...');
+}

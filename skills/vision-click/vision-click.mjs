@@ -1,33 +1,41 @@
 #!/usr/bin/env node
 /**
- * vision-click.mjs — Vision-based coordinate click for AI agents
- * Extracted from cli-jaw browser/vision.ts. Uses codex exec for vision AI.
+ * vision-click.mjs — Vision-based coordinate click via Codex CLI
  *
  * Usage:
- *   node vision-click.mjs "<target>" [--browser-script <path>] [--port N] [--double]
+ *   agent-browser-vision-click "<target>" [--port N] [--double] [--prepare-stable] [--region left-panel]
  *
- * Pipeline: screenshot → codex vision → DPR correction → mouse click → verify
+ * Pipeline: screenshot → optional clip → codex exec (NDJSON) → optional verify crop → DPR correction → mouse click → verify
  *
  * Requires:
- *   - browser.mjs (browser-standalone skill) running Chrome
- *   - codex CLI installed and authenticated
+ *   - agent-browser running Chrome
+ *   - codex CLI installed (npm install -g @openai/codex)
  */
 
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+    buildCoordPrompt,
+    extractCoordJson,
+    assertCodexCli,
+    applyDprCorrection,
+    clipAroundPoint,
+    describeRegion,
+    parseVisionClickCliArgs,
+    resolveRegionClip,
+} from './vision-core.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ─── Config ──────────────────────────────────────
-const BROWSER_SCRIPT = process.env.BROWSER_SCRIPT || join(__dirname, '..', 'browser', 'browser.mjs');
+const DEFAULT_BROWSER_SCRIPT = process.env.BROWSER_SCRIPT || join(__dirname, '..', 'browser', 'browser.mjs');
 const DEFAULT_CDP_PORT = process.env.CDP_PORT || '9222';
 
 // ─── ANSI colors ─────────────────────────────────
 const c = {
-    reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
-    red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m',
-    cyan: '\x1b[36m',
+    reset: '\x1b[0m', dim: '\x1b[2m',
+    red: '\x1b[31m', green: '\x1b[32m',
 };
 
 // ═══════════════════════════════════════════════════
@@ -35,8 +43,9 @@ const c = {
 // ═══════════════════════════════════════════════════
 
 function browserCmd(args, opts = {}) {
+    const browserScript = opts.browserScript || DEFAULT_BROWSER_SCRIPT;
     const portArgs = opts.port ? ['--port', String(opts.port)] : [];
-    const allArgs = [BROWSER_SCRIPT, ...args, ...portArgs];
+    const allArgs = [browserScript, ...args, ...portArgs];
     try {
         return execFileSync('node', allArgs, {
             encoding: 'utf-8',
@@ -49,126 +58,187 @@ function browserCmd(args, opts = {}) {
 }
 
 // ═══════════════════════════════════════════════════
-//  Codex Vision Provider (from cli-jaw src/browser/vision.ts)
+//  Codex CLI Vision (NDJSON)
 // ═══════════════════════════════════════════════════
+//
+// `codex exec --json` emits newline-delimited JSON events to stdout:
+//   {"type":"thread.started","thread_id":"..."}
+//   {"type":"turn.started"}
+//   {"type":"item.completed","item":{"id":"...","type":"agent_message","text":"{\"found\":true,\"x\":...,\"y\":...}"}}
+//   {"type":"turn.completed","usage":{...}}
 
-/**
- * Extract click coordinates from screenshot using Codex CLI vision.
- * Spawns `codex exec -i <image> --json` and parses NDJSON response.
- */
-function codexVision(screenshotPath, target) {
-    const prompt = [
-        `Look at this screenshot image carefully.`,
-        `Find the UI element "${target}" and return its center pixel coordinate.`,
-        `You MUST respond with ONLY this JSON format, nothing else:`,
-        `{"found":true,"x":<int>,"y":<int>,"description":"<brief description>"}`,
-        `If not found: {"found":false,"x":0,"y":0,"description":"not found"}`,
-        `IMPORTANT: Do NOT run any commands. Just analyze the image visually and return the JSON.`,
-    ].join(' ');
+function codexVisionWithPrompt(screenshotPath, prompt) {
+    const args = [
+        'exec', '-i', screenshotPath, '--json',
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--skip-git-repo-check',
+        '--ephemeral',
+        prompt,
+    ];
 
-    return new Promise((resolve, reject) => {
-        const args = [
-            'exec', '-i', screenshotPath, '--json',
-            '--dangerously-bypass-approvals-and-sandbox',
-            '--skip-git-repo-check',
-            prompt,
-        ];
-
-        const child = spawn('codex', args, {
+    let stdout;
+    try {
+        stdout = execFileSync('codex', args, {
+            encoding: 'utf-8',
+            timeout: 90000,
             stdio: ['pipe', 'pipe', 'pipe'],
-            timeout: 60000,
         });
+    } catch (e) {
+        throw new Error(`codex exec failed: ${(e.stderr || e.message).slice(0, 300)}`);
+    }
 
-        let stdout = '';
-        let stderr = '';
-        child.stdout.on('data', d => stdout += d);
-        child.stderr.on('data', d => stderr += d);
+    // Parse NDJSON lines, scan from last to first for item.completed with coordinates
+    const lines = stdout.split('\n').filter(l => l.trim());
+    for (const line of lines.reverse()) {
+        try {
+            const event = JSON.parse(line);
+            const text = event.item?.text || event.item?.aggregated_output || '';
+            if (!text) continue;
+            const coords = extractCoordJson(text);
+            if (coords) return coords;
+        } catch { /* skip non-JSON lines */ }
+    }
+    throw new Error(`No coordinate JSON in codex NDJSON output (${lines.length} lines)`);
+}
 
-        child.on('close', (code) => {
-            if (code !== 0) {
-                return reject(new Error(`codex exec failed (code ${code}): ${stderr.slice(0, 200)}`));
-            }
+function codexVision(screenshotPath, target, options = {}) {
+    return codexVisionWithPrompt(screenshotPath, buildCoordPrompt(target, options));
+}
 
-            try {
-                const lines = stdout.split('\n').filter(l => l.trim());
+function screenshotJsonArgs(opts = {}, clip = null) {
+    const args = ['screenshot', '--json'];
+    const effectiveClip = clip || opts.clip;
+    if (effectiveClip) {
+        args.push('--clip', String(effectiveClip.x), String(effectiveClip.y), String(effectiveClip.width), String(effectiveClip.height));
+    }
+    return args;
+}
 
-                // Scan ALL events for coordinate JSON (agent_message, command output, etc.)
-                // Codex is agentic — JSON may appear in any event type
-                for (const line of lines.reverse()) {
-                    try {
-                        const event = JSON.parse(line);
-                        const textsToSearch = [];
+function prepareStableViewport(opts = {}) {
+    if (!opts.prepareStable && !opts.viewport) return null;
+    const viewport = opts.viewport || { width: 1440, height: 900 };
+    browserCmd(['resize', String(viewport.width), String(viewport.height)], opts);
+    browserCmd(['wait', '250'], opts);
+    return viewport;
+}
 
-                        // Collect text from all event types
-                        if (event.item?.text) textsToSearch.push(event.item.text);
-                        if (event.item?.aggregated_output) textsToSearch.push(event.item.aggregated_output);
+function resolveInitialClip(opts, viewport) {
+    if (opts.clip) return opts.clip;
+    if (opts.region) return resolveRegionClip(opts.region, viewport);
+    return null;
+}
 
-                        for (const text of textsToSearch) {
-                            const jsonMatch = text.match(/\{[^{}]*"found"\s*:\s*(true|false)[^{}]*"x"\s*:\s*\d+[^{}]*"y"\s*:\s*\d+[^{}]*\}/);
-                            if (jsonMatch) {
-                                const coords = JSON.parse(jsonMatch[0]);
-                                if (typeof coords.x === 'number' && typeof coords.y === 'number') {
-                                    return resolve({ ...coords, provider: 'codex' });
-                                }
-                            }
-                        }
-                    } catch { /* skip non-JSON lines */ }
-                }
-                reject(new Error('No coordinate JSON found in codex output'));
-            } catch (e) {
-                reject(new Error(`Failed to parse codex output: ${e.message}`));
-            }
-        });
+function convertRawToCss(raw, dpr, clip = null) {
+    const local = applyDprCorrection(raw.x, raw.y, dpr);
+    if (!clip) return local;
+    return {
+        x: clip.x + local.x,
+        y: clip.y + local.y,
+    };
+}
 
-        child.on('error', (e) => reject(new Error(`Failed to spawn codex: ${e.message}`)));
+function verifyCandidate(target, capture, initialResult, opts = {}) {
+    const cssPoint = convertRawToCss({ x: initialResult.x, y: initialResult.y }, capture.dpr, capture.clip);
+    const verifyClip = clipAroundPoint(cssPoint, capture.viewport, { width: 280, height: 200 });
+    const verifyCapture = JSON.parse(browserCmd(screenshotJsonArgs(opts, verifyClip), opts));
+    const regionHint = describeRegion(opts.region);
+    const verified = codexVision(verifyCapture.path, target, {
+        regionHint: [regionHint, 'This is a zoomed verification crop around the candidate location.'].filter(Boolean).join(' '),
+        centerBias: true,
+        preferContainer: true,
     });
+
+    if (!verified.found) {
+        throw new Error('Verification crop did not contain the target');
+    }
+
+    const verifyCss = applyDprCorrection(verified.x, verified.y, verifyCapture.dpr || capture.dpr || 1);
+    const distanceX = Math.abs(verifyCss.x - verifyClip.width / 2);
+    const distanceY = Math.abs(verifyCss.y - verifyClip.height / 2);
+    if (distanceX > verifyClip.width * 0.45 || distanceY > verifyClip.height * 0.45) {
+        throw new Error('Verification candidate was too far from the crop center');
+    }
+
+    return {
+        raw: {
+            x: Math.round((verifyClip.x + verifyCss.x) * capture.dpr),
+            y: Math.round((verifyClip.y + verifyCss.y) * capture.dpr),
+        },
+        css: {
+            x: verifyClip.x + verifyCss.x,
+            y: verifyClip.y + verifyCss.y,
+        },
+        clip: verifyClip,
+        description: verified.description || initialResult.description,
+    };
 }
 
 // ═══════════════════════════════════════════════════
 //  Vision Click Pipeline
 // ═══════════════════════════════════════════════════
 
-async function visionClick(target, opts = {}) {
+function visionClick(target, opts = {}) {
+    const stableViewport = prepareStableViewport(opts);
+
     // 1. Screenshot (get path + DPR via --json)
     console.error(`${c.dim}📸 Taking screenshot...${c.reset}`);
-    const ssJson = browserCmd(['screenshot', '--json'], opts);
-    const ss = JSON.parse(ssJson);
+    const baseCapture = JSON.parse(browserCmd(['screenshot', '--json'], opts));
+    const viewport = stableViewport || baseCapture.viewport;
+    const clip = resolveInitialClip(opts, viewport);
+    const ss = clip
+        ? JSON.parse(browserCmd(screenshotJsonArgs(opts, clip), opts))
+        : baseCapture;
     const dpr = ss.dpr || 1;
     console.error(`${c.dim}   path: ${ss.path}, dpr: ${dpr}${c.reset}`);
+    if (clip) {
+        console.error(`${c.dim}   clip: (${clip.x}, ${clip.y}, ${clip.width}, ${clip.height})${c.reset}`);
+    }
 
-    // 2. Vision → coordinates (image pixel space)
-    console.error(`${c.dim}👁️  Analyzing screenshot for "${target}"...${c.reset}`);
-    const result = await codexVision(ss.path, target);
+    // 2. Codex vision → coordinates (image pixel space)
+    console.error(`${c.dim}👁️  Analyzing screenshot for "${target}" via codex...${c.reset}`);
+    const result = codexVision(ss.path, target, {
+        regionHint: describeRegion(opts.region),
+        preferContainer: true,
+    });
 
     if (!result.found) {
-        return { success: false, reason: 'target not found', provider: result.provider };
+        return { success: false, reason: 'target not found' };
     }
 
     // 3. DPR correction: image pixels → CSS pixels
-    const cssX = Math.round(result.x / dpr);
-    const cssY = Math.round(result.y / dpr);
-    console.error(`${c.dim}   raw: (${result.x}, ${result.y}) → css: (${cssX}, ${cssY}) [dpr=${dpr}]${c.reset}`);
+    let finalRaw = { x: result.x, y: result.y };
+    let finalCss = convertRawToCss(finalRaw, dpr, clip);
+    let verification = null;
+
+    if (opts.verifyBeforeClick) {
+        verification = verifyCandidate(target, { dpr, viewport, clip }, result, opts);
+        finalRaw = verification.raw;
+        finalCss = verification.css;
+        console.error(`${c.dim}   verified via crop: (${verification.clip.x}, ${verification.clip.y}, ${verification.clip.width}, ${verification.clip.height})${c.reset}`);
+    }
+
+    console.error(`${c.dim}   raw: (${finalRaw.x}, ${finalRaw.y}) → css: (${finalCss.x}, ${finalCss.y}) [dpr=${dpr}]${c.reset}`);
 
     // 4. Click
-    const clickArgs = ['mouse-click', String(cssX), String(cssY)];
+    const clickArgs = ['mouse-click', String(finalCss.x), String(finalCss.y)];
     if (opts.doubleClick) clickArgs.push('--double');
     browserCmd(clickArgs, opts);
 
     // 5. Verify (optional snapshot)
     let snap = null;
     try {
-        const snapOut = browserCmd(['snapshot', '--interactive'], opts);
-        snap = snapOut;
+        snap = browserCmd(['snapshot', '--interactive'], opts);
     } catch { /* ignore */ }
 
     return {
         success: true,
-        clicked: { x: cssX, y: cssY },
-        raw: { x: result.x, y: result.y },
+        clicked: { x: finalCss.x, y: finalCss.y },
+        raw: finalRaw,
         dpr,
-        provider: result.provider,
-        description: result.description,
+        description: verification?.description || result.description,
         snap,
+        clip,
+        verified: Boolean(verification),
     };
 }
 
@@ -176,32 +246,40 @@ async function visionClick(target, opts = {}) {
 //  CLI
 // ═══════════════════════════════════════════════════
 
-const args = process.argv.slice(2);
-const target = args.filter(a => !a.startsWith('--')).join(' ');
+const { target, opts } = parseVisionClickCliArgs(process.argv.slice(2), {
+    port: DEFAULT_CDP_PORT,
+    browserScript: DEFAULT_BROWSER_SCRIPT,
+});
 
-if (!target) {
+if (opts.help || !target) {
     console.log(`
-  👁️ vision-click.mjs — Vision-based coordinate click for AI agents
+  👁️ agent-browser-vision-click — Vision-based coordinate click via Codex CLI
 
   Usage:
-    node vision-click.mjs "<target description>" [options]
+    agent-browser-vision-click "<target description>" [options]
 
   Options:
     --double               Double-click instead of single click
     --port <N>             CDP port (default: 9222)
-    --browser-script <path>  Path to browser.mjs (default: ../browser-standalone/browser.mjs)
+    --browser-script <path>  Path to browser.mjs
+    --prepare-stable       Resize to a stable desktop viewport before capture
+    --viewport <WxH>       Custom viewport preset, e.g. 1440x900
+    --region <name>        Named crop: left-panel, center-map, top-bar
+    --clip <x y w h>       Manual crop in CSS pixels
+    --verify-before-click  Re-check a zoomed crop before clicking
 
   Pipeline:
-    screenshot → codex vision AI → DPR correction → mouse click → verify
+    screenshot → optional clip → codex exec (NDJSON) → optional verify crop → DPR correction → mouse click → verify
 
   Prerequisites:
-    - browser.mjs running Chrome (node browser.mjs start)
-    - codex CLI installed and authenticated
+    - agent-browser running Chrome (agent-browser start)
+    - codex CLI installed (npm install -g @openai/codex)
 
   Examples:
-    node vision-click.mjs "Login button"
-    node vision-click.mjs "Submit" --double
-    node vision-click.mjs "Menu icon" --port 9333
+    agent-browser-vision-click "Login button"
+    agent-browser-vision-click "Submit" --double
+    agent-browser-vision-click "Play button" --port 9333
+    agent-browser-vision-click "first search result row" --prepare-stable --region left-panel --verify-before-click
 
   Environment:
     BROWSER_SCRIPT         Path to browser.mjs (overrides default)
@@ -210,25 +288,15 @@ if (!target) {
     process.exit(0);
 }
 
-// Parse flags
-const opts = {};
-const portIdx = args.indexOf('--port');
-if (portIdx !== -1) opts.port = args[portIdx + 1];
-if (args.includes('--double')) opts.doubleClick = true;
-
-const bsIdx = args.indexOf('--browser-script');
-if (bsIdx !== -1) {
-    // Override for this process — unused since we use BROWSER_SCRIPT const,
-    // but keep for documentation. Actually re-configure via env.
-    process.env.BROWSER_SCRIPT = args[bsIdx + 1];
-}
+// Pre-flight: ensure codex CLI exists
+assertCodexCli();
 
 try {
     console.error(`${c.dim}👁️ vision-click: "${target}"...${c.reset}`);
-    const result = await visionClick(target, opts);
+    const result = visionClick(target, opts);
 
     if (result.success) {
-        console.log(`${c.green}🖱️ vision-clicked "${target}" at (${result.clicked.x}, ${result.clicked.y}) via ${result.provider}${c.reset}`);
+        console.log(`${c.green}🖱️ vision-clicked "${target}" at (${result.clicked.x}, ${result.clicked.y})${c.reset}`);
         if (result.dpr !== 1) {
             console.log(`${c.dim}   DPR=${result.dpr}, raw=(${result.raw.x}, ${result.raw.y})${c.reset}`);
         }
