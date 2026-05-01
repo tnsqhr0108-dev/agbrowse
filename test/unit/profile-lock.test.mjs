@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, rmdirSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { acquireProfileLock, releaseProfileLock, readProfileLock, isStaleLock, updateHeartbeat, updateLockPid, isPidAlive } from '../../skills/browser/profile-lock.mjs';
@@ -97,6 +97,22 @@ describe('profile-lock', () => {
 
     it('isStaleLock returns true for NaN timestamp without pid', () => {
         expect(isStaleLock({ acquiredAt: 'not-a-date', heartbeatAt: 'garbage' })).toBe(true);
+    });
+
+    it('isStaleLock returns false for alive pid with malformed timestamp', () => {
+        expect(isStaleLock({ pid: process.pid, acquiredAt: 'bad', heartbeatAt: 'bad' })).toBe(false);
+    });
+
+    it('isStaleLock returns true for dead pid with malformed timestamp', () => {
+        expect(isStaleLock({ pid: DEAD_PID, acquiredAt: 'bad', heartbeatAt: 'bad' })).toBe(true);
+    });
+
+    it('stale lock reclaim dir prevents concurrent reclaim', () => {
+        const staleLock = { pid: DEAD_PID, token: 'old', acquiredAt: new Date().toISOString(), heartbeatAt: new Date().toISOString() };
+        writeFileSync(join(TEST_HOME, 'profile.lock'), JSON.stringify(staleLock));
+        mkdirSync(join(TEST_HOME, 'profile.lock.reclaiming'));
+        expect(() => acquireProfileLock(TEST_HOME)).toThrow(/reclaim race/);
+        rmdirSync(join(TEST_HOME, 'profile.lock.reclaiming'));
     });
 
     it('stale lock (dead pid) is reclaimed on acquire', () => {

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, openSync, closeSync, writeFileSync, readFileSync, unlinkSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, closeSync, writeFileSync, readFileSync, unlinkSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
@@ -29,12 +29,24 @@ export function acquireProfileLock(homeDir = DEFAULT_HOME) {
     const lock = { pid: process.pid, token, acquiredAt: new Date().toISOString(), heartbeatAt: new Date().toISOString() };
 
     if (existing) {
-        const tmpPath = `${lockPath}.${token}.tmp`;
-        writeFileSync(tmpPath, JSON.stringify(lock, null, 2));
-        renameSync(tmpPath, lockPath);
-        const verify = readProfileLock(homeDir);
-        if (!verify || verify.token !== token) {
-            throw new Error('profile.lock reclaim race: another process acquired the lock');
+        const reclaimDir = `${lockPath}.reclaiming`;
+        try { mkdirSync(reclaimDir); } catch {
+            throw new Error('profile.lock reclaim race: another process is reclaiming the lock');
+        }
+        try {
+            const recheck = readProfileLock(homeDir);
+            if (recheck && !isStaleLock(recheck)) {
+                throw new Error(
+                    `profile.lock held by pid ${recheck.pid} since ${recheck.acquiredAt}. ` +
+                    `Lock was reclaimed by another process during our reclaim attempt.`
+                );
+            }
+            try { unlinkSync(lockPath); } catch { /* already gone */ }
+            const fd = openSync(lockPath, 'wx');
+            writeFileSync(fd, JSON.stringify(lock, null, 2));
+            closeSync(fd);
+        } finally {
+            try { rmdirSync(reclaimDir); } catch { /* cleanup */ }
         }
     } else {
         const fd = openSync(lockPath, 'wx');
@@ -62,14 +74,13 @@ export function readProfileLock(homeDir = DEFAULT_HOME) {
 
 export function isStaleLock(lock) {
     if (!lock) return true;
+    if (Number.isInteger(lock.pid) && lock.pid > 0) {
+        return !isPidAlive(lock.pid);
+    }
     const ref = lock.heartbeatAt || lock.acquiredAt;
     if (!ref) return true;
     const elapsed = Date.now() - Date.parse(ref);
     if (Number.isNaN(elapsed)) return true;
-    if (lock.pid) {
-        if (!isPidAlive(lock.pid)) return true;
-        return false;
-    }
     return elapsed > STALE_AFTER_MS;
 }
 
