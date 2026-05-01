@@ -301,5 +301,8 @@ provider/context-pack `throw new Error(` to `WebAiError`.
 - Never claim live web-ai success from render/dry-run alone.
 - Headed Chrome is the valid path for provider smoke tests.
 - Human verification and login screens must be completed by the user.
+- agbrowse does not bypass anti-bot, captcha, or Cloudflare checks.
+- Do not share one Chrome `--user-data-dir` across multiple CDP-controlled instances.
+- For agent integrations, prefer `AGBROWSE_JSON_ERRORS=1`.
 - If the active tab is ambiguous, run `agbrowse tabs` and
   `agbrowse tab-switch <targetId>` before mutation.

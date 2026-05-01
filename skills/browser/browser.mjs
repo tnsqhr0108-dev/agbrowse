@@ -49,6 +49,7 @@ import {
     dedupeRequests,
 } from './browser-core.mjs';
 import { runInstallSkillsCli, runSkillsCli } from './skill-install.mjs';
+import { acquireProfileLock, releaseProfileLock } from './profile-lock.mjs';
 import { runWebAiCli } from '../../web-ai/cli.mjs';
 
 // ─── Config ──────────────────────────────────────
@@ -295,6 +296,7 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
 
     if (chromeProc && !chromeProc.killed) return;
 
+    acquireProfileLock(DATA_DIR);
     mkdirSync(DATA_DIR, { recursive: true });
     const chrome = findChrome(opts.chromePath);
     const noSandbox = process.env.CHROME_NO_SANDBOX === '1';
@@ -485,6 +487,7 @@ async function closeBrowser() {
     chromeProc = null;
     clearPersistedState();
     clearPersistedSnapshot();
+    releaseProfileLock(DATA_DIR);
     activePort = null;
 }
 

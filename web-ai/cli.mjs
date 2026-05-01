@@ -6,6 +6,7 @@ import { buildContextPackageResult, prepareContextForBrowser, renderContextDryRu
 import { WebAiError, wrapError } from './errors.mjs';
 import { getSession, listSessions, pruneSessionsOlderThan } from './session.mjs';
 import { runDoctor } from './doctor.mjs';
+import { maybeRecordChurn } from './churn-log.mjs';
 
 const COMMANDS = new Set([
     'render', 'status', 'send', 'poll', 'query', 'stop',
@@ -225,7 +226,7 @@ async function runWebAiCliInner(argv = [], deps) {
     };
 
     const result = command === 'doctor'
-        ? await runDoctor(deps, { vendor: input.vendor, full: values.full })
+        ? await runDoctorWithChurn(deps, { vendor: input.vendor, full: values.full })
         : command === 'sessions'
             ? await runSessionsCommand(argv.slice(1), values, deps, input)
             : isContextCommand(command)
@@ -498,6 +499,15 @@ function webAiVendorLabel(vendor) {
     if (key === 'gemini') return 'Gemini';
     if (key === 'grok') return 'Grok';
     return key;
+}
+
+async function runDoctorWithChurn(deps, options) {
+    const report = await runDoctor(deps, options);
+    const churnRecords = maybeRecordChurn(report);
+    if (churnRecords.length) {
+        report.warnings = [...(report.warnings || []), `churn-log-recorded:${churnRecords.length}`];
+    }
+    return report;
 }
 
 function printDoctorHuman(report) {
