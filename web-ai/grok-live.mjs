@@ -45,8 +45,14 @@ export const grokCapabilities = [
     defineCapability('grok-active-tab-verification', async (deps) => probeHostMatches(await deps.getPage(), GROK_HOSTS)),
     defineCapability('grok-composer-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), COMPOSER_SELECTORS)),
     defineCapability('grok-model-alias-selectable', async (deps, input) => grokModelCapabilityProbe(await deps.getPage(), input.model)),
-    defineCapability('grok-upload-surface-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GROK_UPLOAD_SELECTORS, { failNext: 'inline-only' })),
-    defineCapability('grok-copy-button-present', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GROK_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send' })),
+    defineCapability('grok-upload-surface-visible', async (deps, input) => {
+        if (!input.filePath && input.inlineOnly !== false) return { state: 'unknown', evidence: { required: false }, next: 'send' };
+        return probeFirstVisibleSelector(await deps.getPage(), GROK_UPLOAD_SELECTORS, { failNext: 'inline-only' });
+    }),
+    defineCapability('grok-copy-button-present', async (deps, input) => {
+        if (!input.allowCopyMarkdownFallback) return { state: 'unknown', evidence: { required: false }, next: 'send' };
+        return probeFirstVisibleSelector(await deps.getPage(), GROK_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send', failState: 'warn' });
+    }),
     defineCapability('grok-response-streaming', async (deps) => {
         const page = await deps.getPage();
         for (const sel of STOP_SELECTORS) {

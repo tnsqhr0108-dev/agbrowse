@@ -75,8 +75,14 @@ export const chatGptCapabilities = [
     defineCapability('chatgpt-active-tab-verification', async (deps) => probeHostMatches(await deps.getPage(), CHATGPT_HOSTS)),
     defineCapability('chatgpt-composer-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), CHATGPT_COMPOSER_SELECTORS)),
     defineCapability('chatgpt-model-alias-selectable', async (deps, input) => chatGptModelCapabilityProbe(await deps.getPage(), input.model)),
-    defineCapability('chatgpt-upload-surface-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), CHATGPT_UPLOAD_SELECTORS, { failNext: 'inline-only' })),
-    defineCapability('chatgpt-copy-button-present', async (deps) => probeFirstVisibleSelector(await deps.getPage(), CHATGPT_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send' })),
+    defineCapability('chatgpt-upload-surface-visible', async (deps, input) => {
+        if (!input.filePath && input.inlineOnly !== false) return { state: 'unknown', evidence: { required: false }, next: 'send' };
+        return probeFirstVisibleSelector(await deps.getPage(), CHATGPT_UPLOAD_SELECTORS, { failNext: 'inline-only' });
+    }),
+    defineCapability('chatgpt-copy-button-present', async (deps, input) => {
+        if (!input.allowCopyMarkdownFallback) return { state: 'unknown', evidence: { required: false }, next: 'send' };
+        return probeFirstVisibleSelector(await deps.getPage(), CHATGPT_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send', failState: 'warn' });
+    }),
     defineCapability('chatgpt-response-streaming', async (deps) => {
         const page = await deps.getPage();
         for (const sel of CHATGPT_STOP_SELECTORS) {

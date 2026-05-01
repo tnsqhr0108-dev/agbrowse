@@ -56,8 +56,14 @@ export const geminiCapabilities = [
     defineCapability('gemini-active-tab-verification', async (deps) => probeHostMatches(await deps.getPage(), GEMINI_HOSTS)),
     defineCapability('gemini-composer-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), INPUT_SELECTORS)),
     defineCapability('gemini-model-alias-selectable', async (deps, input) => geminiModelCapabilityProbe(await deps.getPage(), input.model)),
-    defineCapability('gemini-upload-surface-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GEMINI_UPLOAD_SELECTORS, { failNext: 'inline-only' })),
-    defineCapability('gemini-copy-button-present', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GEMINI_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send' })),
+    defineCapability('gemini-upload-surface-visible', async (deps, input) => {
+        if (!input.filePath && input.inlineOnly !== false) return { state: 'unknown', evidence: { required: false }, next: 'send' };
+        return probeFirstVisibleSelector(await deps.getPage(), GEMINI_UPLOAD_SELECTORS, { failNext: 'inline-only' });
+    }),
+    defineCapability('gemini-copy-button-present', async (deps, input) => {
+        if (!input.allowCopyMarkdownFallback) return { state: 'unknown', evidence: { required: false }, next: 'send' };
+        return probeFirstVisibleSelector(await deps.getPage(), GEMINI_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send', failState: 'warn' });
+    }),
     defineCapability('gemini-response-streaming', async (deps) => {
         const page = await deps.getPage();
         for (const sel of COMPLETION_SELECTORS) {

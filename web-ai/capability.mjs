@@ -81,5 +81,5 @@ export async function probeFirstVisibleSelector(page, selectors, options = {}) {
         if (Date.now() >= deadline) break;
         await page.waitForTimeout?.(100).catch(() => undefined);
     }
-    return { state: 'fail', evidence: { selectorsTried: selectors }, next: options.failNext || 're-snapshot' };
+    return { state: options.failState || 'fail', evidence: { selectorsTried: selectors }, next: options.failNext || 're-snapshot' };
 }
