@@ -201,6 +201,9 @@ export async function validateResolvedTarget(page, target, {
     const visible = await el.isVisible().catch(() => false);
     if (!visible) return { ok: false, reason: 'not-visible' };
 
+    const enabled = await el.isEnabled().catch(() => false);
+    if (!enabled) return { ok: false, reason: 'not-enabled' };
+
     if (actionKind === 'fill') {
         const editable = await el.isEditable().catch(() => false);
         if (!editable) return { ok: false, reason: 'not-editable' };
