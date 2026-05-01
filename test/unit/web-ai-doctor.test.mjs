@@ -163,4 +163,16 @@ describe('web-ai doctor', () => {
             }
         }
     });
+
+    it('report with multibyte URL stays under 4KB byte budget after clamp', async () => {
+        const longPath = '/c/' + '가나다라'.repeat(200);
+        const page = fakePageForDoctor(`https://chatgpt.com${longPath}?token=x`, {
+            '#prompt-textarea': { count: 1, visible: true },
+        });
+        const deps = { getPage: async () => page };
+        const report = await runDoctor(deps, { vendor: 'chatgpt' });
+        const bytes = Buffer.byteLength(JSON.stringify(report), 'utf8');
+        expect(bytes).toBeLessThanOrEqual(4096);
+        expect(JSON.parse(JSON.stringify(report))).toBeTruthy();
+    });
 });

@@ -142,5 +142,8 @@ function clampReport(report, maxBytes) {
     if (byteLength(JSON.stringify(clamped)) > maxBytes) {
         clamped.url = clamped.url?.slice(0, 64) || null;
     }
+    if (byteLength(JSON.stringify(clamped)) > maxBytes) {
+        return { vendor: clamped.vendor, truncated: true, maxBytes, features: [], warnings: [`report-clamped:${rawBytes}→${maxBytes}`] };
+    }
     return clamped;
 }

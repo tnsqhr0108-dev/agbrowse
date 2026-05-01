@@ -14,10 +14,9 @@ export async function domHashAround(page, selectors, options = {}) {
 
 export function normalizeDomForHash(html) {
     return String(html)
-        .replace(/\sdata-[\w-]+="[^"]*"/g, '')
-        .replace(/\saria-[\w-]+="[^"]*"/g, '')
-        .replace(/\s(?:style|title|alt|placeholder|value)="[^"]*"/g, '')
-        .replace(/>([^<]{1,})</g, '><')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<(\w+)\s[^>]*>/g, '<$1>')
+        .replace(/>([^<]+)</g, '><')
         .replace(/\s+/g, ' ')
         .trim();
 }

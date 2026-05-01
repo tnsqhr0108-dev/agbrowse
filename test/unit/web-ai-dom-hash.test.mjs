@@ -87,14 +87,27 @@ describe('dom-hash', () => {
         expect(result[0].visible).toBe(true);
     });
 
-    it('normalizeDomForHash strips content-bearing attributes', () => {
-        const raw = '<input value="secret" title="tooltip" placeholder="type here" alt="img">';
+    it('normalizeDomForHash strips ALL attributes including href, src, id, class', () => {
+        const raw = '<a href="https://secret.com" id="u123" class="msg"><img src="/avatar.png" alt="photo"></a>';
         const normalized = normalizeDomForHash(raw);
-        expect(normalized).not.toContain('secret');
-        expect(normalized).not.toContain('tooltip');
-        expect(normalized).not.toContain('type here');
-        expect(normalized).not.toContain('img');
-        expect(normalized).toContain('<input');
+        expect(normalized).not.toContain('secret.com');
+        expect(normalized).not.toContain('u123');
+        expect(normalized).not.toContain('msg');
+        expect(normalized).not.toContain('avatar.png');
+        expect(normalized).toBe('<a><img></a>');
+    });
+
+    it('normalizeDomForHash strips HTML comments', () => {
+        const raw = '<div><!-- user session: abc123 --><span></span></div>';
+        expect(normalizeDomForHash(raw)).toBe('<div><span></span></div>');
+    });
+
+    it('href/src/id/class changes do not alter structural hash', async () => {
+        const page1 = fakePage('<a href="https://a.com" class="x"><img src="/1.png"></a>');
+        const page2 = fakePage('<a href="https://b.com" class="y"><img src="/2.png"></a>');
+        const h1 = await domHashAround(page1, ['a']);
+        const h2 = await domHashAround(page2, ['a']);
+        expect(h1).toBe(h2);
     });
 
     it('prompt/response text changes do not alter structural hash', async () => {
