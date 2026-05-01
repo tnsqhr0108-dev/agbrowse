@@ -29,10 +29,26 @@
 - Churn log writes to `$BROWSER_AGENT_HOME/churn-log.jsonl`.
 - Run `web-ai doctor` periodically to detect provider DOM changes early.
 
+## Diagnostics — churn log rotation
+
+- `compactChurnLog` runs automatically after each doctor-triggered churn
+  write, keeping the log at 500 records maximum.
+- For manual compaction: `readChurnLog` + `compactChurnLog(homeDir, limit)`.
+
 ## Profile lock
 
-- agbrowse creates `$BROWSER_AGENT_HOME/profile.lock` when launching Chrome.
-- A second launch from the same `BROWSER_AGENT_HOME` will refuse while the
-  lock is held (5-minute stale reclaim window).
-- If Chrome was `kill -9`'d, the lock auto-reclaims after 5 minutes or can
-  be manually deleted.
+- agbrowse creates `$BROWSER_AGENT_HOME/profile.lock` when launching a
+  **fresh** Chrome process. If the CDP port is already listening (an
+  existing Chrome session), agbrowse reuses it without acquiring a lock.
+- The lock stores the Chrome PID and an ownership token. A second fresh
+  launch from the same `BROWSER_AGENT_HOME` will refuse while the lock
+  is held and the Chrome PID is alive.
+- Staleness is determined by PID liveness: if the recorded Chrome PID is
+  dead, the lock is immediately reclaimable. The 5-minute timeout applies
+  only when no PID is recorded (legacy lock files).
+- If Chrome was `kill -9`'d, the lock auto-reclaims on the next launch
+  (PID check detects the dead process) or can be manually deleted.
+- `releaseProfileLock` verifies ownership (token or PID) before deleting;
+  it will not remove another instance's lock.
+- If Chrome fails to launch after the lock is acquired, the lock is
+  automatically released via try/finally cleanup.

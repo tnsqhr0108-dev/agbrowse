@@ -49,7 +49,7 @@ import {
     dedupeRequests,
 } from './browser-core.mjs';
 import { runInstallSkillsCli, runSkillsCli } from './skill-install.mjs';
-import { acquireProfileLock, releaseProfileLock } from './profile-lock.mjs';
+import { acquireProfileLock, releaseProfileLock, updateLockPid } from './profile-lock.mjs';
 import { runWebAiCli } from '../../web-ai/cli.mjs';
 
 // ─── Config ──────────────────────────────────────
@@ -68,6 +68,7 @@ const CUSTOM_CHROME_PATH = process.env.CHROME_BINARY_PATH || null;
 let cached = null;   // { browser, cdpUrl }
 let chromeProc = null;
 let activePort = null;
+let activeLockToken = null;
 
 // ─── ANSI colors ─────────────────────────────────
 const c = {
@@ -296,47 +297,57 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
 
     if (chromeProc && !chromeProc.killed) return;
 
-    acquireProfileLock(DATA_DIR);
-    mkdirSync(DATA_DIR, { recursive: true });
-    const chrome = findChrome(opts.chromePath);
-    const noSandbox = process.env.CHROME_NO_SANDBOX === '1';
-    const headless = opts.headless || process.env.CHROME_HEADLESS === '1';
+    const lockResult = acquireProfileLock(DATA_DIR);
+    activeLockToken = lockResult.token;
+    try {
+        mkdirSync(DATA_DIR, { recursive: true });
+        const chrome = findChrome(opts.chromePath);
+        const noSandbox = process.env.CHROME_NO_SANDBOX === '1';
+        const headless = opts.headless || process.env.CHROME_HEADLESS === '1';
 
-    chromeProc = spawn(chrome, [
-        `--remote-debugging-port=${port}`,
-        `--user-data-dir=${PROFILE_DIR}`,
-        '--no-first-run', '--no-default-browser-check',
-        '--disable-dev-shm-usage',
-        '--disable-background-networking',
-        ...(noSandbox ? ['--no-sandbox', '--disable-setuid-sandbox'] : []),
-        ...(headless ? ['--headless=new'] : []),
-        'about:blank',
-    ], { detached: true, stdio: 'ignore' });
-    chromeProc.unref();
+        chromeProc = spawn(chrome, [
+            `--remote-debugging-port=${port}`,
+            `--user-data-dir=${PROFILE_DIR}`,
+            '--no-first-run', '--no-default-browser-check',
+            '--disable-dev-shm-usage',
+            '--disable-background-networking',
+            ...(noSandbox ? ['--no-sandbox', '--disable-setuid-sandbox'] : []),
+            ...(headless ? ['--headless=new'] : []),
+            'about:blank',
+        ], { detached: true, stdio: 'ignore' });
+        chromeProc.unref();
 
-    const ready = await waitForCdpReady(port);
-    if (ready) {
-        activePort = port;
-        clearPersistedSnapshot();
-        writePersistedState({
-            pid: chromeProc.pid,
-            port,
-            chromePath: chrome,
-            startedAt: new Date().toISOString(),
-        });
-    } else {
-        if (chromeProc && !chromeProc.killed) {
-            chromeProc.kill('SIGTERM');
-            chromeProc = null;
+        updateLockPid(DATA_DIR, lockResult.token, chromeProc.pid);
+
+        const ready = await waitForCdpReady(port);
+        if (ready) {
+            activePort = port;
+            clearPersistedSnapshot();
+            writePersistedState({
+                pid: chromeProc.pid,
+                port,
+                chromePath: chrome,
+                startedAt: new Date().toISOString(),
+                lockToken: lockResult.token,
+            });
+        } else {
+            if (chromeProc && !chromeProc.killed) {
+                chromeProc.kill('SIGTERM');
+                chromeProc = null;
+            }
+            clearPersistedState();
+            throw new Error(
+                `Chrome CDP not responding on port ${port} after 10s. ` +
+                `Possible causes:\n` +
+                `  - Windows: Chrome singleton absorbed the launch (close ALL Chrome windows first)\n` +
+                `  - No display available (try --headless or CHROME_HEADLESS=1)\n` +
+                `  - Port conflict (try --port <other>)`
+            );
         }
-        clearPersistedState();
-        throw new Error(
-            `Chrome CDP not responding on port ${port} after 10s. ` +
-            `Possible causes:\n` +
-            `  - Windows: Chrome singleton absorbed the launch (close ALL Chrome windows first)\n` +
-            `  - No display available (try --headless or CHROME_HEADLESS=1)\n` +
-            `  - Port conflict (try --port <other>)`
-        );
+    } catch (err) {
+        releaseProfileLock(DATA_DIR, lockResult.token);
+        activeLockToken = null;
+        throw err;
     }
 }
 
@@ -485,9 +496,11 @@ async function closeBrowser() {
 
     cached = null;
     chromeProc = null;
+    const lockToken = activeLockToken || state?.lockToken || null;
     clearPersistedState();
     clearPersistedSnapshot();
-    releaseProfileLock(DATA_DIR);
+    releaseProfileLock(DATA_DIR, lockToken);
+    activeLockToken = null;
     activePort = null;
 }
 

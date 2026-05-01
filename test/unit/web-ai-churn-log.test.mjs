@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { readChurnLog, appendChurnRecord, compactChurnLog, maybeRecordChurn } from '../../web-ai/churn-log.mjs';
+import { readChurnLog, appendChurnRecord, compactChurnLog, maybeRecordChurn, churnLogPath } from '../../web-ai/churn-log.mjs';
 
 const TEST_HOME = join(tmpdir(), `agbrowse-churn-test-${process.pid}`);
 
@@ -87,6 +87,53 @@ describe('churn-log', () => {
                 features: [{ feature: 'upload', domHash: null, state: 'fail' }],
             };
             expect(maybeRecordChurn(report, TEST_HOME)).toHaveLength(0);
+        } finally {
+            if (original !== undefined) process.env.AGBROWSE_CHURN_LOG = original;
+            else delete process.env.AGBROWSE_CHURN_LOG;
+        }
+    });
+
+    it('readChurnLog skips malformed lines and preserves valid ones', () => {
+        const path = churnLogPath(TEST_HOME);
+        writeFileSync(path, '{"key":"a","domHash":"h1"}\n{{bad json\n{"key":"b","domHash":"h2"}\n');
+        const records = readChurnLog(TEST_HOME);
+        expect(records).toHaveLength(2);
+        expect(records[0].key).toBe('a');
+        expect(records[1].key).toBe('b');
+    });
+
+    it('compactChurnLog at limit=1 keeps only the last record', () => {
+        for (let i = 0; i < 5; i += 1) {
+            appendChurnRecord({ key: `k${i}`, domHash: `h${i}` }, TEST_HOME);
+        }
+        const kept = compactChurnLog(TEST_HOME, 1);
+        expect(kept).toBe(1);
+        const records = readChurnLog(TEST_HOME);
+        expect(records).toHaveLength(1);
+        expect(records[0].key).toBe('k4');
+    });
+
+    it('compactChurnLog returns count when under limit', () => {
+        appendChurnRecord({ key: 'k0', domHash: 'h0' }, TEST_HOME);
+        const kept = compactChurnLog(TEST_HOME, 100);
+        expect(kept).toBe(1);
+    });
+
+    it('maybeRecordChurn triggers compaction after writes', () => {
+        const original = process.env.AGBROWSE_CHURN_LOG;
+        try {
+            process.env.AGBROWSE_CHURN_LOG = '1';
+            for (let i = 0; i < 3; i += 1) {
+                appendChurnRecord({ key: `seed:${i}`, domHash: `h${i}` }, TEST_HOME);
+            }
+            const report = {
+                vendor: 'chatgpt',
+                features: [{ feature: 'composer', domHash: 'sha256:new', state: 'ok' }],
+            };
+            maybeRecordChurn(report, TEST_HOME);
+            const records = readChurnLog(TEST_HOME);
+            expect(records.length).toBeGreaterThanOrEqual(1);
+            expect(records.some(r => r.domHash === 'sha256:new')).toBe(true);
         } finally {
             if (original !== undefined) process.env.AGBROWSE_CHURN_LOG = original;
             else delete process.env.AGBROWSE_CHURN_LOG;

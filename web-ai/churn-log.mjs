@@ -13,9 +13,14 @@ export function churnLogPath(homeDir = DEFAULT_HOME) {
 export function readChurnLog(homeDir = DEFAULT_HOME) {
     const path = churnLogPath(homeDir);
     if (!existsSync(path)) return [];
-    try {
-        return readFileSync(path, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
-    } catch { return []; }
+    const raw = readFileSync(path, 'utf8').trim();
+    if (!raw) return [];
+    const records = [];
+    for (const line of raw.split('\n')) {
+        if (!line) continue;
+        try { records.push(JSON.parse(line)); } catch { /* skip malformed line */ }
+    }
+    return records;
 }
 
 export function appendChurnRecord(record, homeDir = DEFAULT_HOME) {
@@ -38,6 +43,7 @@ export function maybeRecordChurn(report, homeDir = DEFAULT_HOME) {
     const prior = readChurnLog(homeDir);
     const records = changedFeatureRecords(report, prior);
     for (const record of records) appendChurnRecord(record, homeDir);
+    if (records.length > 0) compactChurnLog(homeDir);
     return records;
 }
 
