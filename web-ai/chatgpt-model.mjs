@@ -1,3 +1,5 @@
+import { WebAiError } from './errors.mjs';
+
 export const CHATGPT_MODEL_SELECTOR_BUTTONS = [
     'button[data-testid="model-switcher-dropdown-button"]',
     'button[aria-label="Model selector"]',
@@ -41,7 +43,7 @@ export function normalizeChatGptModelChoice(model) {
 export async function selectChatGptModel(page, model) {
     const requested = normalizeChatGptModelChoice(model);
     if (!requested) {
-        if (model) throw new Error(`unsupported ChatGPT model selection: ${model}`);
+        if (model) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `unsupported ChatGPT model selection: ${model}`, evidence: { model } });
         return null;
     }
     const usedFallbacks = [];
@@ -52,13 +54,13 @@ export async function selectChatGptModel(page, model) {
         return { requested, selected: before, alreadySelected: true, usedFallbacks };
     }
     const option = await findModelOption(page, requested);
-    if (!option) throw new Error(`ChatGPT model option not found: ${requested}`);
+    if (!option) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT model option not found: ${requested}`, evidence: { requested } });
     await option.click({ timeout: 5_000 });
     await page.waitForTimeout(750).catch(() => undefined);
     await openModelMenu(page, usedFallbacks);
     const after = await readCheckedModel(page);
     await closeModelMenu(page);
-    if (after !== requested) throw new Error(`ChatGPT model verification failed: expected ${requested}, got ${after || 'none'}`);
+    if (after !== requested) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT model verification failed: expected ${requested}, got ${after || 'none'}`, evidence: { requested, got: after || null } });
     return { requested, selected: after, alreadySelected: false, usedFallbacks };
 }
 
@@ -97,7 +99,14 @@ async function openModelMenu(page, usedFallbacks) {
         await page.waitForTimeout(400).catch(() => undefined);
         if (await isModelMenuOpen(page)) return;
     }
-    throw new Error(`ChatGPT model selector not found. Tried: ${[...CHATGPT_MODEL_SELECTOR_BUTTONS, ...CHATGPT_COMPOSER_MODEL_PILL_SELECTORS].join(', ')}`);
+    throw new WebAiError({
+        errorCode: 'provider.model-mismatch',
+        stage: 'provider-select-mode',
+        vendor: 'chatgpt',
+        retryHint: 'model-fallback',
+        message: `ChatGPT model selector not found. Tried: ${[...CHATGPT_MODEL_SELECTOR_BUTTONS, ...CHATGPT_COMPOSER_MODEL_PILL_SELECTORS].join(', ')}`,
+        selectorsTried: [...CHATGPT_MODEL_SELECTOR_BUTTONS, ...CHATGPT_COMPOSER_MODEL_PILL_SELECTORS],
+    });
 }
 
 async function findComposerModelPill(page) {

@@ -1,3 +1,5 @@
+import { WebAiError } from './errors.mjs';
+
 export const GROK_MODEL_ALIASES = {
     auto: 'auto',
     automatic: 'auto',
@@ -35,7 +37,7 @@ export function normalizeGrokModelChoice(model) {
 export async function selectGrokModel(page, model) {
     const requested = normalizeGrokModelChoice(model);
     if (!requested) {
-        if (model) throw new Error(`unsupported Grok model selection: ${model}`);
+        if (model) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'grok', retryHint: 'model-fallback', message: `unsupported Grok model selection: ${model}`, evidence: { model } });
         return null;
     }
     const usedFallbacks = [];
@@ -43,11 +45,11 @@ export async function selectGrokModel(page, model) {
     if (before === requested) return { requested, selected: before, alreadySelected: true, usedFallbacks };
     await openGrokModelMenu(page, usedFallbacks);
     const option = await findGrokModelOption(page, requested);
-    if (!option) throw new Error(`Grok model option not found: ${requested}`);
+    if (!option) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'grok', retryHint: 'model-fallback', message: `Grok model option not found: ${requested}`, evidence: { requested } });
     await option.click({ timeout: 5_000 });
     await page.waitForTimeout(700).catch(() => undefined);
     const after = await readGrokModel(page);
-    if (after !== requested) throw new Error(`Grok model verification failed: expected ${requested}, got ${after || 'none'}`);
+    if (after !== requested) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'grok', retryHint: 'model-fallback', message: `Grok model verification failed: expected ${requested}, got ${after || 'none'}`, evidence: { requested, got: after || null } });
     return { requested, selected: after, alreadySelected: false, usedFallbacks };
 }
 
@@ -72,7 +74,14 @@ async function openGrokModelMenu(page, usedFallbacks) {
         await page.waitForTimeout(350).catch(() => undefined);
         if (await page.locator('[role="menuitem"]').first().isVisible().catch(() => false)) return;
     }
-    throw new Error(`Grok model selector not found. Tried: ${MODEL_BUTTONS.join(', ')}`);
+    throw new WebAiError({
+        errorCode: 'provider.model-mismatch',
+        stage: 'provider-select-mode',
+        vendor: 'grok',
+        retryHint: 'model-fallback',
+        message: `Grok model selector not found. Tried: ${MODEL_BUTTONS.join(', ')}`,
+        selectorsTried: [...MODEL_BUTTONS],
+    });
 }
 
 async function findGrokModelOption(page, choice) {

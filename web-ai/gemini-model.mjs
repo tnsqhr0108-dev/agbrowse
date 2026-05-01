@@ -1,3 +1,5 @@
+import { WebAiError } from './errors.mjs';
+
 export const GEMINI_MODEL_ALIASES = {
     fast: 'fast',
     flash: 'fast',
@@ -46,7 +48,7 @@ export async function selectGeminiModel(page, model) {
     if (isGeminiDeepThinkChoice(model)) return null;
     const requested = normalizeGeminiModelChoice(model);
     if (!requested) {
-        if (model) throw new Error(`unsupported Gemini model selection: ${model}`);
+        if (model) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'gemini', retryHint: 'model-fallback', message: `unsupported Gemini model selection: ${model}`, evidence: { model } });
         return null;
     }
     const usedFallbacks = [];
@@ -54,11 +56,11 @@ export async function selectGeminiModel(page, model) {
     if (before === requested) return { requested, selected: before, alreadySelected: true, usedFallbacks };
     await openGeminiModelMenu(page, usedFallbacks);
     const option = await findGeminiModelOption(page, requested);
-    if (!option) throw new Error(`Gemini model option not found: ${requested}`);
+    if (!option) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'gemini', retryHint: 'model-fallback', message: `Gemini model option not found: ${requested}`, evidence: { requested } });
     await option.click({ timeout: 5_000 });
     await page.waitForTimeout(700).catch(() => undefined);
     const after = await readGeminiModel(page);
-    if (after !== requested) throw new Error(`Gemini model verification failed: expected ${requested}, got ${after || 'none'}`);
+    if (after !== requested) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'gemini', retryHint: 'model-fallback', message: `Gemini model verification failed: expected ${requested}, got ${after || 'none'}`, evidence: { requested, got: after || null } });
     return { requested, selected: after, alreadySelected: false, usedFallbacks };
 }
 
@@ -83,7 +85,14 @@ async function openGeminiModelMenu(page, usedFallbacks) {
         await page.waitForTimeout(350).catch(() => undefined);
         if (await page.locator('[data-test-id^="bard-mode-option-"], [role="menuitem"]').first().isVisible().catch(() => false)) return;
     }
-    throw new Error(`Gemini mode selector not found. Tried: ${MODE_BUTTONS.join(', ')}`);
+    throw new WebAiError({
+        errorCode: 'provider.model-mismatch',
+        stage: 'provider-select-mode',
+        vendor: 'gemini',
+        retryHint: 'model-fallback',
+        message: `Gemini mode selector not found. Tried: ${MODE_BUTTONS.join(', ')}`,
+        selectorsTried: [...MODE_BUTTONS],
+    });
 }
 
 async function findGeminiModelOption(page, choice) {

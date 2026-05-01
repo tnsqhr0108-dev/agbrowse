@@ -1,4 +1,5 @@
 import { findVisibleCandidate } from './browser-primitives.mjs';
+import { WebAiError } from './errors.mjs';
 
 export const INPUT_SELECTORS = [
     'textarea[data-id="prompt-textarea"]',
@@ -40,7 +41,14 @@ const DEFAULT_COMMIT_TIMEOUT_MS = 60_000;
 export async function findComposerCandidate(page) {
     const candidate = await findVisibleCandidate(page, INPUT_SELECTORS, { allowFirstCandidateFallback: true });
     if (candidate) return { selector: candidate.selector, locator: candidate.locator };
-    throw new Error(`ChatGPT composer not found. Tried: ${INPUT_SELECTORS.join(', ')}`);
+    throw new WebAiError({
+        errorCode: 'provider.composer-not-visible',
+        stage: 'composer-prereq',
+        vendor: 'chatgpt',
+        retryHint: 're-snapshot',
+        message: `ChatGPT composer not found. Tried: ${INPUT_SELECTORS.join(', ')}`,
+        selectorsTried: [...INPUT_SELECTORS],
+    });
 }
 
 export async function insertPromptIntoComposer(page, text, options = {}) {
@@ -59,10 +67,24 @@ export async function insertPromptIntoComposer(page, text, options = {}) {
     }
     const verified = await readComposerState(page, candidate.locator);
     if (!hasInsertedText(verified, text)) {
-        throw new Error('composer verification failed after prompt insertion');
+        throw new WebAiError({
+            errorCode: 'provider.commit-not-verified',
+            stage: 'commit-verify',
+            vendor: 'chatgpt',
+            retryHint: 're-snapshot',
+            message: 'composer verification failed after prompt insertion',
+            mutationAllowed: true,
+        });
     }
     if (text.length >= 50_000 && maxComposerLength(verified) > 0 && maxComposerLength(verified) < text.length - 2_000) {
-        throw new Error('Prompt appears truncated in the composer');
+        throw new WebAiError({
+            errorCode: 'provider.commit-not-verified',
+            stage: 'commit-verify',
+            vendor: 'chatgpt',
+            retryHint: 're-snapshot',
+            message: 'Prompt appears truncated in the composer',
+            mutationAllowed: true,
+        });
     }
 }
 
@@ -95,7 +117,14 @@ export async function verifyPromptCommitted(page, prompt, options = {}) {
         if (composerCleared && hasNewTurn && (stopVisible || assistantVisible)) return { turnsCount: turns.length };
         await page.waitForTimeout?.(100);
     }
-    throw new Error('Prompt did not appear in conversation before timeout (send may have failed)');
+    throw new WebAiError({
+        errorCode: 'provider.commit-not-verified',
+        stage: 'commit-verify',
+        vendor: 'chatgpt',
+        retryHint: 're-snapshot',
+        message: 'Prompt did not appear in conversation before timeout (send may have failed)',
+        mutationAllowed: true,
+    });
 }
 
 export async function countConversationTurns(page) {

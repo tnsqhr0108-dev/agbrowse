@@ -67,13 +67,16 @@ export const chatGptCapabilities = [
 ];
 
 export async function statusWebAi(deps, input = {}) {
-    const page = await requireChatGptPage(deps);
+    // Run capability probes first so chatgpt-active-tab-verification can report
+    // a fail row instead of throwing before any rows are collected. The strict
+    // host-required path stays available for send/poll via requireChatGptPage().
+    const page = await deps.getPage();
     const capabilities = await runCapabilities(deps, chatGptCapabilities, input);
     const worst = worstCapabilityState(capabilities);
     return {
         ok: worst !== 'fail',
         vendor: input.vendor || 'chatgpt',
-        status: 'ready',
+        status: worst === 'fail' ? 'blocked' : 'ready',
         url: page.url(),
         capabilities,
         capabilityState: worst,
