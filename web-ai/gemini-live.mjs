@@ -1,7 +1,18 @@
 import { basename } from 'node:path';
 import { statSync } from 'node:fs';
 import { normalizeEnvelope, renderQuestionEnvelope, renderQuestionEnvelopeWithContext } from './question.mjs';
-import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
+import {
+    createSession,
+    findActiveSession,
+    getBaseline,
+    getLatestBaseline,
+    getSession,
+    resolveDeadlineAt,
+    saveBaseline,
+    sessionToBaseline,
+    summarizeEnvelope,
+    updateSession,
+} from './session.mjs';
 import { prepareContextForBrowser } from './context-pack/index.mjs';
 import { captureCopiedResponseText, GEMINI_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
 import { selectGeminiModel } from './gemini-model.mjs';
@@ -181,11 +192,19 @@ export async function geminiSendWebAi(deps, input = {}) {
         assistantCount: turnsBefore,
         textHash: String((await page.innerText('body').catch(() => '')).length),
     });
+    const session = createSession(envelope, {
+        targetId: await deps.getTargetId?.().catch(() => null) || null,
+        originalUrl: input.url || page.url(),
+        conversationUrl: page.url(),
+        deadlineAt: resolveDeadlineAt(input, 'gemini'),
+        envelopeSummary: { ...summarizeEnvelope(input, contextPack), assistantCount: turnsBefore },
+    });
     return {
         ok: true,
         vendor: 'gemini',
         status: 'sent',
         url: page.url(),
+        sessionId: session.sessionId,
         baseline,
         usedFallbacks,
         contextPack: contextPack ? summarizeContextPack(contextPack) : undefined,
@@ -289,7 +308,16 @@ export async function geminiPollWebAi(deps, input = {}) {
         message: `active tab is not gemini.google.com (${page.url()})`,
         evidence: { url: page.url() },
     });
-    const baseline = getBaseline('gemini', page.url()) || getLatestBaseline('gemini');
+    const session = input.session
+        ? getSession(input.session)
+        : findActiveSession({
+            vendor: 'gemini',
+            targetId: await deps.getTargetId?.().catch(() => null) || null,
+            conversationUrl: page.url(),
+        });
+    const baseline = (session && sessionToBaseline(session))
+        || getBaseline('gemini', page.url())
+        || getLatestBaseline('gemini');
     if (!baseline) throw new WebAiError({
         errorCode: 'provider.poll-timeout',
         stage: 'poll',
@@ -320,21 +348,25 @@ export async function geminiPollWebAi(deps, input = {}) {
                     warnings.push(`copy-markdown-fallback-unavailable:${copied.status || 'unknown'}`);
                 }
             }
-            return { ok: true, vendor: 'gemini', status: 'complete', url: page.url(), answerText, baseline, usedFallbacks, warnings };
+            if (session) updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+            return { ok: true, vendor: 'gemini', status: 'complete', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), answerText, baseline, usedFallbacks, warnings };
         }
         await page.waitForTimeout(2_000).catch(() => undefined);
     }
-    return { ok: false, vendor: 'gemini', status: 'timeout', url: page.url(), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for gemini response' };
+    if (session) updateSession(session.sessionId, { status: 'timeout' });
+    return { ok: false, vendor: 'gemini', status: 'timeout', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for gemini response' };
 }
 
 export async function geminiQueryWebAi(deps, input = {}) {
     const sent = await geminiSendWebAi(deps, input);
     const result = await geminiPollWebAi(deps, {
         timeout: input.timeout || input.thinkingTime,
+        session: sent.sessionId,
         allowCopyMarkdownFallback: input.allowCopyMarkdownFallback === true,
     });
     return {
         ...result,
+        sessionId: result.sessionId || sent.sessionId,
         usedFallbacks: [...(sent.usedFallbacks || []), ...(result.usedFallbacks || [])],
         warnings: [...(sent.warnings || []), ...(result.warnings || [])],
     };

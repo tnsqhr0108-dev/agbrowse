@@ -1,0 +1,117 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const ORIGINAL_HOME = process.env.BROWSER_AGENT_HOME;
+let tmpHome;
+
+beforeEach(() => {
+    tmpHome = mkdtempSync(join(tmpdir(), 'agbrowse-provider-session-'));
+    process.env.BROWSER_AGENT_HOME = tmpHome;
+});
+
+afterEach(() => {
+    if (ORIGINAL_HOME === undefined) delete process.env.BROWSER_AGENT_HOME;
+    else process.env.BROWSER_AGENT_HOME = ORIGINAL_HOME;
+    rmSync(tmpHome, { recursive: true, force: true });
+});
+
+describe('web-ai resolveDeadlineAt', () => {
+    it('uses explicit deadline when provided', async () => {
+        const { resolveDeadlineAt } = await import('../../web-ai/session.mjs');
+        const iso = '2026-12-31T00:00:00.000Z';
+        expect(resolveDeadlineAt({ deadline: iso }, 'chatgpt')).toBe(iso);
+    });
+
+    it('derives from --timeout when deadline missing', async () => {
+        const { resolveDeadlineAt } = await import('../../web-ai/session.mjs');
+        const before = Date.now();
+        const out = resolveDeadlineAt({ timeout: 60 }, 'chatgpt');
+        const computed = Date.parse(out);
+        expect(computed - before).toBeGreaterThanOrEqual(58_000);
+        expect(computed - before).toBeLessThanOrEqual(62_000);
+    });
+
+    it('falls back to vendor default (chatgpt 1200, gemini 1200, grok 600)', async () => {
+        const { resolveDeadlineAt } = await import('../../web-ai/session.mjs');
+        const before = Date.now();
+        const cg = Date.parse(resolveDeadlineAt({}, 'chatgpt')) - before;
+        const gm = Date.parse(resolveDeadlineAt({}, 'gemini')) - before;
+        const gk = Date.parse(resolveDeadlineAt({}, 'grok')) - before;
+        expect(cg).toBeGreaterThanOrEqual(1199_000);
+        expect(cg).toBeLessThanOrEqual(1201_000);
+        expect(gm).toBeGreaterThanOrEqual(1199_000);
+        expect(gm).toBeLessThanOrEqual(1201_000);
+        expect(gk).toBeGreaterThanOrEqual(599_000);
+        expect(gk).toBeLessThanOrEqual(601_000);
+    });
+});
+
+describe('web-ai summarizeEnvelope', () => {
+    it('captures model + attachmentPolicy + filePath + contextPack stats', async () => {
+        const { summarizeEnvelope } = await import('../../web-ai/session.mjs');
+        const summary = summarizeEnvelope(
+            { model: 'pro', attachmentPolicy: 'upload', filePath: '/tmp/x.txt' },
+            { files: [{}, {}], transport: 'upload' },
+        );
+        expect(summary).toEqual({
+            model: 'pro',
+            attachmentPolicy: 'upload',
+            filePath: '/tmp/x.txt',
+            fileCount: 2,
+            contextTransport: 'upload',
+        });
+    });
+});
+
+describe('web-ai provider integration (source-string contracts)', () => {
+    const root = process.cwd();
+    const chatgptSrc = readFileSync(join(root, 'web-ai/chatgpt.mjs'), 'utf8');
+    const geminiSrc = readFileSync(join(root, 'web-ai/gemini-live.mjs'), 'utf8');
+    const grokSrc = readFileSync(join(root, 'web-ai/grok-live.mjs'), 'utf8');
+
+    it('all three providers create a session on send and return sessionId', () => {
+        for (const src of [chatgptSrc, geminiSrc, grokSrc]) {
+            expect(src).toMatch(/createSession\(envelope, \{[\s\S]*?targetId:[\s\S]*?conversationUrl:[\s\S]*?deadlineAt: resolveDeadlineAt/);
+            expect(src).toMatch(/sessionId: session\.sessionId/);
+        }
+    });
+
+    it('all three providers resolve session on poll via input.session > findActiveSession', () => {
+        for (const src of [chatgptSrc, geminiSrc, grokSrc]) {
+            expect(src).toMatch(/input\.session\s*\?\s*getSession\(input\.session\)/);
+            expect(src).toMatch(/findActiveSession\(\{[\s\S]*?vendor[\s\S]*?targetId[\s\S]*?conversationUrl/);
+            expect(src).toMatch(/session && sessionToBaseline\(session\)/);
+        }
+    });
+
+    it('all three providers updateSession on completion and on timeout', () => {
+        for (const src of [chatgptSrc, geminiSrc, grokSrc]) {
+            expect(src).toMatch(/updateSession\(session\.sessionId, \{ status: 'complete'/);
+            expect(src).toMatch(/updateSession\(session\.sessionId, \{ status: 'timeout' \}\)/);
+        }
+    });
+
+    it('queryWebAi forwards sent.sessionId into pollWebAi to keep one session record', () => {
+        for (const src of [chatgptSrc, geminiSrc, grokSrc]) {
+            expect(src).toMatch(/session: sent\.sessionId/);
+            expect(src).toMatch(/sessionId: result\.sessionId \|\| sent\.sessionId/);
+        }
+    });
+});
+
+describe('web-ai cli session flags', () => {
+    const cliSrc = readFileSync(join(process.cwd(), 'web-ai/cli.mjs'), 'utf8');
+    it('declares --session, --deadline, --navigate options', () => {
+        expect(cliSrc).toMatch(/session: \{ type: 'string' \}/);
+        expect(cliSrc).toMatch(/deadline: \{ type: 'string' \}/);
+        expect(cliSrc).toMatch(/navigate: \{ type: 'boolean', default: false \}/);
+    });
+
+    it('passes them into the input object as session/deadline/navigate', () => {
+        expect(cliSrc).toMatch(/session: values\.session/);
+        expect(cliSrc).toMatch(/deadline: values\.deadline/);
+        expect(cliSrc).toMatch(/navigate: values\.navigate === true/);
+    });
+});

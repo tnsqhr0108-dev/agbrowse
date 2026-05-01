@@ -1,5 +1,16 @@
 import { renderQuestionEnvelope, renderQuestionEnvelopeWithContext, normalizeEnvelope } from './question.mjs';
-import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
+import {
+    createSession,
+    findActiveSession,
+    getBaseline,
+    getLatestBaseline,
+    getSession,
+    resolveDeadlineAt,
+    saveBaseline,
+    sessionToBaseline,
+    summarizeEnvelope,
+    updateSession,
+} from './session.mjs';
 import { WebAiError } from './errors.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
@@ -76,6 +87,13 @@ export async function sendWebAi(deps, input = {}) {
         assistantCount,
         textHash: String((await page.innerText('body').catch(() => '')).length),
     });
+    const session = createSession(envelope, {
+        targetId: await deps.getTargetId?.().catch(() => null) || null,
+        originalUrl: input.url || page.url(),
+        conversationUrl: page.url(),
+        deadlineAt: resolveDeadlineAt(input, 'chatgpt'),
+        envelopeSummary: { ...summarizeEnvelope(input, contextPack), assistantCount },
+    });
 
     const adapter = createChatGptEditorAdapter(page, {
         insertText: async (text) => {
@@ -130,11 +148,16 @@ export async function sendWebAi(deps, input = {}) {
             mutationAllowed: true,
         });
     }
+    const finalUrl = page.url();
+    if (session && finalUrl !== session.conversationUrl) {
+        updateSession(session.sessionId, { conversationUrl: finalUrl });
+    }
     return {
         ok: true,
         vendor: envelope.vendor,
         status: 'sent',
-        url: page.url(),
+        url: finalUrl,
+        sessionId: session.sessionId,
         baseline,
         usedFallbacks: [...usedFallbacks, ...(selectedModel?.usedFallbacks || [])],
         contextPack: contextPack ? summarizeContextPack(contextPack) : undefined,
@@ -153,7 +176,15 @@ export async function pollWebAi(deps, input = {}) {
     const timeout = Math.max(1, Number(input.timeout || 1200));
     const page = await requireChatGptPage(deps);
     const url = page.url();
-    const baseline = getBaseline(vendor, url)
+    const session = input.session
+        ? getSession(input.session)
+        : findActiveSession({
+            vendor,
+            targetId: await deps.getTargetId?.().catch(() => null) || null,
+            conversationUrl: url,
+        });
+    const baseline = (session && sessionToBaseline(session))
+        || getBaseline(vendor, url)
         || getLatestBaseline(vendor, { sameHostUrl: url })
         || getLatestBaseline(vendor);
     if (!baseline) throw new WebAiError({
@@ -188,11 +219,13 @@ export async function pollWebAi(deps, input = {}) {
                             warnings.push(`copy-markdown-fallback-unavailable:${copied.status || 'unknown'}`);
                         }
                     }
+                    if (session) updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
                     return {
                         ok: true,
                         vendor,
                         status: 'complete',
                         url: page.url(),
+                        ...(session ? { sessionId: session.sessionId } : {}),
                         answerText,
                         baseline,
                         usedFallbacks,
@@ -214,29 +247,35 @@ export async function pollWebAi(deps, input = {}) {
         const copied = await captureCopiedResponseText(page, CHATGPT_COPY_SELECTORS);
         const copiedText = preferCopiedText(stableText, copied);
         if (copiedText) {
+            const answerText = cleanAssistantText(copiedText);
+            if (session) updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
             return {
                 ok: true,
                 vendor,
                 status: 'complete',
                 url: page.url(),
-                answerText: cleanAssistantText(copiedText),
+                ...(session ? { sessionId: session.sessionId } : {}),
+                answerText,
                 baseline,
                 usedFallbacks: ['copy-markdown'],
                 warnings: [],
             };
         }
+        if (session) updateSession(session.sessionId, { status: 'timeout' });
         return {
             ok: false,
             vendor,
             status: 'timeout',
             url: page.url(),
+            ...(session ? { sessionId: session.sessionId } : {}),
             baseline,
             warnings: [`copy-markdown-fallback-unavailable:${copied.status || 'unknown'}`],
             usedFallbacks: [],
             error: 'timed out waiting for answer',
         };
     }
-    return { ok: false, vendor, status: 'timeout', url: page.url(), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for answer' };
+    if (session) updateSession(session.sessionId, { status: 'timeout' });
+    return { ok: false, vendor, status: 'timeout', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for answer' };
 }
 
 async function isStreaming(page) {
@@ -252,10 +291,12 @@ export async function queryWebAi(deps, input = {}) {
     const result = await pollWebAi(deps, {
         vendor: sent.vendor,
         timeout: input.timeout,
+        session: sent.sessionId,
         allowCopyMarkdownFallback: input.allowCopyMarkdownFallback === true,
     });
     return {
         ...result,
+        sessionId: result.sessionId || sent.sessionId,
         usedFallbacks: [...(sent.usedFallbacks || []), ...(result.usedFallbacks || [])],
         warnings: [...(sent.warnings || []), ...(result.warnings || [])],
     };

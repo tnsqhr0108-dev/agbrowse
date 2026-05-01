@@ -53,6 +53,11 @@ Attachments and context:
   --allow-copy-markdown-fallback    Capture provider Copy button output after DOM response
   --allow-grok-context-pack         Override Grok context-pack hard-gate (Grok prefers inline)
 
+Sessions (Phase 1):
+  --session <id>      Resume an existing session (Phase 1 PR2). poll/query priority: --session > active target > vendor latest.
+  --deadline <iso>    Override the session deadline (default derived from --timeout / vendor poll default)
+  --navigate          Allow sessions resume to switch tabs when conversationUrl mismatches (PR3)
+
 Output:
   --json             Print JSON
   --full             Print full context dry-run/render output
@@ -111,6 +116,9 @@ async function runWebAiCliInner(argv = [], deps) {
             output: { type: 'string' },
             constraints: { type: 'string' },
             timeout: { type: 'string' },
+            deadline: { type: 'string' },
+            session: { type: 'string' },
+            navigate: { type: 'boolean', default: false },
             'inline-only': { type: 'boolean', default: false },
             'allow-copy-markdown-fallback': { type: 'boolean', default: false },
             'allow-grok-context-pack': { type: 'boolean', default: false },
@@ -154,6 +162,9 @@ async function runWebAiCliInner(argv = [], deps) {
         output: values.output,
         constraints: values.constraints,
         timeout: values.timeout,
+        deadline: values.deadline,
+        session: values.session,
+        navigate: values.navigate === true,
         attachmentPolicy: values.file ? 'upload' : 'inline-only',
         filePath: values.file,
         thinkingTime: values['thinking-time'],

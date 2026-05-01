@@ -155,6 +155,27 @@ export function pruneSessionsOlderThan(input = {}) {
     return pruneSessions(input);
 }
 
+const VENDOR_DEFAULT_TIMEOUT_SEC = { chatgpt: 1200, gemini: 1200, grok: 600 };
+
+export function resolveDeadlineAt(input = {}, vendor = 'chatgpt') {
+    if (input.deadlineAt) return new Date(input.deadlineAt).toISOString();
+    if (input.deadline) return new Date(input.deadline).toISOString();
+    const seconds = Number(input.timeout) > 0
+        ? Number(input.timeout)
+        : VENDOR_DEFAULT_TIMEOUT_SEC[vendor] || 1200;
+    return new Date(Date.now() + seconds * 1000).toISOString();
+}
+
+export function summarizeEnvelope(input = {}, contextPack = null) {
+    const summary = {};
+    if (input.model) summary.model = input.model;
+    if (input.attachmentPolicy) summary.attachmentPolicy = input.attachmentPolicy;
+    if (input.filePath) summary.filePath = input.filePath;
+    if (contextPack?.files?.length) summary.fileCount = contextPack.files.length;
+    if (contextPack?.transport) summary.contextTransport = contextPack.transport;
+    return summary;
+}
+
 export function sessionToBaseline(session) {
     if (!session) return null;
     return {

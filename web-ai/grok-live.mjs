@@ -1,5 +1,16 @@
 import { normalizeEnvelope, renderQuestionEnvelope, renderQuestionEnvelopeWithContext } from './question.mjs';
-import { getBaseline, getLatestBaseline, saveBaseline } from './session.mjs';
+import {
+    createSession,
+    findActiveSession,
+    getBaseline,
+    getLatestBaseline,
+    getSession,
+    resolveDeadlineAt,
+    saveBaseline,
+    sessionToBaseline,
+    summarizeEnvelope,
+    updateSession,
+} from './session.mjs';
 import { hasContextPackaging, prepareContextForBrowser } from './context-pack/index.mjs';
 import { WebAiError } from './errors.mjs';
 
@@ -137,11 +148,19 @@ export async function grokSendWebAi(deps, input = {}) {
         assistantCount,
         textHash: String((await page.innerText('body').catch(() => '')).length),
     });
+    const session = createSession(envelope, {
+        targetId: await deps.getTargetId?.().catch(() => null) || null,
+        originalUrl: input.url || page.url(),
+        conversationUrl: page.url(),
+        deadlineAt: resolveDeadlineAt(input, 'grok'),
+        envelopeSummary: { ...summarizeEnvelope(input, contextPack), assistantCount },
+    });
     return {
         ok: true,
         vendor: 'grok',
         status: 'sent',
         url: page.url(),
+        sessionId: session.sessionId,
         baseline,
         contextPack: contextPack ? summarizeContextPack(contextPack) : undefined,
         usedFallbacks: selectedModel?.usedFallbacks || [],
@@ -163,7 +182,16 @@ export async function grokPollWebAi(deps, input = {}) {
         message: `active tab is not grok.com (${page.url()})`,
         evidence: { url: page.url() },
     });
-    const baseline = getBaseline('grok', page.url()) || getLatestBaseline('grok');
+    const session = input.session
+        ? getSession(input.session)
+        : findActiveSession({
+            vendor: 'grok',
+            targetId: await deps.getTargetId?.().catch(() => null) || null,
+            conversationUrl: page.url(),
+        });
+    const baseline = (session && sessionToBaseline(session))
+        || getBaseline('grok', page.url())
+        || getLatestBaseline('grok');
     if (!baseline) throw new WebAiError({
         errorCode: 'provider.poll-timeout',
         stage: 'poll',
@@ -195,7 +223,8 @@ export async function grokPollWebAi(deps, input = {}) {
                             warnings.push(`copy-markdown-fallback-unavailable:${copied.status || 'unknown'}`);
                         }
                     }
-                    return { ok: true, vendor: 'grok', status: 'complete', url: page.url(), answerText, baseline, usedFallbacks, warnings };
+                    if (session) updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+                    return { ok: true, vendor: 'grok', status: 'complete', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), answerText, baseline, usedFallbacks, warnings };
                 }
             } else {
                 stableText = latest;
@@ -207,17 +236,20 @@ export async function grokPollWebAi(deps, input = {}) {
         }
         await page.waitForTimeout(500).catch(() => undefined);
     }
-    return { ok: false, vendor: 'grok', status: 'timeout', url: page.url(), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for grok response' };
+    if (session) updateSession(session.sessionId, { status: 'timeout' });
+    return { ok: false, vendor: 'grok', status: 'timeout', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for grok response' };
 }
 
 export async function grokQueryWebAi(deps, input = {}) {
     const sent = await grokSendWebAi(deps, input);
     const result = await grokPollWebAi(deps, {
         timeout: input.timeout || input.thinkingTime,
+        session: sent.sessionId,
         allowCopyMarkdownFallback: input.allowCopyMarkdownFallback === true,
     });
     return {
         ...result,
+        sessionId: result.sessionId || sent.sessionId,
         usedFallbacks: [...(sent.usedFallbacks || []), ...(result.usedFallbacks || [])],
         warnings: [...(sent.warnings || []), ...(result.warnings || [])],
     };
