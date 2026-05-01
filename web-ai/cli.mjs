@@ -5,10 +5,11 @@ import { grokStatusWebAi, grokSendWebAi, grokPollWebAi, grokQueryWebAi, grokStop
 import { buildContextPackageResult, prepareContextForBrowser, renderContextDryRunReport } from './context-pack/index.mjs';
 import { WebAiError, wrapError } from './errors.mjs';
 import { getSession, listSessions, pruneSessionsOlderThan } from './session.mjs';
+import { runDoctor } from './doctor.mjs';
 
 const COMMANDS = new Set([
     'render', 'status', 'send', 'poll', 'query', 'stop',
-    'sessions',
+    'sessions', 'doctor',
     'context-dry-run', 'context-render',
 ]);
 const SESSIONS_SUBCOMMANDS = new Set(['list', 'show', 'resume', 'reattach', 'prune']);
@@ -223,11 +224,13 @@ async function runWebAiCliInner(argv = [], deps) {
         probe: values.probe,
     };
 
-    const result = command === 'sessions'
-        ? await runSessionsCommand(argv.slice(1), values, deps, input)
-        : isContextCommand(command)
-            ? await runContextCommand(command, input, values)
-            : await runCommand(command, deps, input);
+    const result = command === 'doctor'
+        ? await runDoctor(deps, { vendor: input.vendor, full: values.full })
+        : command === 'sessions'
+            ? await runSessionsCommand(argv.slice(1), values, deps, input)
+            : isContextCommand(command)
+                ? await runContextCommand(command, input, values)
+                : await runCommand(command, deps, input);
     if (isContextCommand(command) && values.json) console.log(renderContextDryRunReport(result, {
         mode: 'json',
         full: values.full || command === 'context-render',
@@ -240,6 +243,7 @@ async function runWebAiCliInner(argv = [], deps) {
         full: values.full || command === 'context-render',
         json: false,
     }));
+    else if (command === 'doctor') printDoctorHuman(result);
     else if (command === 'sessions') printSessionsHuman(result);
     else printHuman(command, result);
     return result;
@@ -494,6 +498,26 @@ function webAiVendorLabel(vendor) {
     if (key === 'gemini') return 'Gemini';
     if (key === 'grok') return 'Grok';
     return key;
+}
+
+function printDoctorHuman(report) {
+    const worst = report.features.reduce((w, f) => {
+        const rank = { fail: 3, warn: 2, ok: 1, unknown: 0 };
+        return (rank[f.state] || 0) > (rank[w] || 0) ? f.state : w;
+    }, 'ok');
+    console.log(`doctor ${report.vendor}  worst=${worst}  ${report.url}`);
+    console.log(`captured: ${report.capturedAt}`);
+    for (const f of report.features) {
+        const matches = f.selectorMatches.length;
+        const tried = f.selectorsTried.length;
+        console.log(`  ${f.state.padEnd(4)}  ${f.feature.padEnd(22)}  ${matches}/${tried} selectors  ${f.domHash}`);
+    }
+    if (report.lastSession) {
+        console.log(`  session: ${report.lastSession.sessionId} (${report.lastSession.status})`);
+    }
+    if (report.warnings?.length) {
+        console.log(`  warnings: ${report.warnings.join(', ')}`);
+    }
 }
 
 function printHuman(command, result) {
