@@ -16,21 +16,33 @@ function fakePage(evalResult, locatorMap = {}) {
 describe('dom-hash', () => {
     it('normalizeDomForHash strips cosmetic attributes', () => {
         const raw = '<div data-message-id="abc" aria-busy="true" style="color:red">hello  world</div>';
-        expect(normalizeDomForHash(raw)).toBe('<div>hello world</div>');
+        expect(normalizeDomForHash(raw)).toBe('<div></div>');
+    });
+
+    it('normalizeDomForHash strips text content for structural-only hashing', () => {
+        const a = normalizeDomForHash('<div><button>Copy this secret</button></div>');
+        const b = normalizeDomForHash('<div><button>Copy different secret</button></div>');
+        expect(a).toBe(b);
     });
 
     it('normalizeDomForHash preserves structural differences', () => {
-        const a = normalizeDomForHash('<div><button>Copy</button></div>');
-        const b = normalizeDomForHash('<div><span>Copy</span></div>');
+        const a = normalizeDomForHash('<div><button></button></div>');
+        const b = normalizeDomForHash('<div><span></span></div>');
         expect(a).not.toBe(b);
     });
 
-    it('domHashAround returns stable hash for same content', async () => {
-        const page = fakePage('<div style="color:red" data-message-id="x">content</div>');
-        const h1 = await domHashAround(page, ['div.foo']);
-        const h2 = await domHashAround(page, ['div.bar']);
+    it('domHashAround returns sha256 hash', async () => {
+        const page = fakePage('<div style="color:red"><button>ok</button></div>');
+        const hash = await domHashAround(page, ['div.foo']);
+        expect(hash).toMatch(/^sha256:[0-9a-f]{16}$/);
+    });
+
+    it('domHashAround returns stable hash for same structure', async () => {
+        const page1 = fakePage('<div style="a"><button>secret1</button></div>');
+        const page2 = fakePage('<div style="b"><button>secret2</button></div>');
+        const h1 = await domHashAround(page1, ['div']);
+        const h2 = await domHashAround(page2, ['div']);
         expect(h1).toBe(h2);
-        expect(h1).toMatch(/^sha1:[0-9a-f]{40}$/);
     });
 
     it('domHashAround returns different hash for different structure', async () => {
@@ -41,10 +53,10 @@ describe('dom-hash', () => {
         expect(h1).not.toBe(h2);
     });
 
-    it('domHashAround handles missing element', async () => {
-        const page = fakePage('missing');
+    it('domHashAround returns null when no element found', async () => {
+        const page = fakePage(null);
         const hash = await domHashAround(page, ['div.nonexistent']);
-        expect(hash).toMatch(/^sha1:/);
+        expect(hash).toBeNull();
     });
 
     it('selectorMatchSummary returns counts and visibility', async () => {
@@ -56,5 +68,13 @@ describe('dom-hash', () => {
         expect(result).toHaveLength(2);
         expect(result[0]).toEqual({ selector: 'button.copy', matched: 2, visible: true });
         expect(result[1]).toEqual({ selector: 'button.upload', matched: 0, visible: false });
+    });
+
+    it('prompt/response text changes do not alter structural hash', async () => {
+        const page1 = fakePage('<div contenteditable="true"><p>Write me a poem about cats</p></div>');
+        const page2 = fakePage('<div contenteditable="true"><p>Write me a poem about dogs and API keys abc123</p></div>');
+        const h1 = await domHashAround(page1, ['div']);
+        const h2 = await domHashAround(page2, ['div']);
+        expect(h1).toBe(h2);
     });
 });

@@ -184,7 +184,6 @@ export async function chatGptModelCapabilityProbe(page, model) {
     } catch {
         menuClosed = false;
     }
-    return option
-        ? { state: 'ok', evidence: { requested, menuClosed, usedFallbacks }, next: 'send' }
-        : { state: 'fail', evidence: { requested, menuClosed }, next: 'model-fallback' };
+    const state = option ? (menuClosed ? 'ok' : 'warn') : 'fail';
+    return { state, evidence: { requested, menuClosed, usedFallbacks }, next: state === 'ok' ? 'send' : 'model-fallback' };
 }

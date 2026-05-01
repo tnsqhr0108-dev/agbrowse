@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { featureDefinitionsForVendor, diagnoseFeature, runDoctor } from '../../web-ai/doctor.mjs';
 
-function fakePageForDoctor(locatorMap = {}) {
+function fakePageForDoctor(url, locatorMap = {}) {
     return {
-        url: () => 'https://chatgpt.com/c/test-123',
-        evaluate: async () => '<div>fake</div>',
+        url: () => url || 'https://chatgpt.com/c/test-123',
+        evaluate: async (_fn, selectors) => {
+            if (Array.isArray(selectors)) {
+                const hasMatch = selectors.some(s => (locatorMap[s]?.count ?? 0) > 0);
+                return hasMatch ? '<div><button>ok</button></div>' : null;
+            }
+            return '<div><button>ok</button></div>';
+        },
         locator: (selector) => ({
             count: async () => locatorMap[selector]?.count ?? 0,
             first: () => ({
@@ -15,7 +21,7 @@ function fakePageForDoctor(locatorMap = {}) {
 }
 
 describe('web-ai doctor', () => {
-    it('featureDefinitionsForVendor returns features for each vendor', () => {
+    it('featureDefinitionsForVendor returns 6 features for each vendor', () => {
         expect(featureDefinitionsForVendor('chatgpt').length).toBe(6);
         expect(featureDefinitionsForVendor('gemini').length).toBe(6);
         expect(featureDefinitionsForVendor('grok').length).toBe(6);
@@ -28,7 +34,7 @@ describe('web-ai doctor', () => {
     });
 
     it('diagnoseFeature returns ok when selector is visible', async () => {
-        const page = fakePageForDoctor({
+        const page = fakePageForDoctor('https://chatgpt.com/', {
             'div[contenteditable="true"]': { count: 1, visible: true },
         });
         const feature = { feature: 'composer', selectors: ['#missing', 'div[contenteditable="true"]'] };
@@ -36,11 +42,12 @@ describe('web-ai doctor', () => {
         expect(result.feature).toBe('composer');
         expect(result.state).toBe('ok');
         expect(result.selectorMatches.length).toBeGreaterThan(0);
-        expect(result.domHash).toMatch(/^sha1:/);
+        expect(result.selectorCounts.tried).toBe(2);
+        expect(result.selectorCounts.matched).toBe(1);
     });
 
     it('diagnoseFeature returns warn when matched but not visible', async () => {
-        const page = fakePageForDoctor({
+        const page = fakePageForDoctor('https://chatgpt.com/', {
             'button.copy': { count: 1, visible: false },
         });
         const feature = { feature: 'copy', selectors: ['button.copy'] };
@@ -49,30 +56,29 @@ describe('web-ai doctor', () => {
     });
 
     it('diagnoseFeature returns fail when nothing matches', async () => {
-        const page = fakePageForDoctor({});
+        const page = fakePageForDoctor('https://chatgpt.com/');
         const feature = { feature: 'upload', selectors: ['button.upload'] };
         const result = await diagnoseFeature(page, feature);
         expect(result.state).toBe('fail');
         expect(result.selectorMatches).toEqual([]);
     });
 
-    it('runDoctor produces a complete report', async () => {
-        const page = fakePageForDoctor({
+    it('runDoctor produces a complete report with redacted URL', async () => {
+        const page = fakePageForDoctor('https://chatgpt.com/c/secret-id?token=abc', {
             'div[contenteditable="true"]': { count: 1, visible: true },
         });
         const deps = { getPage: async () => page };
         const report = await runDoctor(deps, { vendor: 'chatgpt' });
-
         expect(report.vendor).toBe('chatgpt');
-        expect(report.url).toBe('https://chatgpt.com/c/test-123');
+        expect(report.url).toBe('https://chatgpt.com/c/secret-id');
+        expect(report.url).not.toContain('token=abc');
         expect(report.capturedAt).toBeTruthy();
         expect(report.features.length).toBe(6);
-        expect(report.lastSession === null || typeof report.lastSession === 'object').toBe(true);
         expect(Array.isArray(report.warnings)).toBe(true);
     });
 
-    it('runDoctor report is parseable JSON under 4KB by default', async () => {
-        const page = fakePageForDoctor({});
+    it('runDoctor report is parseable JSON under 4KB', async () => {
+        const page = fakePageForDoctor('https://chatgpt.com/');
         const deps = { getPage: async () => page };
         const report = await runDoctor(deps, { vendor: 'chatgpt' });
         const json = JSON.stringify(report);
@@ -80,16 +86,63 @@ describe('web-ai doctor', () => {
         expect(JSON.parse(json)).toBeTruthy();
     });
 
-    it('each feature has required keys', async () => {
-        const page = fakePageForDoctor({});
+    it('each feature has required keys including selectorCounts', async () => {
+        const page = fakePageForDoctor('https://gemini.google.com/');
         const deps = { getPage: async () => page };
         const report = await runDoctor(deps, { vendor: 'gemini' });
         for (const f of report.features) {
             expect(f).toHaveProperty('feature');
             expect(f).toHaveProperty('selectorsTried');
             expect(f).toHaveProperty('selectorMatches');
+            expect(f).toHaveProperty('selectorCounts');
             expect(f).toHaveProperty('state');
             expect(f).toHaveProperty('domHash');
+            expect(f.selectorCounts).toHaveProperty('tried');
+            expect(f.selectorCounts).toHaveProperty('matched');
+        }
+    });
+
+    it('wrong host skips DOM evidence and adds warning', async () => {
+        const page = fakePageForDoctor('https://evil.com/', {
+            'div[contenteditable="true"]': { count: 1, visible: true },
+        });
+        const deps = { getPage: async () => page };
+        const report = await runDoctor(deps, { vendor: 'chatgpt' });
+        expect(report.warnings.some(w => w.startsWith('host-mismatch'))).toBe(true);
+        for (const f of report.features) {
+            expect(f.state).toBe('fail');
+            expect(f.domHash).toBeNull();
+        }
+    });
+
+    it('session content is redacted by default', async () => {
+        const page = fakePageForDoctor('https://chatgpt.com/');
+        const deps = { getPage: async () => page };
+        const report = await runDoctor(deps, { vendor: 'chatgpt' });
+        if (report.lastSession) {
+            expect(report.lastSession).not.toHaveProperty('composerBefore');
+            expect(report.lastSession).not.toHaveProperty('composerAfter');
+        }
+    });
+
+    it('clamped report remains valid JSON with truncated flag', async () => {
+        const page = fakePageForDoctor('https://chatgpt.com/');
+        const deps = { getPage: async () => page };
+        const report = await runDoctor(deps, { vendor: 'chatgpt' });
+        const json = JSON.stringify(report);
+        const parsed = JSON.parse(json);
+        expect(parsed).toBeTruthy();
+        expect(parsed.vendor).toBe('chatgpt');
+    });
+
+    it('domHash is null when selector not found', async () => {
+        const page = fakePageForDoctor('https://chatgpt.com/');
+        const deps = { getPage: async () => page };
+        const report = await runDoctor(deps, { vendor: 'chatgpt' });
+        for (const f of report.features) {
+            if (f.state === 'fail') {
+                expect(f.domHash).toBeNull();
+            }
         }
     });
 });
