@@ -15,7 +15,7 @@ import {
 } from './session.mjs';
 import { prepareContextForBrowser } from './context-pack/index.mjs';
 import { captureCopiedResponseText, GEMINI_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
-import { selectGeminiModel } from './gemini-model.mjs';
+import { selectGeminiModel, geminiModelCapabilityProbe } from './gemini-model.mjs';
 import { preflightAttachment } from './chatgpt-attachments.mjs';
 import { WebAiError } from './errors.mjs';
 import { defineCapability, probeFirstVisibleSelector, probeHostMatches, runCapabilities, worstCapabilityState } from './capability.mjs';
@@ -47,9 +47,28 @@ const RESPONSE_SELECTORS = ['model-response', '[data-response-index]'];
 const RESPONSE_TEXT_SELECTORS = ['message-content', '.markdown', '[class*="response-content"]'];
 const COMPLETION_SELECTORS = ['.response-footer.complete', 'message-actions', '[aria-label*="Good response" i]'];
 
+const GEMINI_UPLOAD_SELECTORS = [
+    'button[aria-label="Open upload file menu"]',
+    'button[aria-label*="upload file menu" i]',
+];
+
 export const geminiCapabilities = [
     defineCapability('gemini-active-tab-verification', async (deps) => probeHostMatches(await deps.getPage(), GEMINI_HOSTS)),
     defineCapability('gemini-composer-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), INPUT_SELECTORS)),
+    defineCapability('gemini-model-alias-selectable', async (deps, input) => geminiModelCapabilityProbe(await deps.getPage(), input.model)),
+    defineCapability('gemini-upload-surface-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GEMINI_UPLOAD_SELECTORS, { failNext: 'inline-only' })),
+    defineCapability('gemini-copy-button-present', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GEMINI_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send' })),
+    defineCapability('gemini-response-streaming', async (deps) => {
+        const page = await deps.getPage();
+        for (const sel of COMPLETION_SELECTORS) {
+            if (await page.locator(sel).first().isVisible().catch(() => false)) {
+                return { state: 'ok', evidence: { streaming: false, completionSelector: sel }, next: 'send' };
+            }
+        }
+        const hasResponse = await page.locator(RESPONSE_SELECTORS[0]).first().isVisible().catch(() => false);
+        if (hasResponse) return { state: 'warn', evidence: { streaming: true }, next: 'poll' };
+        return { state: 'ok', evidence: { streaming: false }, next: 'send' };
+    }),
 ];
 
 export async function geminiStatusWebAi(deps, input = {}) {

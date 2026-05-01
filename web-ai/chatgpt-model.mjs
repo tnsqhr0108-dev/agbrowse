@@ -165,3 +165,20 @@ async function readActiveModelPill(page) {
 async function isModelMenuOpen(page) {
     return page.locator(CHATGPT_MODEL_MENU_ITEM_SELECTOR).first().isVisible().catch(() => false);
 }
+
+export async function chatGptModelCapabilityProbe(page, model) {
+    const requested = normalizeChatGptModelChoice(model);
+    if (!model) return { state: 'unknown', evidence: { requested: null }, next: 'send' };
+    if (!requested) return { state: 'fail', evidence: { requested: model }, next: 'model-fallback' };
+    const usedFallbacks = [];
+    try {
+        await openModelMenu(page, usedFallbacks);
+    } catch {
+        return { state: 'fail', evidence: { requested, menuOpenFailed: true, usedFallbacks }, next: 'model-fallback' };
+    }
+    const option = await findModelOption(page, requested).catch(() => null);
+    await closeModelMenu(page).catch(() => undefined);
+    return option
+        ? { state: 'ok', evidence: { requested, usedFallbacks }, next: 'send' }
+        : { state: 'fail', evidence: { requested }, next: 'model-fallback' };
+}

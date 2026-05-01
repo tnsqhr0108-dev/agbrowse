@@ -101,6 +101,16 @@ async function findGrokModelOption(page, choice) {
     return null;
 }
 
+export async function grokModelCapabilityProbe(page, model) {
+    const requested = normalizeGrokModelChoice(model);
+    if (!model) return { state: 'unknown', evidence: { requested: null }, next: 'send' };
+    if (!requested) return { state: 'fail', evidence: { requested: model }, next: 'model-fallback' };
+    const active = await readGrokModel(page).catch(() => null);
+    return active === requested
+        ? { state: 'ok', evidence: { active, requested }, next: 'send' }
+        : { state: 'warn', evidence: { active, requested }, next: 'model-fallback' };
+}
+
 async function readGrokModel(page) {
     for (const selector of MODEL_BUTTONS) {
         const loc = page.locator(selector).first();

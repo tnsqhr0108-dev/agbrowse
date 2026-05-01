@@ -20,7 +20,7 @@ import {
     fileInfoFromPath,
     verifySentTurnAttachmentLive,
 } from './chatgpt-attachments.mjs';
-import { selectChatGptModel } from './chatgpt-model.mjs';
+import { selectChatGptModel, chatGptModelCapabilityProbe } from './chatgpt-model.mjs';
 import { prepareContextForBrowser } from './context-pack/index.mjs';
 import { captureCopiedResponseText, CHATGPT_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
 
@@ -61,9 +61,31 @@ export async function renderWebAi(input = {}) {
     };
 }
 
+const CHATGPT_UPLOAD_SELECTORS = [
+    'button[aria-label*="Upload" i]',
+    'button[aria-label*="Attach" i]',
+    'button[data-testid*="plus" i]',
+];
+const CHATGPT_STOP_SELECTORS = [
+    'button[data-testid="stop-button"]',
+    'button[aria-label*="Stop" i]',
+];
+
 export const chatGptCapabilities = [
     defineCapability('chatgpt-active-tab-verification', async (deps) => probeHostMatches(await deps.getPage(), CHATGPT_HOSTS)),
     defineCapability('chatgpt-composer-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), CHATGPT_COMPOSER_SELECTORS)),
+    defineCapability('chatgpt-model-alias-selectable', async (deps, input) => chatGptModelCapabilityProbe(await deps.getPage(), input.model)),
+    defineCapability('chatgpt-upload-surface-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), CHATGPT_UPLOAD_SELECTORS, { failNext: 'inline-only' })),
+    defineCapability('chatgpt-copy-button-present', async (deps) => probeFirstVisibleSelector(await deps.getPage(), CHATGPT_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send' })),
+    defineCapability('chatgpt-response-streaming', async (deps) => {
+        const page = await deps.getPage();
+        for (const sel of CHATGPT_STOP_SELECTORS) {
+            if (await page.locator(sel).first().isVisible().catch(() => false)) {
+                return { state: 'warn', evidence: { streaming: true, selector: sel }, next: 'poll' };
+            }
+        }
+        return { state: 'ok', evidence: { streaming: false }, next: 'send' };
+    }),
 ];
 
 export async function statusWebAi(deps, input = {}) {

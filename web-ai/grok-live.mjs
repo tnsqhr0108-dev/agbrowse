@@ -18,7 +18,7 @@ import { defineCapability, probeFirstVisibleSelector, probeHostMatches, runCapab
 export const GROK_CONTEXT_PACK_WARNING = 'grok-context-pack-not-recommended: prefer inline prompts plus optional --file uploads for Grok; ChatGPT or Gemini handle context packages more reliably.';
 import { attachLocalFileLive, fileInfoFromPath } from './chatgpt-attachments.mjs';
 import { captureCopiedResponseText, GROK_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
-import { selectGrokModel } from './grok-model.mjs';
+import { selectGrokModel, grokModelCapabilityProbe } from './grok-model.mjs';
 
 const GROK_HOSTS = new Set(['grok.com']);
 const COMPOSER_SELECTORS = ['.ProseMirror[contenteditable="true"]', '[contenteditable="true"].ProseMirror'];
@@ -35,9 +35,27 @@ const ATTACHMENT_EVIDENCE_SELECTORS = [
     '[role="img"]',
 ];
 
+const GROK_UPLOAD_SELECTORS = [
+    'button[aria-label*="Upload" i]',
+    'button[aria-label*="Attach" i]',
+    'button[data-testid*="plus" i]',
+];
+
 export const grokCapabilities = [
     defineCapability('grok-active-tab-verification', async (deps) => probeHostMatches(await deps.getPage(), GROK_HOSTS)),
     defineCapability('grok-composer-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), COMPOSER_SELECTORS)),
+    defineCapability('grok-model-alias-selectable', async (deps, input) => grokModelCapabilityProbe(await deps.getPage(), input.model)),
+    defineCapability('grok-upload-surface-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GROK_UPLOAD_SELECTORS, { failNext: 'inline-only' })),
+    defineCapability('grok-copy-button-present', async (deps) => probeFirstVisibleSelector(await deps.getPage(), GROK_COPY_SELECTORS.copyButtonSelectors, { timeoutMs: 500, failNext: 'send' })),
+    defineCapability('grok-response-streaming', async (deps) => {
+        const page = await deps.getPage();
+        for (const sel of STOP_SELECTORS) {
+            if (await page.locator(sel).first().isVisible().catch(() => false)) {
+                return { state: 'warn', evidence: { streaming: true, selector: sel }, next: 'poll' };
+            }
+        }
+        return { state: 'ok', evidence: { streaming: false }, next: 'send' };
+    }),
 ];
 
 export async function grokStatusWebAi(deps, input = {}) {

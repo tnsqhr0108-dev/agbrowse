@@ -84,19 +84,81 @@ describe('web-ai per-vendor capability arrays exported from provider modules', (
     it('chatgpt exports chatGptCapabilities with hyphenated IDs', async () => {
         const mod = await import('../../web-ai/chatgpt.mjs');
         const ids = mod.chatGptCapabilities.map(c => c.capabilityId);
-        expect(ids).toEqual(['chatgpt-active-tab-verification', 'chatgpt-composer-visible']);
+        expect(ids).toEqual([
+            'chatgpt-active-tab-verification',
+            'chatgpt-composer-visible',
+            'chatgpt-model-alias-selectable',
+            'chatgpt-upload-surface-visible',
+            'chatgpt-copy-button-present',
+            'chatgpt-response-streaming',
+        ]);
     });
 
     it('gemini exports geminiCapabilities with hyphenated IDs', async () => {
         const mod = await import('../../web-ai/gemini-live.mjs');
         const ids = mod.geminiCapabilities.map(c => c.capabilityId);
-        expect(ids).toEqual(['gemini-active-tab-verification', 'gemini-composer-visible']);
+        expect(ids).toEqual([
+            'gemini-active-tab-verification',
+            'gemini-composer-visible',
+            'gemini-model-alias-selectable',
+            'gemini-upload-surface-visible',
+            'gemini-copy-button-present',
+            'gemini-response-streaming',
+        ]);
     });
 
     it('grok exports grokCapabilities with hyphenated IDs', async () => {
         const mod = await import('../../web-ai/grok-live.mjs');
         const ids = mod.grokCapabilities.map(c => c.capabilityId);
-        expect(ids).toEqual(['grok-active-tab-verification', 'grok-composer-visible']);
+        expect(ids).toEqual([
+            'grok-active-tab-verification',
+            'grok-composer-visible',
+            'grok-model-alias-selectable',
+            'grok-upload-surface-visible',
+            'grok-copy-button-present',
+            'grok-response-streaming',
+        ]);
+    });
+});
+
+describe('web-ai model capability probes', () => {
+    it('chatGptModelCapabilityProbe returns unknown when no model given', async () => {
+        const { chatGptModelCapabilityProbe } = await import('../../web-ai/chatgpt-model.mjs');
+        const result = await chatGptModelCapabilityProbe(fakePage('https://chatgpt.com/'), undefined);
+        expect(result.state).toBe('unknown');
+        expect(result.next).toBe('send');
+    });
+
+    it('chatGptModelCapabilityProbe returns fail for unsupported alias', async () => {
+        const { chatGptModelCapabilityProbe } = await import('../../web-ai/chatgpt-model.mjs');
+        const result = await chatGptModelCapabilityProbe(fakePage('https://chatgpt.com/'), 'nonexistent-model');
+        expect(result.state).toBe('fail');
+        expect(result.next).toBe('model-fallback');
+    });
+
+    it('geminiModelCapabilityProbe returns unknown for deepthink', async () => {
+        const { geminiModelCapabilityProbe } = await import('../../web-ai/gemini-model.mjs');
+        const result = await geminiModelCapabilityProbe(fakePage('https://gemini.google.com/'), 'deepthink');
+        expect(result.state).toBe('unknown');
+        expect(result.evidence.tool).toBe('deepthink');
+    });
+
+    it('geminiModelCapabilityProbe returns fail for unsupported alias', async () => {
+        const { geminiModelCapabilityProbe } = await import('../../web-ai/gemini-model.mjs');
+        const result = await geminiModelCapabilityProbe(fakePage('https://gemini.google.com/'), 'nonexistent');
+        expect(result.state).toBe('fail');
+    });
+
+    it('grokModelCapabilityProbe returns unknown when no model given', async () => {
+        const { grokModelCapabilityProbe } = await import('../../web-ai/grok-model.mjs');
+        const result = await grokModelCapabilityProbe(fakePage('https://grok.com/'), undefined);
+        expect(result.state).toBe('unknown');
+    });
+
+    it('grokModelCapabilityProbe returns fail for unsupported alias', async () => {
+        const { grokModelCapabilityProbe } = await import('../../web-ai/grok-model.mjs');
+        const result = await grokModelCapabilityProbe(fakePage('https://grok.com/'), 'nonexistent');
+        expect(result.state).toBe('fail');
     });
 });
 

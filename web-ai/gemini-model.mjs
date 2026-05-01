@@ -115,6 +115,19 @@ async function findGeminiModelOption(page, choice) {
     return null;
 }
 
+export async function geminiModelCapabilityProbe(page, model) {
+    if (isGeminiDeepThinkChoice(model)) {
+        return { state: 'unknown', evidence: { requested: model, tool: 'deepthink' }, next: 'send' };
+    }
+    const requested = normalizeGeminiModelChoice(model);
+    if (!model) return { state: 'unknown', evidence: { requested: null }, next: 'send' };
+    if (!requested) return { state: 'fail', evidence: { requested: model }, next: 'model-fallback' };
+    const active = await readGeminiModel(page).catch(() => null);
+    return active === requested
+        ? { state: 'ok', evidence: { active, requested }, next: 'send' }
+        : { state: 'warn', evidence: { active, requested }, next: 'model-fallback' };
+}
+
 async function readGeminiModel(page) {
     for (const selector of MODE_BUTTONS) {
         const loc = page.locator(selector).first();
