@@ -1,4 +1,46 @@
-import { getActivePage, getCdpSession, listTabs } from './browser.mjs';
+/**
+ * Tab Manager — self-contained (no import from browser.mjs to avoid circular deps)
+ */
+
+async function loadPlaywright() {
+    try {
+        return await import('playwright-core');
+    } catch (error) {
+        if (error?.code === 'ERR_MODULE_NOT_FOUND' || String(error?.message || '').includes('playwright-core')) {
+            throw new Error(
+                `playwright-core is required.\n` +
+                `  Fix: cd <project-root> && npm install playwright-core`
+            );
+        }
+        throw error;
+    }
+}
+
+async function connectCdp(port) {
+    const { chromium } = await loadPlaywright();
+    const cdpUrl = `http://127.0.0.1:${port}`;
+    const browser = await chromium.connectOverCDP(cdpUrl, { timeout: 10000 });
+    return { browser, cdpUrl };
+}
+
+async function getActivePage(port) {
+    const { browser } = await connectCdp(port);
+    const pages = browser.contexts().flatMap(c => c.pages());
+    return pages[pages.length - 1] || null;
+}
+
+async function getCdpSession(port) {
+    const page = await getActivePage(port);
+    if (!page) return null;
+    return page.context().newCDPSession(page);
+}
+
+async function listTabs(port) {
+    const resp = await fetch(`http://127.0.0.1:${port}/json/list`);
+    return (await resp.json()).filter(t => t.type === 'page');
+}
+
+// ─── Tab operations ──────────────────────────────────────
 
 /**
  * Create a new browser tab and optionally navigate to URL
@@ -11,22 +53,19 @@ import { getActivePage, getCdpSession, listTabs } from './browser.mjs';
 export async function createTab(port, url = 'about:blank', opts = {}) {
     const cdp = await getCdpSession(port);
     if (!cdp) throw new Error('No CDP session available for tab creation');
-    
+
     try {
-        // Create new target via CDP
         const { targetId } = await cdp.send('Target.createTarget', {
             url,
             newWindow: false,
             background: !opts.activate
         });
-        
-        // Wait a moment for navigation to start
+
         await new Promise(r => setTimeout(r, 100));
-        
-        // Get tab info
+
         const tabs = await listTabs(port);
         const tab = tabs.find(t => t.id === targetId);
-        
+
         return {
             targetId,
             url: tab?.url || url,
@@ -47,12 +86,11 @@ export async function createTab(port, url = 'about:blank', opts = {}) {
 export async function closeTab(port, targetId) {
     const cdp = await getCdpSession(port);
     if (!cdp) throw new Error('No CDP session available for tab close');
-    
+
     try {
         await cdp.send('Target.closeTarget', { targetId });
         return { closed: true, targetId };
     } catch (error) {
-        // Tab might already be closed
         if (error.message?.includes('No target')) {
             return { closed: true, targetId, alreadyClosed: true };
         }
@@ -71,15 +109,13 @@ export async function closeTab(port, targetId) {
 export async function switchToTab(port, targetId) {
     const cdp = await getCdpSession(port);
     if (!cdp) throw new Error('No CDP session available for tab switch');
-    
+
     try {
-        // Get current active target
         const { targetInfo } = await cdp.send('Target.getTargetInfo');
         const previousTargetId = targetInfo?.targetId;
-        
-        // Activate new target
+
         await cdp.send('Target.activateTarget', { targetId });
-        
+
         return {
             active: true,
             previousTargetId,
@@ -116,7 +152,7 @@ export async function getTabInfo(port, targetId) {
     const tabs = await listTabs(port);
     const tab = tabs.find(t => t.id === targetId);
     if (!tab) throw new Error(`Tab not found: ${targetId}`);
-    
+
     return {
         targetId: tab.id,
         url: tab.url,
@@ -138,4 +174,29 @@ export async function isTabAlive(port, targetId) {
     } catch {
         return false;
     }
+}
+
+/**
+ * Get Playwright page by targetId via CDP
+ * @param {number} port - CDP port
+ * @param {string} targetId - Tab target ID
+ * @returns {Promise<Page|null>}
+ */
+export async function getPageByTargetId(port, targetId) {
+    const { browser } = await connectCdp(port);
+    const contexts = browser.contexts();
+    for (const context of contexts) {
+        for (const page of context.pages()) {
+            const session = await context.newCDPSession(page);
+            try {
+                const { targetInfo } = await session.send('Target.getTargetInfo');
+                if (targetInfo.targetId === targetId) {
+                    return page;
+                }
+            } finally {
+                await session.detach().catch(() => { });
+            }
+        }
+    }
+    return null;
 }

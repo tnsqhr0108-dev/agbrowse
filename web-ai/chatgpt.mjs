@@ -2,6 +2,7 @@ import { renderQuestionEnvelope, renderQuestionEnvelopeWithContext, normalizeEnv
 import { defineCapability, probeFirstVisibleSelector, probeHostMatches, runCapabilities, worstCapabilityState } from './capability.mjs';
 import { INPUT_SELECTORS as CHATGPT_COMPOSER_SELECTORS } from './chatgpt-composer.mjs';
 import {
+    bindSessionToTab,
     createSession,
     findActiveSession,
     getBaseline,
@@ -135,13 +136,15 @@ export async function sendWebAi(deps, input = {}) {
         assistantCount,
         textHash: String((await page.innerText('body').catch(() => '')).length),
     });
+    const targetId = await deps.getTargetId?.().catch(() => null) || null;
     const session = createSession(envelope, {
-        targetId: await deps.getTargetId?.().catch(() => null) || null,
+        targetId,
         originalUrl: input.url || page.url(),
         conversationUrl: page.url(),
         deadlineAt: resolveDeadlineAt(input, 'chatgpt'),
         envelopeSummary: { ...summarizeEnvelope(input, contextPack), assistantCount },
     });
+    if (targetId) bindSessionToTab(session.sessionId, targetId);
 
     const adapter = createChatGptEditorAdapter(page, {
         insertText: async (text) => {

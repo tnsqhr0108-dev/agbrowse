@@ -6,6 +6,7 @@ import { pollWebAi } from './chatgpt.mjs';
 import { geminiPollWebAi } from './gemini-live.mjs';
 import { grokPollWebAi } from './grok-live.mjs';
 import { getSession, updateSession } from './session.mjs';
+import { withSessionPage } from './tab-recovery.mjs';
 import { WebAiError, wrapError } from './errors.mjs';
 import {
     defineCapability, runCapabilities,
@@ -137,75 +138,84 @@ export async function watchSessionOnce(deps, input = {}) {
         };
     }
 
-    const page = await deps.getPage();
-    const profileLockSummary = await readProfileLockSummary()
-        .catch(err => ({ state: 'unknown', error: err?.message || String(err) }));
-    const reattach = await ensureWatcherAttached(page, session, options);
-    if (!reattach.ok) {
+    // Phase 9.1: Use withSessionPage to resolve session's specific page, not active tab
+    return withSessionPage(deps, options.sessionId, async ({ page, targetId }) => {
+        const profileLockSummary = await readProfileLockSummary()
+            .catch(err => ({ state: 'unknown', error: err?.message || String(err) }));
+        const reattach = await ensureWatcherAttached(page, session, options);
+        if (!reattach.ok) {
+            return {
+                ok: false, sessionId: session.sessionId, vendor,
+                status: 'reattach-mismatch', terminal: false,
+                url: reattach.url, warnings: reattach.warnings,
+                profileLock: profileLockSummary,
+            };
+        }
+
+        const preflight = await runWatcherPreflight(page, vendor);
+        if (preflight.worst === 'fail') {
+            updateSession(session.sessionId, {
+                status: 'polling',
+                lastError: {
+                    errorCode: 'capability.unsupported',
+                    message: 'pre-poll capability failed',
+                    evidence: preflight.rows,
+                },
+            });
+            return {
+                ok: false, sessionId: session.sessionId, vendor,
+                status: 'capability-fail', terminal: false,
+                warnings: ['pre-poll-capability-fail'],
+                preflight, profileLock: profileLockSummary,
+            };
+        }
+
+        // Create session-specific deps so poll functions use the right page
+        const sessionDeps = {
+            ...deps,
+            getPage: async () => page,
+            getTargetId: async () => targetId,
+        };
+
+        const domHashBefore = await domHashAround(page, ['body'], { maxChars: options.domHashMaxChars }).catch(() => null);
+        const pollResult = await callVendorPoll(sessionDeps, vendor, session, options);
+        const domHashAfter = await domHashAround(page, ['body'], { maxChars: options.domHashMaxChars }).catch(() => null);
+        const answerText = typeof pollResult.answerText === 'string'
+            ? pollResult.answerText
+            : (typeof pollResult.answer === 'string' ? pollResult.answer : null);
+        const refreshed = getSession(session.sessionId) || session;
+        let status = refreshed.status || pollResult.status || 'polling';
+
+        if (status === 'timeout' && !isDeadlineExpired(refreshed.deadlineAt || session.deadlineAt)) {
+            status = 'polling';
+            updateSession(session.sessionId, {
+                status,
+                warnings: appendUniqueWarning(
+                    refreshed.warnings || [],
+                    `watcher-transient-poll-timeout:${options.pollTimeoutSec}s`,
+                ),
+            });
+        }
+
+        updateSession(session.sessionId, {
+            lastDomHash: domHashAfter || domHashBefore || refreshed.lastDomHash || null,
+            lastStreamingState: deriveStreamingState(status, pollResult),
+            lastResponseCharCount: answerText ? answerText.length : (refreshed.lastResponseCharCount || 0),
+        });
+
         return {
-            ok: false, sessionId: session.sessionId, vendor,
-            status: 'reattach-mismatch', terminal: false,
-            url: reattach.url, warnings: reattach.warnings,
+            ok: pollResult.ok !== false,
+            sessionId: session.sessionId,
+            vendor,
+            status,
+            terminal: TERMINAL_SESSION_STATUSES.has(status),
+            url: page.url?.() || null,
+            answerText,
+            warnings: [...(reattach.warnings || []), ...(pollResult.warnings || [])],
+            preflight,
             profileLock: profileLockSummary,
         };
-    }
-
-    const preflight = await runWatcherPreflight(page, vendor);
-    if (preflight.worst === 'fail') {
-        updateSession(session.sessionId, {
-            status: 'polling',
-            lastError: {
-                errorCode: 'capability.unsupported',
-                message: 'pre-poll capability failed',
-                evidence: preflight.rows,
-            },
-        });
-        return {
-            ok: false, sessionId: session.sessionId, vendor,
-            status: 'capability-fail', terminal: false,
-            warnings: ['pre-poll-capability-fail'],
-            preflight, profileLock: profileLockSummary,
-        };
-    }
-
-    const domHashBefore = await domHashAround(page, ['body'], { maxChars: options.domHashMaxChars }).catch(() => null);
-    const pollResult = await callVendorPoll(deps, vendor, session, options);
-    const domHashAfter = await domHashAround(page, ['body'], { maxChars: options.domHashMaxChars }).catch(() => null);
-    const answerText = typeof pollResult.answerText === 'string'
-        ? pollResult.answerText
-        : (typeof pollResult.answer === 'string' ? pollResult.answer : null);
-    const refreshed = getSession(session.sessionId) || session;
-    let status = refreshed.status || pollResult.status || 'polling';
-
-    if (status === 'timeout' && !isDeadlineExpired(refreshed.deadlineAt || session.deadlineAt)) {
-        status = 'polling';
-        updateSession(session.sessionId, {
-            status,
-            warnings: appendUniqueWarning(
-                refreshed.warnings || [],
-                `watcher-transient-poll-timeout:${options.pollTimeoutSec}s`,
-            ),
-        });
-    }
-
-    updateSession(session.sessionId, {
-        lastDomHash: domHashAfter || domHashBefore || refreshed.lastDomHash || null,
-        lastStreamingState: deriveStreamingState(status, pollResult),
-        lastResponseCharCount: answerText ? answerText.length : (refreshed.lastResponseCharCount || 0),
     });
-
-    return {
-        ok: pollResult.ok !== false,
-        sessionId: session.sessionId,
-        vendor,
-        status,
-        terminal: TERMINAL_SESSION_STATUSES.has(status),
-        url: page.url?.() || null,
-        answerText,
-        warnings: [...(reattach.warnings || []), ...(pollResult.warnings || [])],
-        preflight,
-        profileLock: profileLockSummary,
-    };
 }
 
 export function createStdoutNotifier({ json = false, stream = process.stdout } = {}) {

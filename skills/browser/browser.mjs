@@ -39,7 +39,7 @@ import { spawn } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import net from 'node:net';
 import {
     parseAriaYaml,
@@ -62,6 +62,7 @@ const PROFILE_DIR = join(DATA_DIR, 'browser-profile');
 const SCREENSHOTS_DIR = join(DATA_DIR, 'screenshots');
 const STATE_FILE = join(DATA_DIR, 'browser-state.json');
 const SNAPSHOT_FILE = join(DATA_DIR, 'last-snapshot.json');
+const SNAPSHOTS_DIR = join(DATA_DIR, 'snapshots');
 const DEFAULT_CDP_PORT = parseInt(process.env.CDP_PORT || '9222', 10);
 const CUSTOM_CHROME_PATH = process.env.CHROME_BINARY_PATH || null;
 
@@ -137,22 +138,39 @@ function clearPersistedState() {
     rmSync(STATE_FILE, { force: true });
 }
 
-function readPersistedSnapshot() {
-    if (!existsSync(SNAPSHOT_FILE)) return null;
+function getSnapshotFile(targetId = null) {
+    if (targetId) return join(SNAPSHOTS_DIR, `${targetId}.json`);
+    return SNAPSHOT_FILE;
+}
+
+function readPersistedSnapshot(targetId = null) {
+    const file = getSnapshotFile(targetId);
+    if (!existsSync(file)) return null;
     try {
-        return JSON.parse(readFileSync(SNAPSHOT_FILE, 'utf8'));
+        return JSON.parse(readFileSync(file, 'utf8'));
     } catch {
         return null;
     }
 }
 
-function writePersistedSnapshot(snapshotState) {
-    mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(SNAPSHOT_FILE, JSON.stringify(snapshotState, null, 2));
+function writePersistedSnapshot(snapshotState, targetId = null) {
+    const file = getSnapshotFile(targetId);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, JSON.stringify(snapshotState, null, 2));
 }
 
-function clearPersistedSnapshot() {
+function clearPersistedSnapshot(targetId = null) {
+    if (targetId) {
+        rmSync(getSnapshotFile(targetId), { force: true });
+        return;
+    }
     rmSync(SNAPSHOT_FILE, { force: true });
+    // Also clear per-tab snapshots on global clear
+    if (existsSync(SNAPSHOTS_DIR)) {
+        for (const f of readdirSync(SNAPSHOTS_DIR)) {
+            rmSync(join(SNAPSHOTS_DIR, f), { force: true });
+        }
+    }
 }
 
 function getCliPort() {
@@ -463,6 +481,12 @@ async function getPageTargetId(page) {
     }
 }
 
+async function getActiveTargetId(port = getPort()) {
+    const page = await getActivePage(port);
+    if (!page) return null;
+    return getPageTargetId(page);
+}
+
 async function listTabs(port = getPort()) {
     const resp = await fetch(`http://127.0.0.1:${port}/json/list`);
     return (await resp.json()).filter(t => t.type === 'page');
@@ -626,6 +650,7 @@ function normalizeClip(clip, viewport) {
 
 async function snapshot(port, opts = {}) {
     const page = await getReadyPage(port);
+    const targetId = await getPageTargetId(page).catch(() => null);
 
     let nodes;
 
@@ -661,13 +686,18 @@ async function snapshot(port, opts = {}) {
     }
 
     if (opts.persist) {
-        writePersistedSnapshot({
+        const snapshotData = {
             url: page.url(),
             interactive: Boolean(opts.interactive),
             maxNodes: opts.maxNodes ?? null,
             savedAt: new Date().toISOString(),
+            targetId,
             nodes,
-        });
+        };
+        // Phase 9.1: per-tab snapshots for isolation
+        if (targetId) writePersistedSnapshot(snapshotData, targetId);
+        // Also keep global snapshot for backward compatibility during transition
+        writePersistedSnapshot(snapshotData);
     }
     return nodes;
 }
@@ -680,7 +710,9 @@ function locatorForSnapshotNode(page, node) {
 }
 
 async function refToLocator(page, port, ref) {
-    const persisted = readPersistedSnapshot();
+    const targetId = await getPageTargetId(page).catch(() => null);
+    // Phase 9.1: prefer per-tab snapshot, fall back to global
+    const persisted = (targetId && readPersistedSnapshot(targetId)) || readPersistedSnapshot();
     if (persisted?.url && persisted.url !== page.url()) {
         throw new Error(
             `ref ${ref} is stale because the page changed.\n` +
@@ -755,6 +787,8 @@ async function hover(port, ref) {
 async function navigate(port, url) {
     const page = await getReadyPage(port);
     await page.goto(url, { waitUntil: 'domcontentloaded' });
+    const targetId = await getPageTargetId(page).catch(() => null);
+    clearPersistedSnapshot(targetId);
     clearPersistedSnapshot();
     return { ok: true, url: page.url() };
 }
@@ -805,7 +839,8 @@ async function scroll(port, direction, opts = {}) {
 async function waitFor(port, ref, opts = {}) {
     const timeout = opts.timeout || 10000;
     const page = await getReadyPage(port);
-    const persisted = readPersistedSnapshot();
+    const targetId = await getPageTargetId(page).catch(() => null);
+    const persisted = (targetId && readPersistedSnapshot(targetId)) || readPersistedSnapshot();
     if (!persisted?.nodes) {
         throw new Error(
             `wait-for: no persisted snapshot found for ref ${ref}\n` +
@@ -903,6 +938,8 @@ async function waitMs(ms) {
 async function reload(port) {
     const page = await getReadyPage(port);
     await page.reload({ waitUntil: 'domcontentloaded' });
+    const targetId = await getPageTargetId(page).catch(() => null);
+    clearPersistedSnapshot(targetId);
     clearPersistedSnapshot();
     return { ok: true, url: page.url() };
 }
@@ -1119,6 +1156,8 @@ const sub = process.argv[2];
 const browserDeps = {
     getPage: () => getReadyPage(getPort()),
     getCdpSession: () => getCdpSession(getPort()),
+    getPort: () => getPort(),
+    getTargetId: () => getActiveTargetId(getPort()),
 };
 
 try {

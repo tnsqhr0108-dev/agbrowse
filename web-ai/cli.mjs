@@ -9,7 +9,14 @@ import { maybeRecordChurn } from './churn-log.mjs';
 import { watchSession } from './watcher.mjs';
 import { buildWebAiSnapshot } from './ax-snapshot.mjs';
 import { runSessionsCommand, printSessionsHuman, parseDurationToMs } from './cli-sessions.mjs';
+import { createTab, switchToTab } from '../skills/browser/tab-manager.mjs';
 export { parseDurationToMs };
+
+const VENDOR_DEFAULT_URLS = {
+    chatgpt: 'https://chatgpt.com',
+    gemini: 'https://gemini.google.com',
+    grok: 'https://grok.com',
+};
 
 const COMMANDS = new Set([
     'render', 'status', 'send', 'poll', 'query', 'stop',
@@ -275,8 +282,8 @@ async function runWebAiCliInner(argv = [], deps) {
         snapshotOption: values.snapshot,
         maxDepth: values['max-depth'],
         rootSelector: values['root-selector'],
-        newTab: values['new-tab'] === true,
-        reuseTab: values['reuse-tab'] === true,
+        newTab: values['new-tab'] === true || (['send', 'query'].includes(command) && values['reuse-tab'] !== true && process.env.AGBROWSE_REUSE_TAB !== '1'),
+        reuseTab: values['reuse-tab'] === true || process.env.AGBROWSE_REUSE_TAB === '1',
     };
 
     const result = command === 'watch'
@@ -330,7 +337,24 @@ function isContextCommand(command) {
     return command === 'context-dry-run' || command === 'context-render';
 }
 
+async function ensureProviderTab(deps, input) {
+    if (!input.newTab || input.reuseTab) return deps;
+    const vendorUrl = input.url || VENDOR_DEFAULT_URLS[input.vendor || 'chatgpt'];
+    const port = deps.getPort?.() || 9222;
+    const tab = await createTab(port, vendorUrl, { activate: true });
+    await switchToTab(port, tab.targetId);
+    return {
+        ...deps,
+        getTargetId: async () => tab.targetId,
+    };
+}
+
 async function runCommand(command, deps, input) {
+    // Phase 9.1: create new tab per session for send/query
+    if (['send', 'query'].includes(command)) {
+        deps = await ensureProviderTab(deps, input);
+    }
+
     if (input.vendor === 'gemini') {
         switch (command) {
             case 'render': return renderWebAi(input);

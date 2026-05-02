@@ -73,7 +73,8 @@ describe('web-ai provider integration (source-string contracts)', () => {
 
     it('all three providers create a session on send and return sessionId', () => {
         for (const src of [chatgptSrc, geminiSrc, grokSrc]) {
-            expect(src).toMatch(/createSession\(envelope, \{[\s\S]*?targetId:[\s\S]*?conversationUrl:[\s\S]*?deadlineAt: resolveDeadlineAt/);
+            // Phase 9.1: targetId may be extracted to a variable before createSession
+            expect(src).toMatch(/createSession\(envelope, \{[\s\S]*?(targetId|targetId,)[\s\S]*?conversationUrl:[\s\S]*?deadlineAt: resolveDeadlineAt/);
             expect(src).toMatch(/sessionId: session\.sessionId/);
         }
     });

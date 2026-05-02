@@ -2,6 +2,7 @@ import { basename } from 'node:path';
 import { statSync } from 'node:fs';
 import { normalizeEnvelope, renderQuestionEnvelope, renderQuestionEnvelopeWithContext } from './question.mjs';
 import {
+    bindSessionToTab,
     createSession,
     findActiveSession,
     getBaseline,
@@ -222,13 +223,15 @@ export async function geminiSendWebAi(deps, input = {}) {
         assistantCount: turnsBefore,
         textHash: String((await page.innerText('body').catch(() => '')).length),
     });
+    const targetId = await deps.getTargetId?.().catch(() => null) || null;
     const session = createSession(envelope, {
-        targetId: await deps.getTargetId?.().catch(() => null) || null,
+        targetId,
         originalUrl: input.url || page.url(),
         conversationUrl: page.url(),
         deadlineAt: resolveDeadlineAt(input, 'gemini'),
         envelopeSummary: { ...summarizeEnvelope(input, contextPack), assistantCount: turnsBefore },
     });
+    if (targetId) bindSessionToTab(session.sessionId, targetId);
     return {
         ok: true,
         vendor: 'gemini',
