@@ -1,0 +1,52 @@
+name: Contract Drift Check
+on:
+  pull_request:
+    paths:
+      - 'web-ai/**'
+      - 'test/fixtures/**'
+      - 'test/unit/web-ai-contract-audit.test.mjs'
+      - '.github/workflows/contract-drift.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.mjs'
+  schedule:
+    - cron: '0 9 * * 1'
+
+jobs:
+  fixture-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run test:contract-drift
+        env:
+          AGBROWSE_DRIFT_MODE: fixture
+
+  live-drift:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run test:contract-drift
+        env:
+          AGBROWSE_DRIFT_MODE: live
+        continue-on-error: true
+      - name: Alert on drift
+        if: failure()
+        run: |
+          curl -X POST "$AGBROWSE_ALERT_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -d '{"text":"Contract drift detected in live provider check"}'
+        env:
+          AGBROWSE_ALERT_WEBHOOK: ${{ secrets.AGBROWSE_ALERT_WEBHOOK }}

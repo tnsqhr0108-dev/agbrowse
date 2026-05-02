@@ -37,6 +37,8 @@
     "test:integration": "vitest run test/integration",
     "test:e2e": "vitest run test/e2e",
     "test:watch": "vitest",
+    "test:smoke": "vitest run test/integration/self-heal-smoke.test.mjs",
+    "test:contract-drift": "vitest run test/unit/web-ai-contract-audit.test.mjs",
     "release": "bash scripts/release.sh",
     "release:preview": "bash scripts/release-preview.sh"
   },

@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { domHashAround, selectorMatchSummary } from './dom-hash.mjs';
 import { findActiveSession } from './session.mjs';
 import { CHATGPT_COPY_SELECTORS, GEMINI_COPY_SELECTORS, GROK_COPY_SELECTORS } from './copy-markdown.mjs';
@@ -6,6 +8,7 @@ import { CHATGPT_MODEL_SELECTOR_BUTTONS } from './chatgpt-model.mjs';
 import { buildWebAiSnapshot, summarizeSnapshotForDoctor } from './ax-snapshot.mjs';
 import { observeProviderTargets } from './observe-targets.mjs';
 import { editorContractForVendor } from './vendor-editor-contract.mjs';
+import { reportCacheMetricsFromEvents } from './cache-metrics.mjs';
 
 const CHATGPT_FEATURES = [
     { feature: 'composer', selectors: ['#prompt-textarea', '[data-testid="composer-textarea"]', 'div[contenteditable="true"]'] },
@@ -131,6 +134,13 @@ export async function runDoctor(deps, options = {}) {
         lastSession: lastSession ? summarizeSessionForDoctor(lastSession, options) : null,
         warnings,
     };
+
+    if (options.cacheMetrics) {
+        const homeDir = process.env.BROWSER_AGENT_HOME || join(homedir(), '.browser-agent');
+        const metrics = reportCacheMetricsFromEvents(homeDir);
+        report.cacheMetrics = metrics;
+    }
+
     const maxBytes = options.full ? FULL_MAX_REPORT_BYTES : DEFAULT_MAX_REPORT_BYTES;
     return clampReport(report, maxBytes);
 }

@@ -189,7 +189,7 @@ describe('web-ai self-heal', () => {
                 semanticTarget: { roles: ['button'], names: [/^send/i] },
             });
             expect(result.ok).toBe(false);
-            expect(result.reason).toBe('semantic-mismatch');
+            expect(result.reason).toBe('low-confidence');
         });
 
         it('accepts elements matching semantic target roles', async () => {
@@ -210,7 +210,7 @@ describe('web-ai self-heal', () => {
                 semanticTarget: { roles: ['button'], excludeNames: [/cancel/i] },
             });
             expect(result.ok).toBe(false);
-            expect(result.reason).toBe('semantic-mismatch');
+            expect(result.reason).toBe('low-confidence');
         });
 
         it('returns ref-stale when registry is stale', async () => {

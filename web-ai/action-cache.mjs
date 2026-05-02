@@ -2,15 +2,15 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from '
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { CACHE_SCHEMA_VERSION } from './constants.mjs';
 
 const DEFAULT_HOME = process.env.BROWSER_AGENT_HOME || join(homedir(), '.browser-agent');
 const CACHE_FILE = 'action-cache.json';
-const SCHEMA_VERSION = 1;
 const STALE_MS = 30 * 86_400_000;
 
 export function cacheKey({ provider, urlHost, intent, actionKind, domHashPrefix, axHashPrefix }) {
     return [
-        'v1',
+        'v2',
         provider || '*',
         urlHost || '*',
         intent || '*',
@@ -22,10 +22,12 @@ export function cacheKey({ provider, urlHost, intent, actionKind, domHashPrefix,
 
 export function loadActionCache(homeDir = DEFAULT_HOME) {
     const path = join(homeDir, CACHE_FILE);
-    if (!existsSync(path)) return { schemaVersion: SCHEMA_VERSION, entries: {} };
+    if (!existsSync(path)) return createEmptyCache();
     try {
         const raw = JSON.parse(readFileSync(path, 'utf8'));
-        if (raw.schemaVersion !== SCHEMA_VERSION) return { schemaVersion: SCHEMA_VERSION, entries: {} };
+        if (raw.schemaVersion !== CACHE_SCHEMA_VERSION) {
+            return createEmptyCache();
+        }
         const now = Date.now();
         const entries = {};
         for (const [key, entry] of Object.entries(raw.entries || {})) {
@@ -34,16 +36,20 @@ export function loadActionCache(homeDir = DEFAULT_HOME) {
                 entries[key] = entry;
             }
         }
-        return { schemaVersion: SCHEMA_VERSION, entries };
+        return { schemaVersion: CACHE_SCHEMA_VERSION, entries };
     } catch {
-        return { schemaVersion: SCHEMA_VERSION, entries: {} };
+        return createEmptyCache();
     }
+}
+
+function createEmptyCache() {
+    return { schemaVersion: CACHE_SCHEMA_VERSION, entries: {} };
 }
 
 export function saveActionCache(cache, homeDir = DEFAULT_HOME) {
     mkdirSync(homeDir, { recursive: true });
     const path = join(homeDir, CACHE_FILE);
-    const tmpPath = path + '.tmp';
+    const tmpPath = path + `.tmp.${process.pid}.${Date.now()}`;
     writeFileSync(tmpPath, JSON.stringify(cache, null, 2));
     renameSync(tmpPath, path);
 }
@@ -60,10 +66,24 @@ export function getCachedTarget(cache, { provider, intent, actionKind, urlHost, 
     });
     const entry = cache.entries[key];
     if (!entry) return null;
-    return { target: entry.target, key, entry };
+    return {
+        target: {
+            ...entry.target,
+            schemaVersion: entry.schemaVersion,
+            contractVersion: entry.contractVersion,
+            framePath: entry.framePath,
+            browserConfigHash: entry.browserConfigHash,
+        },
+        key,
+        entry,
+    };
 }
 
-export function updateCacheEntry(cache, ctx, resolvedTarget, fingerprint) {
+export function updateCacheEntry(cache, ctx, resolvedTarget, fingerprint, {
+    contractVersion = '1.0',
+    framePath = null,
+    browserConfigHash = null,
+} = {}) {
     if (!cache || !resolvedTarget?.selector) return;
     const { provider, intent, actionKind, urlHost } = ctx;
     const key = cacheKey({
@@ -76,12 +96,15 @@ export function updateCacheEntry(cache, ctx, resolvedTarget, fingerprint) {
     });
     const existing = cache.entries[key];
     cache.entries[key] = {
-        schemaVersion: SCHEMA_VERSION,
+        schemaVersion: CACHE_SCHEMA_VERSION,
         provider,
         intent,
         actionKind,
         urlHost: urlHost || null,
         pageFingerprint: fingerprint || {},
+        contractVersion,
+        framePath,
+        browserConfigHash,
         target: {
             selector: resolvedTarget.selector,
             role: resolvedTarget.role || null,
@@ -111,8 +134,8 @@ export function createActionCacheHandle(homeDir = DEFAULT_HOME) {
         get(lookupCtx) {
             return getCachedTarget(cache, lookupCtx);
         },
-        update(ctx, resolvedTarget, fingerprint) {
-            updateCacheEntry(cache, ctx, resolvedTarget, fingerprint);
+        update(ctx, resolvedTarget, fingerprint, meta) {
+            updateCacheEntry(cache, ctx, resolvedTarget, fingerprint, meta);
         },
         save() {
             saveActionCache(cache, homeDir);

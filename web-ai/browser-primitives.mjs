@@ -145,49 +145,14 @@ function hashTexts(texts) {
     return (hash >>> 0).toString(16);
 }
 
+import { clickWithPostAssert, fillWithPostAssert } from './post-action-assert.mjs';
+
 export async function clickResolvedTarget(page, locator, resolvedTarget, traceCtx) {
-    try {
-        await locator.click();
-        if (traceCtx) traceCtx.record({ action: 'click', target: scrubTargetForTrace(resolvedTarget), status: 'ok' });
-    } catch (err) {
-        if (traceCtx) traceCtx.record({ action: 'click', target: scrubTargetForTrace(resolvedTarget), status: 'error', errorCode: err.name });
-        throw err;
-    }
+    return clickWithPostAssert(page, locator, resolvedTarget, traceCtx);
 }
 
 export async function fillResolvedTarget(page, locator, resolvedTarget, value, traceCtx) {
-    try {
-        await locator.fill(value);
-        if (traceCtx) traceCtx.record({ action: 'fill', target: scrubTargetForTrace(resolvedTarget), status: 'ok' });
-    } catch (fillErr) {
-        const role = resolvedTarget.role || '';
-        const isContentEditable = role === 'textbox' || resolvedTarget.contentEditable;
-        if (isContentEditable) {
-            try {
-                await locator.click();
-                const focused = await page.evaluate((sel) => {
-                    const target = sel ? document.querySelector(sel) : null;
-                    if (!target) return false;
-                    return document.activeElement === target || target.contains(document.activeElement);
-                }, resolvedTarget.selector || null).catch(() => false);
-                if (!focused) {
-                    if (traceCtx) traceCtx.record({ action: 'fill-keyboard-fallback', target: scrubTargetForTrace(resolvedTarget), status: 'error', errorCode: 'focus-mismatch' });
-                    throw fillErr;
-                }
-                const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
-                await page.keyboard.press(`${mod}+a`);
-                await page.keyboard.insertText(value);
-                if (traceCtx) traceCtx.record({ action: 'fill-keyboard-fallback', target: scrubTargetForTrace(resolvedTarget), status: 'ok' });
-                return;
-            } catch (kbErr) {
-                if (kbErr === fillErr) throw kbErr;
-                if (traceCtx) traceCtx.record({ action: 'fill-keyboard-fallback', target: scrubTargetForTrace(resolvedTarget), status: 'error', errorCode: kbErr.name });
-                throw kbErr;
-            }
-        }
-        if (traceCtx) traceCtx.record({ action: 'fill', target: scrubTargetForTrace(resolvedTarget), status: 'error', errorCode: fillErr.name });
-        throw fillErr;
-    }
+    return fillWithPostAssert(page, locator, resolvedTarget, value, traceCtx);
 }
 
 function scrubTargetForTrace(target) {

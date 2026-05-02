@@ -214,6 +214,7 @@ async function runWebAiCliInner(argv = [], deps) {
             'root-selector': { type: 'string' },
             full: { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
+            'cache-metrics': { type: 'boolean', default: false },
         },
         strict: false,
     });
@@ -277,7 +278,7 @@ async function runWebAiCliInner(argv = [], deps) {
         : command === 'snapshot'
             ? await runSnapshotCommand(deps, input, values)
             : command === 'doctor'
-                ? await runDoctorWithChurn(deps, { vendor: input.vendor, full: values.full, snapshot: values.snapshot })
+                ? await runDoctorWithChurn(deps, { vendor: input.vendor, full: values.full, snapshot: values.snapshot, cacheMetrics: values['cache-metrics'] })
                 : command === 'sessions'
                     ? await runSessionsCommand(argv.slice(1), values, deps, input)
                     : isContextCommand(command)
@@ -423,6 +424,14 @@ function printDoctorHuman(report) {
     }
     if (report.warnings?.length) {
         console.log(`  warnings: ${report.warnings.join(', ')}`);
+    }
+    if (report.cacheMetrics) {
+        console.log('');
+        console.log('Cache Metrics (last 7 days):');
+        console.log(`  Hit rate: ${(report.cacheMetrics.cacheHitRate * 100).toFixed(1)}%`);
+        console.log(`  Self-heal rate: ${(report.cacheMetrics.selfHealRate * 100).toFixed(1)}%`);
+        console.log(`  False heals: ${report.cacheMetrics.falseHeals}`);
+        console.log(`  Avg duration: ${report.cacheMetrics.avgDurationMs.toFixed(0)}ms`);
     }
 }
 

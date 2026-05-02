@@ -82,4 +82,40 @@ export const ATTACHMENT_POLICY = Object.freeze({
  * @property {string} text
  * @property {Record<string, ElementRef>} refs
  * @property {{nodeCount:number, interactiveCount:number, tokenEstimate:number}} stats
+ *
+ * @typedef {Object} ValidationResult
+ * @property {boolean} ok
+ * @property {string} [reason]
+ * @property {number} [confidence]
+ * @property {string} [resolvedVia]
+ *
+ * @typedef {Object} CacheEntryV2
+ * @property {number} schemaVersion
+ * @property {string} provider
+ * @property {string} intent
+ * @property {string} actionKind
+ * @property {string|null} urlHost
+ * @property {Object} pageFingerprint
+ * @property {string} contractVersion
+ * @property {string|null} framePath
+ * @property {string|null} browserConfigHash
+ * @property {Object} target
+ * @property {Object} stats
+ *
+ * @typedef {Object} TraceEvent
+ * @property {string} stepId
+ * @property {string} ts
+ * @property {string} action
+ * @property {Object|null} target
+ * @property {string} [status]
+ * @property {Object} [error]
+ *
+ * @typedef {Object} MetricEvent
+ * @property {string} type
+ * @property {string} ts
+ * @property {string} [provider]
+ * @property {string} [intent]
+ * @property {string} [actionKind]
+ * @property {number} [durationMs]
+ * @property {string} [reason]
  */

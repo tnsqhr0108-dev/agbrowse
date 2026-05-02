@@ -2,13 +2,11 @@ import { observeProviderTargets, rankTargetCandidates } from './observe-targets.
 import { semanticTargetsForVendor } from './vendor-editor-contract.mjs';
 import { isRegistryStale, resolveRef } from './ref-registry.mjs';
 import { WebAiError } from './errors.mjs';
+import { CACHE_SCHEMA_VERSION, VALIDATION_REASONS, VALIDATION_THRESHOLD, RESOLUTION_SOURCES } from './constants.mjs';
+import { createHash } from 'node:crypto';
 
-export const ResolutionSource = Object.freeze({
-    CACHE: 'cache',
-    SNAPSHOT_SEMANTIC: 'snapshot-semantic',
-    CSS_FALLBACK: 'css-fallback',
-    OBSERVE_RANKED: 'observe-ranked',
-});
+// Preserve backward-compatible alias for existing consumers
+export { RESOLUTION_SOURCES as ResolutionSource } from './constants.mjs';
 
 const INTENT_FEATURE = Object.freeze({
     'composer.fill': 'composer',
@@ -39,12 +37,13 @@ export async function resolveActionTarget(page, ctx) {
         fingerprint = null,
         feature: featureOverride = null,
         semanticTargetOverride = null,
+        selectors: selectorsOverride = null,
     } = ctx;
 
     const feature = resolveIntentFeature(intent, featureOverride);
     const allTargets = semanticTargetsForVendor(provider);
     const semanticTarget = semanticTargetOverride || (feature ? allTargets[feature] : null);
-    const selectors = semanticTarget?.cssFallbacks || [];
+    const selectors = selectorsOverride || semanticTarget?.cssFallbacks || [];
     const attempts = [];
 
     let urlHost = null;
@@ -57,12 +56,15 @@ export async function resolveActionTarget(page, ctx) {
                 semanticTarget,
                 actionKind,
                 registry,
+                contractVersion: ctx.contractVersion,
+                framePath: ctx.framePath,
+                browserConfigHash: ctx.browserConfigHash,
             });
-            attempts.push({ source: ResolutionSource.CACHE, validation });
+            attempts.push({ source: RESOLUTION_SOURCES.CACHE, validation });
             if (validation.ok) {
                 return {
                     ok: true,
-                    target: { ...cached.target, resolution: ResolutionSource.CACHE },
+                    target: { ...cached.target, resolution: RESOLUTION_SOURCES.CACHE },
                     attempts,
                 };
             }
@@ -135,7 +137,7 @@ async function collectTargetCandidates(page, {
         });
         if (feature && observed[feature]) {
             for (const c of observed[feature]) {
-                candidates.push({ ...c, source: c.source || ResolutionSource.OBSERVE_RANKED });
+                candidates.push({ ...c, source: c.source || RESOLUTION_SOURCES.OBSERVE_RANKED });
             }
         }
     }
@@ -145,7 +147,7 @@ async function collectTargetCandidates(page, {
         const count = await page.locator(sel).count().catch(() => 0);
         if (count > 0) {
             candidates.push({
-                source: ResolutionSource.CSS_FALLBACK,
+                source: RESOLUTION_SOURCES.CSS_FALLBACK,
                 selector: sel,
                 count,
                 confidence: count === 1 ? 3 : 1,
@@ -160,18 +162,34 @@ export async function validateResolvedTarget(page, target, {
     semanticTarget = null,
     actionKind = 'click',
     registry = null,
+    contractVersion = null,
+    framePath = null,
+    browserConfigHash = null,
 } = {}) {
+    if (target?.schemaVersion && target.schemaVersion !== CACHE_SCHEMA_VERSION) {
+        return { ok: false, reason: VALIDATION_REASONS.SCHEMA_VERSION_MISMATCH };
+    }
+    if (target?.contractVersion && contractVersion && target.contractVersion !== contractVersion) {
+        return { ok: false, reason: VALIDATION_REASONS.CONTRACT_VERSION_MISMATCH };
+    }
+    if (target?.framePath && framePath && target.framePath !== framePath) {
+        return { ok: false, reason: VALIDATION_REASONS.FRAME_PATH_MISMATCH };
+    }
+    if (target?.browserConfigHash && browserConfigHash && target.browserConfigHash !== browserConfigHash) {
+        return { ok: false, reason: VALIDATION_REASONS.BROWSER_CONFIG_MISMATCH };
+    }
+
     let selector = target?.selector;
 
     if (target?.ref && registry) {
         if (isRegistryStale(registry)) {
-            return { ok: false, reason: 'ref-stale' };
+            return { ok: false, reason: VALIDATION_REASONS.REF_STALE };
         }
         try {
             const entry = await resolveRef(page, registry, target.ref, { allowStale: false });
             if (entry.selector) selector = entry.selector;
         } catch {
-            return { ok: false, reason: 'ref-invalid' };
+            return { ok: false, reason: VALIDATION_REASONS.REF_INVALID };
         }
     }
 
@@ -179,51 +197,58 @@ export async function validateResolvedTarget(page, target, {
         if (target?.ref && target.role && target.name) {
             const roleLocator = page.getByRole(target.role, { name: new RegExp(escapeForRegExp(target.name), 'i') });
             const roleCount = await roleLocator.count().catch(() => 0);
-            if (roleCount === 0) return { ok: false, reason: 'role-locator-not-found' };
+            if (roleCount === 0) return { ok: false, reason: VALIDATION_REASONS.NOT_FOUND };
+            if (roleCount > 1) return { ok: false, reason: VALIDATION_REASONS.AMBIGUOUS_SELECTOR, count: roleCount };
             const roleEl = roleLocator.first();
             const roleVisible = await roleEl.isVisible().catch(() => false);
-            if (!roleVisible) return { ok: false, reason: 'not-visible' };
+            if (!roleVisible) return { ok: false, reason: VALIDATION_REASONS.NOT_VISIBLE };
+            const roleEnabled = await roleEl.isEnabled().catch(() => false);
+            if (!roleEnabled) return { ok: false, reason: VALIDATION_REASONS.NOT_ENABLED };
             if (actionKind === 'fill') {
                 const editable = await roleEl.isEditable().catch(() => false);
-                if (!editable) return { ok: false, reason: 'not-editable' };
+                if (!editable) return { ok: false, reason: VALIDATION_REASONS.NOT_EDITABLE };
             }
-            return { ok: true, resolvedVia: 'role-locator' };
+            return { ok: true, resolvedVia: 'role-locator', confidence: 1.0 };
         }
-        if (target?.ref) return { ok: false, reason: 'ref-no-selector' };
-        return { ok: false, reason: 'missing-selector' };
+        if (target?.ref) return { ok: false, reason: VALIDATION_REASONS.REF_NO_SELECTOR };
+        return { ok: false, reason: VALIDATION_REASONS.MISSING_SELECTOR };
     }
 
     const locator = page.locator(selector);
     const count = await locator.count().catch(() => 0);
-    if (count === 0) return { ok: false, reason: 'not-found' };
+    if (count === 0) return { ok: false, reason: VALIDATION_REASONS.NOT_FOUND };
+    if (count > 1) return { ok: false, reason: VALIDATION_REASONS.AMBIGUOUS_SELECTOR, count };
 
     const el = locator.first();
     const visible = await el.isVisible().catch(() => false);
-    if (!visible) return { ok: false, reason: 'not-visible' };
+    if (!visible) return { ok: false, reason: VALIDATION_REASONS.NOT_VISIBLE };
 
     const enabled = await el.isEnabled().catch(() => false);
-    if (!enabled) return { ok: false, reason: 'not-enabled' };
+    if (!enabled) return { ok: false, reason: VALIDATION_REASONS.NOT_ENABLED };
 
     if (actionKind === 'fill') {
         const editable = await el.isEditable().catch(() => false);
-        if (!editable) return { ok: false, reason: 'not-editable' };
+        if (!editable) return { ok: false, reason: VALIDATION_REASONS.NOT_EDITABLE };
     }
 
-    if (target.role && target.name) {
-        return { ok: true };
+    if (semanticTarget?.roles?.length || semanticTarget?.names?.length || target.role || target.name || target.nameHash) {
+        const validation = await runValidationContract(page, el, {
+            target,
+            semanticTarget,
+            actionKind,
+        });
+        if (!validation.ok) {
+            return { ok: false, reason: validation.reason, confidence: validation.confidence };
+        }
+        return { ok: true, confidence: validation.confidence };
     }
 
-    if (semanticTarget?.roles?.length || semanticTarget?.names?.length) {
-        const matchesSemantic = await checkSemanticMatch(page, el, semanticTarget);
-        if (!matchesSemantic) return { ok: false, reason: 'semantic-mismatch' };
-    }
-
-    return { ok: true };
+    return { ok: true, confidence: 1.0 };
 }
 
-async function checkSemanticMatch(page, locator, semanticTarget) {
+async function runValidationContract(page, locator, { target, semanticTarget, actionKind }) {
     try {
-        const info = await locator.evaluate(node => {
+        const info = await locator.evaluate((node) => {
             const explicitRole = node.getAttribute('role');
             const tag = node.tagName.toLowerCase();
             const isEditable = node.isContentEditable || node.contentEditable === 'true';
@@ -241,24 +266,62 @@ async function checkSemanticMatch(page, locator, semanticTarget) {
                 labelText = ref?.textContent?.trim()?.slice(0, 100) || '';
             }
             if (!labelText) labelText = node.textContent?.trim()?.slice(0, 100) || '';
-            return { role: implicitRole, label: labelText };
-        }).catch(() => ({ role: null, label: '' }));
+            return { role: implicitRole, label: labelText, tagName: tag, isEditable };
+        }).catch(() => null);
 
-        if (semanticTarget.excludeNames?.some(p => patternMatches(p, info.label))) {
-            return false;
+        if (!info) return { ok: false, reason: 'eval-failed', confidence: 0 };
+
+        let score = 0;
+        let maxScore = 0;
+
+        maxScore += 3;
+        if (target.role) {
+            if (target.role === info.role) score += 3;
+            else if (semanticTarget?.roles?.includes(info.role)) score += 2;
+        } else if (semanticTarget?.roles?.includes(info.role)) {
+            score += 3;
         }
 
-        if (semanticTarget.roles?.length && info.role) {
-            if (semanticTarget.roles.some(r => r === info.role)) return true;
+        maxScore += 3;
+        if (target.nameHash) {
+            const currentNameHash = info.label ? hashField(info.label) : null;
+            if (currentNameHash === target.nameHash) score += 3;
+        } else if (target.name) {
+            const namePattern = new RegExp(escapeForRegExp(target.name), 'i');
+            if (namePattern.test(info.label)) score += 3;
+        } else if (semanticTarget?.names?.length) {
+            if (semanticTarget.names.some(p => patternMatches(p, info.label))) {
+                score += 3;
+            }
         }
 
-        if (semanticTarget.names?.length) {
-            return semanticTarget.names.some(p => patternMatches(p, info.label));
+        maxScore += 2;
+        if (semanticTarget?.excludeNames?.some(p => patternMatches(p, info.label))) {
+            score -= 2;
+        } else {
+            score += 2;
         }
 
-        return true;
+        maxScore += 2;
+        if (actionKind === 'fill') {
+            if (info.isEditable || info.tagName === 'textarea' || info.tagName === 'input') {
+                score += 2;
+            }
+        } else if (actionKind === 'click') {
+            if (info.tagName === 'button' || info.tagName === 'a' || info.role === 'button') {
+                score += 2;
+            }
+        }
+
+        const confidence = maxScore > 0 ? score / maxScore : 1;
+
+        if (confidence < VALIDATION_THRESHOLD) {
+            return { ok: false, reason: VALIDATION_REASONS.LOW_CONFIDENCE, confidence };
+        }
+
+        return { ok: true, confidence };
     } catch {
-        return false;
+        return { ok: false, reason: 'contract-error', confidence: 0 };
     }
 }
 
@@ -270,6 +333,10 @@ function patternMatches(pattern, value) {
         return pattern.test(text);
     }
     return text.toLowerCase().includes(String(pattern).toLowerCase());
+}
+
+function hashField(value) {
+    return `sha256:${createHash('sha256').update(String(value)).digest('hex').slice(0, 12)}`;
 }
 
 export async function locatorForResolvedTarget(page, target, { registry } = {}) {

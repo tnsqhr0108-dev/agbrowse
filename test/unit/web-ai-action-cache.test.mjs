@@ -25,27 +25,27 @@ describe('web-ai action-cache', () => {
     describe('cacheKey', () => {
         it('builds deterministic composite key', () => {
             const key = cacheKey({ provider: 'chatgpt', urlHost: 'chatgpt.com', intent: 'composer.fill', actionKind: 'fill', domHashPrefix: 'abc', axHashPrefix: 'def' });
-            expect(key).toBe('v1|chatgpt|chatgpt.com|composer.fill|fill|abc|def');
+            expect(key).toBe('v2|chatgpt|chatgpt.com|composer.fill|fill|abc|def');
         });
 
         it('uses wildcards for missing parts', () => {
             const key = cacheKey({ provider: 'chatgpt' });
-            expect(key).toBe('v1|chatgpt|*|*|*|*|*');
+            expect(key).toBe('v2|chatgpt|*|*|*|*|*');
         });
     });
 
     describe('loadActionCache', () => {
         it('returns empty cache when file does not exist', () => {
             const cache = loadActionCache(tempDir);
-            expect(cache.schemaVersion).toBe(1);
+            expect(cache.schemaVersion).toBe(2);
             expect(Object.keys(cache.entries)).toHaveLength(0);
         });
 
         it('loads existing cache file', () => {
             const existing = {
-                schemaVersion: 1,
+                schemaVersion: 2,
                 entries: {
-                    'v1|chatgpt|*|composer.fill|*|*|*': {
+                    'v2|chatgpt|*|composer.fill|*|*|*': {
                         target: { selector: '#composer' },
                         stats: { hitCount: 5, lastValidatedAt: new Date().toISOString() },
                     },
@@ -59,13 +59,13 @@ describe('web-ai action-cache', () => {
         it('prunes entries older than 30 days', () => {
             const staleDate = new Date(Date.now() - 31 * 86_400_000).toISOString();
             const existing = {
-                schemaVersion: 1,
+                schemaVersion: 2,
                 entries: {
-                    'old': {
+                    'v2|*|*|old|*|*|*': {
                         target: { selector: '#old' },
                         stats: { hitCount: 1, lastValidatedAt: staleDate },
                     },
-                    'fresh': {
+                    'v2|*|*|fresh|*|*|*': {
                         target: { selector: '#fresh' },
                         stats: { hitCount: 1, lastValidatedAt: new Date().toISOString() },
                     },
@@ -74,7 +74,7 @@ describe('web-ai action-cache', () => {
             saveActionCache(existing, tempDir);
             const cache = loadActionCache(tempDir);
             expect(Object.keys(cache.entries)).toHaveLength(1);
-            expect(cache.entries.fresh).toBeDefined();
+            expect(cache.entries['v2|*|*|fresh|*|*|*']).toBeDefined();
         });
 
         it('resets cache on schema version mismatch', () => {
@@ -89,7 +89,7 @@ describe('web-ai action-cache', () => {
         it('returns matching entry', () => {
             const cache = {
                 entries: {
-                    'v1|chatgpt|chatgpt.com|composer.fill|fill|abc|def': {
+                    'v2|chatgpt|chatgpt.com|composer.fill|fill|abc|def': {
                         target: { selector: '#composer' },
                     },
                 },
@@ -121,7 +121,7 @@ describe('web-ai action-cache', () => {
                 urlHost: 'chatgpt.com',
             }, { selector: '#composer', role: 'textbox', name: 'Message ChatGPT' }, { domHashPrefix: 'abc' });
 
-            const key = 'v1|chatgpt|chatgpt.com|composer.fill|fill|abc|*';
+            const key = 'v2|chatgpt|chatgpt.com|composer.fill|fill|abc|*';
             expect(cache.entries[key]).toBeDefined();
             expect(cache.entries[key].target.selector).toBe('#composer');
             expect(cache.entries[key].target.role).toBe('textbox');
@@ -135,7 +135,7 @@ describe('web-ai action-cache', () => {
             updateCacheEntry(cache, ctx, { selector: '#composer' });
             updateCacheEntry(cache, ctx, { selector: '#composer' });
 
-            const key = 'v1|chatgpt|*|composer.fill|fill|*|*';
+            const key = 'v2|chatgpt|*|composer.fill|fill|*|*';
             expect(cache.entries[key].stats.hitCount).toBe(2);
         });
 
@@ -162,13 +162,13 @@ describe('web-ai action-cache', () => {
             const path = join(tempDir, 'action-cache.json');
             expect(existsSync(path)).toBe(true);
             const raw = JSON.parse(readFileSync(path, 'utf8'));
-            expect(raw.schemaVersion).toBe(1);
+            expect(raw.schemaVersion).toBe(2);
             expect(Object.keys(raw.entries)).toHaveLength(1);
         });
 
         it('raw returns internal cache object', () => {
             const handle = createActionCacheHandle(tempDir);
-            expect(handle.raw().schemaVersion).toBe(1);
+            expect(handle.raw().schemaVersion).toBe(2);
         });
     });
 });
