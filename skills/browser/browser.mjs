@@ -51,6 +51,7 @@ import {
 import { runInstallSkillsCli, runSkillsCli } from './skill-install.mjs';
 import { acquireProfileLock, releaseProfileLock, updateLockPid } from './profile-lock.mjs';
 import { runWebAiCli } from '../../web-ai/cli.mjs';
+import { createTab, closeTab, switchToTab, listManagedTabs } from './tab-manager.mjs';
 
 // ─── Config ──────────────────────────────────────
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -1325,6 +1326,19 @@ try {
             if (!target) { console.error('Usage: browser.mjs tab-switch <index-or-targetId>'); process.exit(1); }
             const ts = await tabSwitch(getPort(), target);
             console.log(`switched to ${ts.tab ? `tab ${ts.tab}` : ts.targetId}: ${ts.title}`);
+            break;
+        }
+        case 'new-tab': {
+            const url = process.argv[3] || 'about:blank';
+            const tab = await createTab(getPort(), url);
+            console.log(`created tab: ${tab.targetId} (${tab.url})`);
+            break;
+        }
+        case 'tab-close': {
+            const target = process.argv[3];
+            if (!target) { console.error('Usage: browser.mjs tab-close <targetId>'); process.exit(1); }
+            const result = await closeTab(getPort(), target);
+            console.log(`closed tab: ${result.targetId}`);
             break;
         }
         case 'text': {

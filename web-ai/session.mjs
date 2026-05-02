@@ -111,6 +111,13 @@ export function createSession(envelope, meta = {}) {
         updatedAt: now,
         deadlineAt: meta.deadlineAt || null,
         targetId: meta.targetId || null,
+        tabId: meta.tabId || null,
+        tabState: meta.tabState || {
+            createdAt: now,
+            lastActiveAt: now,
+            recoveryCount: 0,
+            closeCount: 0,
+        },
         originalUrl: meta.originalUrl || null,
         conversationUrl: meta.conversationUrl || meta.originalUrl || null,
         promptHash: `sha256:${hashPrompt(envelope || {})}`,
@@ -158,6 +165,43 @@ export function findActiveSession({ vendor, targetId, conversationUrl } = {}) {
 
 export function pruneSessionsOlderThan(input = {}) {
     return pruneSessions(input);
+}
+
+// ─── Phase 9.1: Tab Binding ───────────────────────────────────────
+
+export function bindSessionToTab(sessionId, targetId, tabId = null) {
+    return updateSession(sessionId, {
+        targetId,
+        tabId: tabId || targetId,
+        tabState: {
+            createdAt: new Date().toISOString(),
+            lastActiveAt: new Date().toISOString(),
+            recoveryCount: 0,
+            closeCount: 0,
+        }
+    });
+}
+
+export function updateSessionTabState(sessionId, updates = {}) {
+    const session = getSession(sessionId);
+    if (!session) return null;
+    
+    const current = session.tabState || {};
+    return updateSession(sessionId, {
+        tabState: {
+            ...current,
+            ...updates,
+            lastActiveAt: new Date().toISOString(),
+        }
+    });
+}
+
+export function incrementRecoveryCount(sessionId) {
+    const session = getSession(sessionId);
+    if (!session) return null;
+    
+    const current = session.tabState?.recoveryCount || 0;
+    return updateSessionTabState(sessionId, { recoveryCount: current + 1 });
 }
 
 const VENDOR_DEFAULT_TIMEOUT_SEC = { chatgpt: 1200, gemini: 1200, grok: 600 };

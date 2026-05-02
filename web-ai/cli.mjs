@@ -76,6 +76,8 @@ Sessions (durable across shells, stored at $BROWSER_AGENT_HOME/web-ai-sessions.j
                       or the vendor polling default).
   --navigate          When sessions reattach finds a tab mismatch, allow
                       the runtime to switch tabs to the saved conversationUrl.
+  --new-tab           Create a new tab for this send/query (default in Phase 9.1)
+  --reuse-tab         Reuse the existing active tab (legacy single-tab behavior)
 
 Sessions subcommands:
   agbrowse web-ai sessions list   [--vendor <v>] [--status <s>] [--limit N] [--json]
@@ -215,6 +217,8 @@ async function runWebAiCliInner(argv = [], deps) {
             full: { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
             'cache-metrics': { type: 'boolean', default: false },
+            'new-tab': { type: 'boolean', default: false },
+            'reuse-tab': { type: 'boolean', default: false },
         },
         strict: false,
     });
@@ -271,6 +275,8 @@ async function runWebAiCliInner(argv = [], deps) {
         snapshotOption: values.snapshot,
         maxDepth: values['max-depth'],
         rootSelector: values['root-selector'],
+        newTab: values['new-tab'] === true,
+        reuseTab: values['reuse-tab'] === true,
     };
 
     const result = command === 'watch'
