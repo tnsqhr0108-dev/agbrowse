@@ -303,7 +303,10 @@ export async function pollWebAi(deps, input = {}) {
         const copiedText = preferCopiedText(stableText, copied);
         if (copiedText) {
             const answerText = cleanAssistantText(copiedText);
-            if (session) updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+            if (session) {
+                updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+                poolTab(vendor, session.targetId, page.url());
+            }
             return {
                 ok: true,
                 vendor,

@@ -14,6 +14,7 @@ import {
 } from './session.mjs';
 import { hasContextPackaging, prepareContextForBrowser } from './context-pack/index.mjs';
 import { WebAiError } from './errors.mjs';
+import { poolTab } from './tab-pool.mjs';
 import { defineCapability, probeFirstVisibleSelector, probeHostMatches, runCapabilities, worstCapabilityState } from './capability.mjs';
 
 export const GROK_CONTEXT_PACK_WARNING = 'grok-context-pack-not-recommended: prefer inline prompts plus optional --file uploads for Grok; ChatGPT or Gemini handle context packages more reliably.';
@@ -255,7 +256,10 @@ export async function grokPollWebAi(deps, input = {}) {
                             warnings.push(`copy-markdown-fallback-unavailable:${copied.status || 'unknown'}`);
                         }
                     }
-                    if (session) updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+                    if (session) {
+                        updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+                        poolTab('grok', session.targetId, page.url());
+                    }
                     return { ok: true, vendor: 'grok', status: 'complete', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), answerText, baseline, usedFallbacks, warnings };
                 }
             } else {

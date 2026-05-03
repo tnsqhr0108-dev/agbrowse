@@ -19,6 +19,7 @@ import { captureCopiedResponseText, GEMINI_COPY_SELECTORS, preferCopiedText } fr
 import { selectGeminiModel, geminiModelCapabilityProbe } from './gemini-model.mjs';
 import { preflightAttachment } from './chatgpt-attachments.mjs';
 import { WebAiError } from './errors.mjs';
+import { poolTab } from './tab-pool.mjs';
 import { defineCapability, probeFirstVisibleSelector, probeHostMatches, runCapabilities, worstCapabilityState } from './capability.mjs';
 
 const GEMINI_HOSTS = new Set(['gemini.google.com']);
@@ -381,7 +382,10 @@ export async function geminiPollWebAi(deps, input = {}) {
                     warnings.push(`copy-markdown-fallback-unavailable:${copied.status || 'unknown'}`);
                 }
             }
-            if (session) updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+            if (session) {
+                updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
+                poolTab('gemini', session.targetId, page.url());
+            }
             return { ok: true, vendor: 'gemini', status: 'complete', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), answerText, baseline, usedFallbacks, warnings };
         }
         await page.waitForTimeout(2_000).catch(() => undefined);

@@ -92,4 +92,13 @@ describe('tab lifecycle cleanup selection', () => {
         expect(source).toContain('opts.reuseBlank !== false');
         expect(source).toContain('reusedBlank: true');
     });
+
+    it('persists tab pool across CLI processes and checks out pooled tabs once', () => {
+        const source = readFileSync(new URL('../../web-ai/tab-pool.mjs', import.meta.url), 'utf8');
+        expect(source).toContain('web-ai-tab-pool.json');
+        expect(source).toContain('function loadPool');
+        expect(source).toContain('function savePool');
+        expect(source).toContain('savePool();');
+        expect(source).toContain('return { targetId: entry.targetId, url: entry.url }');
+    });
 });
