@@ -85,4 +85,11 @@ describe('tab lifecycle cleanup selection', () => {
         expect(source).toContain('.map(tab => tabDisplayState(tab))');
         expect(source).not.toContain('.map(tabDisplayState)');
     });
+
+    it('reuses startup about:blank tabs before creating provider tabs', () => {
+        const source = readFileSync(new URL('../../skills/browser/tab-manager.mjs', import.meta.url), 'utf8');
+        expect(source).toContain('function isReusableBlankTab');
+        expect(source).toContain('opts.reuseBlank !== false');
+        expect(source).toContain('reusedBlank: true');
+    });
 });

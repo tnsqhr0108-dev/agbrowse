@@ -99,6 +99,11 @@ async function listTabs(port) {
     return (await resp.json()).filter(t => t.type === 'page');
 }
 
+function isReusableBlankTab(tab) {
+    const url = String(tab?.url || '').toLowerCase();
+    return tab?.id && (url === 'about:blank' || url === '');
+}
+
 // ─── Tab operations ──────────────────────────────────────
 
 /**
@@ -114,6 +119,26 @@ export async function createTab(port, url = 'about:blank', opts = {}) {
     if (!cdp) throw new Error('No CDP session available for tab creation');
 
     try {
+        if (url !== 'about:blank' && opts.reuseBlank !== false) {
+            const blank = (await listTabs(port)).find(isReusableBlankTab);
+            if (blank?.id) {
+                const page = await waitForPageByTargetId(port, blank.id);
+                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+                if (opts.activate !== false) {
+                    await cdp.send('Target.activateTarget', { targetId: blank.id });
+                }
+                const now = markTabActive(blank.id);
+                return {
+                    targetId: blank.id,
+                    url: page.url(),
+                    title: await page.title().catch(() => 'New Tab'),
+                    activated: opts.activate !== false,
+                    lastActiveAt: now,
+                    reusedBlank: true
+                };
+            }
+        }
+
         const { targetId } = await cdp.send('Target.createTarget', {
             url,
             newWindow: false,
