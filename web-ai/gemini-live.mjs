@@ -19,7 +19,8 @@ import { captureCopiedResponseText, GEMINI_COPY_SELECTORS, preferCopiedText } fr
 import { selectGeminiModel, geminiModelCapabilityProbe } from './gemini-model.mjs';
 import { preflightAttachment } from './chatgpt-attachments.mjs';
 import { WebAiError } from './errors.mjs';
-import { poolTab } from './tab-pool.mjs';
+import { finalizeProviderTab } from './tab-finalizer.mjs';
+import { recordActiveLease } from './tab-lease-store.mjs';
 import { defineCapability, probeFirstVisibleSelector, probeHostMatches, runCapabilities, worstCapabilityState } from './capability.mjs';
 
 const GEMINI_HOSTS = new Set(['gemini.google.com']);
@@ -233,6 +234,15 @@ export async function geminiSendWebAi(deps, input = {}) {
         envelopeSummary: { ...summarizeEnvelope(input, contextPack), assistantCount: turnsBefore },
     });
     if (targetId) bindSessionToTab(session.sessionId, targetId);
+    if (targetId) await recordActiveLease({
+        owner: 'web-ai',
+        vendor: 'gemini',
+        sessionType: 'send-poll',
+        sessionId: session.sessionId,
+        targetId,
+        url: page.url(),
+        port: deps.getPort?.() || 9222,
+    });
     return {
         ok: true,
         vendor: 'gemini',
@@ -383,8 +393,7 @@ export async function geminiPollWebAi(deps, input = {}) {
                 }
             }
             if (session) {
-                updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
-                poolTab('gemini', session.targetId, page.url());
+                await finalizeProviderTab(deps, { vendor: 'gemini', session, page, answerText, warnings });
             }
             return { ok: true, vendor: 'gemini', status: 'complete', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), answerText, baseline, usedFallbacks, warnings };
         }

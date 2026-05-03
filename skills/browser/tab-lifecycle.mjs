@@ -3,6 +3,7 @@
  */
 import { closeTab, listManagedTabs } from './tab-manager.mjs';
 import { listSessions } from '../../web-ai/session.mjs';
+import { listLeases } from '../../web-ai/tab-lease-store.mjs';
 
 const MAX_TABS = parseInt(process.env.AGBROWSE_MAX_TABS || '10', 10);
 const IDLE_TIMEOUT_MS = parseDuration(process.env.AGBROWSE_TAB_IDLE || '30m');
@@ -38,12 +39,14 @@ export function selectTabsForCleanup({
     idleTimeoutMs = IDLE_TIMEOUT_MS,
     maxTabs = MAX_TABS,
     includeUntracked = false,
+    leaseByTargetId = null,
 } = {}) {
     const selected = new Map();
     const closeable = (tabs || []).filter(tab =>
         tab?.targetId &&
         !pinnedTargetIds.has(tab.targetId) &&
-        !activeSessionTargetIds.has(tab.targetId)
+        !activeSessionTargetIds.has(tab.targetId) &&
+        isCloseableByOwnership(tab, leaseByTargetId, includeUntracked)
     );
 
     for (const tab of closeable) {
@@ -60,11 +63,13 @@ export function selectTabsForCleanup({
         const tracked = Number.isFinite(lastActiveAt) && lastActiveAt > 0;
         return !pinnedTargetIds.has(tab.targetId) &&
             !activeSessionTargetIds.has(tab.targetId) &&
-            (tracked || includeUntracked);
+            (tracked || includeUntracked) &&
+            isCloseableByOwnership(tab, leaseByTargetId, includeUntracked);
     });
 
-    if (remaining.length > maxTabs) {
-        const limitCloseCount = remaining.length - maxTabs;
+    const limitSourceCount = leaseByTargetId ? remainingUnpinned.length : remaining.length;
+    if (limitSourceCount > maxTabs) {
+        const limitCloseCount = limitSourceCount - maxTabs;
         const oldest = remainingUnpinned
             .slice()
             .sort((a, b) => (Number(a.lastActiveAt) || 0) - (Number(b.lastActiveAt) || 0))
@@ -77,6 +82,14 @@ export function selectTabsForCleanup({
     return Array.from(selected.values());
 }
 
+function isCloseableByOwnership(tab, leaseByTargetId, includeUntracked) {
+    if (!leaseByTargetId) return true;
+    const lease = leaseByTargetId.get(tab.targetId);
+    if (!lease) return includeUntracked === true;
+    return ['web-ai', 'cli-jaw'].includes(lease.owner) &&
+        ['pooled', 'completed-session'].includes(lease.state);
+}
+
 /**
  * Enforce MAX_TABS limit and idle timeout. Closes oldest non-pinned, non-active-session tabs.
  * @param {number} port - CDP port
@@ -86,6 +99,8 @@ export function selectTabsForCleanup({
 export async function cleanupIdleTabs(port, opts = {}) {
     const tabs = await listManagedTabs(port);
     const now = opts.now || Date.now();
+    const leases = await listLeases().catch(() => []);
+    const leaseByTargetId = new Map(leases.map(lease => [lease.targetId, lease]));
 
     const activeSessionTargetIds = new Set();
     for (const session of listSessions({ active: true })) {
@@ -100,6 +115,7 @@ export async function cleanupIdleTabs(port, opts = {}) {
         idleTimeoutMs: opts.idleTimeoutMs || IDLE_TIMEOUT_MS,
         maxTabs: opts.maxTabs ?? MAX_TABS,
         includeUntracked: opts.includeUntracked === true,
+        leaseByTargetId,
     });
 
     const summary = { closed: 0, idleClosed: 0, limitClosed: 0, untrackedClosed: 0 };

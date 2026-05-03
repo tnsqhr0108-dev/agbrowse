@@ -68,6 +68,20 @@ describe('web-ai CLI contract', () => {
         expect(result.stderr).toContain('unsupported ChatGPT model selection');
     });
 
+    it('accepts observed ChatGPT reasoning effort choices in CLI preflight', async () => {
+        const pro = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello', '--model', 'pro', '--effort', 'standard']);
+        expect(pro.code).toBe(0);
+        expect(pro.stderr).not.toContain('unsupported ChatGPT reasoning effort');
+
+        const thinking = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello', '--model', 'thinking', '--reasoning-effort', 'heavy']);
+        expect(thinking.code).toBe(0);
+        expect(thinking.stderr).not.toContain('unsupported ChatGPT reasoning effort');
+
+        const invalid = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello', '--model', 'pro', '--effort', 'maximum']);
+        expect(invalid.code).not.toBe(0);
+        expect(invalid.stderr).toContain('unsupported ChatGPT reasoning effort');
+    });
+
     it('accepts observed Gemini and Grok model choices in CLI preflight', async () => {
         const gemini = await execBrowser(['web-ai', 'render', '--vendor', 'gemini', '--prompt', 'hello', '--model', 'thinking']);
         expect(gemini.stderr).not.toContain('unsupported gemini model selection');

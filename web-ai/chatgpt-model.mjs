@@ -9,15 +9,36 @@ export const CHATGPT_MODEL_SELECTOR_BUTTONS = [
 const CHATGPT_COMPOSER_MODEL_PILL_SELECTORS = [
     'button.__composer-pill[aria-haspopup="menu"]',
     '[role="button"].__composer-pill[aria-haspopup="menu"]',
+    'button.__composer-pill',
+    '[role="button"].__composer-pill',
 ];
 
 const CHATGPT_MODEL_MENU_ITEM_SELECTOR = '[data-testid^="model-switcher-"]';
-const CHATGPT_MODEL_TEXT_BUTTON_PATTERN = /^(Instant|Fast|Thinking|Pro|Heavy)\b/i;
+const CHATGPT_MODEL_TEXT_BUTTON_PATTERN = /^((Light|Standard|Extended|Heavy)\s+)?(Instant|Fast|Thinking|Pro|Heavy)\b/i;
 
 export const CHATGPT_MODEL_OPTIONS = {
     instant: { testIds: ['model-switcher-gpt-5-3'], labels: ['Instant'] },
     thinking: { testIds: ['model-switcher-gpt-5-5-thinking', 'model-switcher-gpt-5-5-thinking-thinking-effort'], labels: ['Thinking'] },
     pro: { testIds: ['model-switcher-gpt-5-5-pro', 'model-switcher-gpt-5-5-pro-thinking-effort'], labels: ['Pro', 'Heavy'] },
+};
+
+export const CHATGPT_MODEL_EFFORT_OPTIONS = {
+    thinking: {
+        triggerTestIds: ['model-switcher-gpt-5-5-thinking-thinking-effort'],
+        efforts: {
+            light: 'Light',
+            standard: 'Standard',
+            extended: 'Extended',
+            heavy: 'Heavy',
+        },
+    },
+    pro: {
+        triggerTestIds: ['model-switcher-gpt-5-5-pro-thinking-effort'],
+        efforts: {
+            standard: 'Standard',
+            extended: 'Extended',
+        },
+    },
 };
 
 const MODEL_ALIASES = {
@@ -34,34 +55,80 @@ const MODEL_ALIASES = {
     'gpt-5.5-pro': 'pro',
 };
 
+const EFFORT_ALIASES = {
+    light: 'light',
+    low: 'light',
+    standard: 'standard',
+    normal: 'standard',
+    regular: 'standard',
+    default: 'standard',
+    extended: 'extended',
+    high: 'extended',
+    heavy: 'heavy',
+};
+
 export function normalizeChatGptModelChoice(model) {
     const key = String(model || '').trim().toLowerCase();
     if (!key) return null;
     return MODEL_ALIASES[key] || null;
 }
 
-export async function selectChatGptModel(page, model) {
+export function normalizeChatGptEffortChoice(effort) {
+    const key = String(effort || '').trim().toLowerCase();
+    if (!key) return null;
+    return EFFORT_ALIASES[key] || null;
+}
+
+export function isChatGptEffortSupported(model, effort) {
+    const requestedModel = normalizeChatGptModelChoice(model) || model;
+    const requestedEffort = normalizeChatGptEffortChoice(effort) || effort;
+    return Boolean(CHATGPT_MODEL_EFFORT_OPTIONS[requestedModel]?.efforts?.[requestedEffort]);
+}
+
+export async function selectChatGptModel(page, model, options = {}) {
     const requested = normalizeChatGptModelChoice(model);
+    const requestedEffort = normalizeChatGptEffortChoice(options.effort || options.reasoningEffort);
     if (!requested) {
         if (model) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `unsupported ChatGPT model selection: ${model}`, evidence: { model } });
-        return null;
+        if (!requestedEffort) return null;
+    }
+    if ((options.effort || options.reasoningEffort) && !requestedEffort) {
+        throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `unsupported ChatGPT reasoning effort: ${options.effort || options.reasoningEffort}`, evidence: { effort: options.effort || options.reasoningEffort } });
     }
     const usedFallbacks = [];
     await openModelMenu(page, usedFallbacks);
-    const before = await readCheckedModel(page);
-    if (before === requested) {
+    let currentModel = await readCheckedModel(page);
+    const targetModel = requested || currentModel;
+    let modelChanged = false;
+    if (!targetModel) {
         await closeModelMenu(page);
-        return { requested, selected: before, alreadySelected: true, usedFallbacks };
+        throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: 'ChatGPT model must be selected before setting reasoning effort', evidence: { effort: requestedEffort } });
     }
-    const option = await findModelOption(page, requested);
-    if (!option) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT model option not found: ${requested}`, evidence: { requested } });
-    await option.click({ timeout: 5_000 });
-    await page.waitForTimeout(750).catch(() => undefined);
-    await openModelMenu(page, usedFallbacks);
+    if (requested && currentModel !== requested) {
+        const option = await findModelOption(page, requested);
+        if (!option) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT model option not found: ${requested}`, evidence: { requested } });
+        await option.click({ timeout: 5_000 });
+        await page.waitForTimeout(750).catch(() => undefined);
+        await openModelMenu(page, usedFallbacks);
+        currentModel = await readCheckedModel(page);
+        modelChanged = true;
+    }
+    let selectedEffort = null;
+    if (requestedEffort) {
+        selectedEffort = await selectChatGptEffort(page, targetModel, requestedEffort, usedFallbacks);
+        await openModelMenu(page, usedFallbacks);
+    }
     const after = await readCheckedModel(page);
     await closeModelMenu(page);
-    if (after !== requested) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT model verification failed: expected ${requested}, got ${after || 'none'}`, evidence: { requested, got: after || null } });
-    return { requested, selected: after, alreadySelected: false, usedFallbacks };
+    if (after !== targetModel) throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT model verification failed: expected ${targetModel}, got ${after || 'none'}`, evidence: { requested: targetModel, got: after || null } });
+    return {
+        requested: requested || targetModel,
+        selected: after,
+        alreadySelected: !modelChanged && !selectedEffort?.changed,
+        effort: selectedEffort?.selected || null,
+        requestedEffort: requestedEffort || null,
+        usedFallbacks,
+    };
 }
 
 async function closeModelMenu(page) {
@@ -93,7 +160,7 @@ async function openModelMenu(page, usedFallbacks) {
         await page.waitForTimeout(250).catch(() => undefined);
     }
     usedFallbacks.push('model-menu-text-button');
-    const textButton = page.locator('button').filter({ hasText: /^ChatGPT$|^GPT-|^Instant$|^Fast$|^Thinking$|^Pro$|^Heavy$/i }).first();
+    const textButton = page.locator('button').filter({ hasText: /^ChatGPT$|^GPT-|^Instant$|^Fast$|^Thinking$|^Pro$|^Heavy$|^Extended Pro$|^Standard Pro$/i }).first();
     if (await textButton.isVisible().catch(() => false)) {
         await textButton.click({ timeout: 5_000 });
         await page.waitForTimeout(400).catch(() => undefined);
@@ -137,6 +204,135 @@ async function findModelOption(page, choice) {
     return null;
 }
 
+async function selectChatGptEffort(page, model, effort, usedFallbacks) {
+    const config = CHATGPT_MODEL_EFFORT_OPTIONS[model];
+    if (!config?.efforts?.[effort]) {
+        throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT reasoning effort ${effort} is not available for ${model}`, evidence: { model, effort, supported: Object.keys(config?.efforts || {}) } });
+    }
+    await openEffortMenu(page, model, usedFallbacks);
+    const before = await readCheckedEffort(page, model);
+    if (before === effort) return { requested: effort, selected: before, changed: false };
+    const option = await findEffortOption(page, model, effort);
+    if (!option) {
+        const label = config.efforts[effort];
+        throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT reasoning effort option not found: ${model}/${effort}`, evidence: { model, effort, label } });
+    }
+    await option.click({ timeout: 5_000 });
+    await page.waitForTimeout(500).catch(() => undefined);
+    await openEffortMenu(page, model, usedFallbacks);
+    const after = await readCheckedEffort(page, model);
+    if (after !== effort) {
+        throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT reasoning effort verification failed: expected ${effort}, got ${after || 'none'}`, evidence: { model, effort, got: after || null } });
+    }
+    return { requested: effort, selected: after, changed: true };
+}
+
+async function findEffortOption(page, model, effort) {
+    const label = CHATGPT_MODEL_EFFORT_OPTIONS[model]?.efforts?.[effort];
+    if (!label) return null;
+    const option = page.locator('[role="menuitemradio"]').filter({ hasText: new RegExp(`^${label}\\b`, 'i') }).last();
+    return (await option.isVisible().catch(() => false)) ? option : null;
+}
+
+async function openEffortMenu(page, model, usedFallbacks) {
+    if (await isEffortMenuOpen(page, model)) return;
+    const config = CHATGPT_MODEL_EFFORT_OPTIONS[model];
+    const row = await findModelOption(page, model);
+    const rowBox = row ? await row.boundingBox().catch(() => null) : null;
+    if (rowBox) {
+        await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2).catch(() => undefined);
+        await page.waitForTimeout(150).catch(() => undefined);
+    } else if (row) {
+        await row.hover({ timeout: 2_000 }).catch(() => undefined);
+    }
+    for (const testId of config.triggerTestIds) {
+        const trigger = page.locator(`[data-testid="${testId}"]`).first();
+        if (!(await trigger.count().then(count => count > 0).catch(() => false))) continue;
+        const box = await elementRectByTestId(page, testId);
+        if (box) {
+            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2).catch(() => undefined);
+            await page.waitForTimeout(100).catch(() => undefined);
+            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2).catch(() => undefined);
+            await page.waitForTimeout(300).catch(() => undefined);
+            if (await isEffortMenuOpen(page, model)) return;
+        }
+        await trigger.click({ timeout: 5_000 });
+        await page.waitForTimeout(300).catch(() => undefined);
+        if (await isEffortMenuOpen(page, model)) return;
+    }
+    const fallbackBox = await findEffortTriggerBoxNearModelRow(page, model);
+    if (fallbackBox) {
+        await page.mouse.move(fallbackBox.x + fallbackBox.width / 2, fallbackBox.y + fallbackBox.height / 2).catch(() => undefined);
+        await page.waitForTimeout(100).catch(() => undefined);
+        await page.mouse.click(fallbackBox.x + fallbackBox.width / 2, fallbackBox.y + fallbackBox.height / 2).catch(() => undefined);
+        await page.waitForTimeout(300).catch(() => undefined);
+        if (await isEffortMenuOpen(page, model)) {
+            usedFallbacks.push(`${model}-effort-row-button`);
+            return;
+        }
+    }
+    usedFallbacks.push(`${model}-effort-trigger`);
+    throw new WebAiError({ errorCode: 'provider.model-mismatch', stage: 'provider-select-mode', vendor: 'chatgpt', retryHint: 'model-fallback', message: `ChatGPT reasoning effort selector not found for ${model}`, selectorsTried: config.triggerTestIds.map(testId => `[data-testid="${testId}"]`), evidence: { model } });
+}
+
+async function findEffortTriggerBoxNearModelRow(page, model) {
+    const labels = CHATGPT_MODEL_OPTIONS[model]?.labels || [];
+    return page.evaluate((expectedLabels) => {
+        const rows = Array.from(document.querySelectorAll('[role="menuitemradio"][data-testid^="model-switcher-"], [role="menuitemradio"]'));
+        const row = rows.find((candidate) => {
+            const text = (candidate.innerText || candidate.textContent || '').trim();
+            return expectedLabels.some(label => new RegExp(`^${label}\\b`, 'i').test(text));
+        });
+        if (!row) return null;
+        const rowRect = row.getBoundingClientRect();
+        const effortButtons = Array.from(document.querySelectorAll('[aria-label="Effort"], [role="menuitem"][aria-label="Effort"]'));
+        const button = effortButtons.find((candidate) => {
+            const rect = candidate.getBoundingClientRect();
+            const rowCenterY = rowRect.y + rowRect.height / 2;
+            return rect.width > 0 && rect.height > 0 && rowCenterY >= rect.y && rowCenterY <= rect.y + rect.height;
+        });
+        if (!button) return null;
+        const rect = button.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }, labels).catch(() => null);
+}
+
+async function elementRectByTestId(page, testId) {
+    return page.evaluate((id) => {
+        const el = document.querySelector(`[data-testid="${id}"]`);
+        if (!el) return null;
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height) return null;
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }, testId).catch(() => null);
+}
+
+async function readCheckedEffort(page, model) {
+    const config = CHATGPT_MODEL_EFFORT_OPTIONS[model];
+    for (const [effort, label] of Object.entries(config?.efforts || {})) {
+        const checked = await page.locator(`[role="menuitemradio"][aria-checked="true"], [role="menuitemradio"][data-state="checked"]`)
+            .filter({ hasText: new RegExp(`^${label}\\b`, 'i') })
+            .last()
+            .isVisible()
+            .catch(() => false);
+        if (checked) return effort;
+    }
+    return null;
+}
+
+async function isEffortMenuOpen(page, model) {
+    const config = CHATGPT_MODEL_EFFORT_OPTIONS[model];
+    if (!config) return false;
+    const labels = Object.values(config.efforts);
+    return page.locator('[role="menu"]').evaluateAll((menus, expectedLabels) => {
+        return menus.some(menu => {
+            const text = menu.innerText || menu.textContent || '';
+            const matches = expectedLabels.filter(label => new RegExp(`(^|\\s)${label}(\\s|$)`, 'i').test(text));
+            return matches.length >= Math.min(2, expectedLabels.length);
+        });
+    }, labels).catch(() => false);
+}
+
 async function readCheckedModel(page) {
     for (const [choice, option] of Object.entries(CHATGPT_MODEL_OPTIONS)) {
         for (const testId of option.testIds) {
@@ -146,8 +342,8 @@ async function readCheckedModel(page) {
     }
     const active = await readActiveModelPill(page);
     if (/^(Instant|Fast)\b/i.test(active)) return 'instant';
-    if (/^Thinking\b/i.test(active)) return 'thinking';
-    if (/^(Pro|Heavy)\b/i.test(active)) return 'pro';
+    if (/\bThinking\b/i.test(active)) return 'thinking';
+    if (/\bPro\b/i.test(active) || /^Heavy\b/i.test(active)) return 'pro';
     return null;
 }
 
@@ -166,10 +362,13 @@ async function isModelMenuOpen(page) {
     return page.locator(CHATGPT_MODEL_MENU_ITEM_SELECTOR).first().isVisible().catch(() => false);
 }
 
-export async function chatGptModelCapabilityProbe(page, model) {
+export async function chatGptModelCapabilityProbe(page, model, options = {}) {
     const requested = normalizeChatGptModelChoice(model);
-    if (!model) return { state: 'unknown', evidence: { requested: null }, next: 'send' };
+    const requestedEffort = normalizeChatGptEffortChoice(options.effort || options.reasoningEffort);
+    if (!model && !(options.effort || options.reasoningEffort)) return { state: 'unknown', evidence: { requested: null, effort: null }, next: 'send' };
     if (!requested) return { state: 'fail', evidence: { requested: model }, next: 'model-fallback' };
+    if ((options.effort || options.reasoningEffort) && !requestedEffort) return { state: 'fail', evidence: { requested, effort: options.effort || options.reasoningEffort }, next: 'model-fallback' };
+    if (requestedEffort && !isChatGptEffortSupported(requested, requestedEffort)) return { state: 'fail', evidence: { requested, effort: requestedEffort }, next: 'model-fallback' };
     const usedFallbacks = [];
     try {
         await openModelMenu(page, usedFallbacks);
@@ -177,6 +376,15 @@ export async function chatGptModelCapabilityProbe(page, model) {
         return { state: 'fail', evidence: { requested, menuOpenFailed: true, usedFallbacks }, next: 'model-fallback' };
     }
     const option = await findModelOption(page, requested).catch(() => null);
+    let effortOption = null;
+    if (option && requestedEffort) {
+        try {
+            await openEffortMenu(page, requested, usedFallbacks);
+            effortOption = await findEffortOption(page, requested, requestedEffort);
+        } catch {
+            effortOption = null;
+        }
+    }
     let menuClosed = false;
     try {
         await closeModelMenu(page);
@@ -184,6 +392,7 @@ export async function chatGptModelCapabilityProbe(page, model) {
     } catch {
         menuClosed = false;
     }
-    const state = option ? (menuClosed ? 'ok' : 'warn') : 'fail';
-    return { state, evidence: { requested, menuClosed, usedFallbacks }, next: state === 'ok' ? 'send' : 'model-fallback' };
+    const selectable = Boolean(option) && (!requestedEffort || Boolean(effortOption));
+    const state = selectable ? (menuClosed ? 'ok' : 'warn') : 'fail';
+    return { state, evidence: { requested, effort: requestedEffort || null, menuClosed, usedFallbacks }, next: state === 'ok' ? 'send' : 'model-fallback' };
 }

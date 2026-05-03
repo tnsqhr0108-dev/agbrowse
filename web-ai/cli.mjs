@@ -13,7 +13,7 @@ import { createTab, waitForPageByTargetId } from '../skills/browser/tab-manager.
 import { cleanupIdleTabs } from '../skills/browser/tab-lifecycle.mjs';
 import { withSessionPage } from './tab-recovery.mjs';
 import { withSessionCommandLock } from './session-store.mjs';
-import { getPooledTab } from './tab-pool.mjs';
+import { cleanupPoolTabs, getPooledTab } from './tab-pool.mjs';
 export { parseDurationToMs };
 
 const VENDOR_DEFAULT_URLS = {
@@ -53,6 +53,11 @@ Provider:
                         Gemini  models: fast, thinking, pro
                         Gemini  tool:   deepthink
                         Grok:   auto, fast, expert, thinking, heavy
+  --effort <alias>    ChatGPT reasoning effort
+                        Pro: standard, extended
+                        Thinking: light, standard, extended, heavy
+  --reasoning-effort <alias>
+                      Alias for --effort
   --timeout <sec>     Polling timeout. Defaults: ChatGPT 1200, Gemini 1200, Grok 600.
 
 Prompt envelope (every prompt also gets a [INSTRUCTIONS] block telling the
@@ -203,6 +208,8 @@ async function runWebAiCliInner(argv = [], deps) {
             'allow-grok-context-pack': { type: 'boolean', default: false },
             file: { type: 'string' },
             model: { type: 'string' },
+            effort: { type: 'string' },
+            'reasoning-effort': { type: 'string' },
             'thinking-time': { type: 'string' },
             'context-from-files': { type: 'string', multiple: true },
             'context-exclude': { type: 'string', multiple: true },
@@ -265,6 +272,7 @@ async function runWebAiCliInner(argv = [], deps) {
         filePath: values.file,
         thinkingTime: values['thinking-time'],
         model: values.model,
+        reasoningEffort: values.effort || values['reasoning-effort'],
         contextFromFiles: values['context-from-files'] || [],
         contextExclude: values['context-exclude'] || [],
         contextFile: values['context-file'],
@@ -346,10 +354,16 @@ async function ensureProviderTab(deps, input) {
     const vendorUrl = input.url || VENDOR_DEFAULT_URLS[input.vendor || 'chatgpt'];
     const port = deps.getPort?.() || 9222;
 
+    await cleanupPoolTabs(port);
     await cleanupIdleTabs(port, { maxTabs: Number.POSITIVE_INFINITY });
 
     // Phase 9.2: try tab pool first
-    const pooled = await getPooledTab(port, input.vendor || 'chatgpt');
+    const pooled = await getPooledTab(port, input.vendor || 'chatgpt', {
+        owner: 'web-ai',
+        sessionType: 'send-poll',
+        url: vendorUrl,
+        port,
+    });
     if (pooled) {
         const page = await waitForPageByTargetId(port, pooled.targetId);
         if (page.url() !== vendorUrl) {
@@ -459,6 +473,17 @@ function rejectFutureScope(values) {
             evidence: { model: values.model },
         });
     }
+    const effort = values.effort || values['reasoning-effort'];
+    if (effort && !isSupportedWebAiEffort(values.vendor || 'chatgpt', effort)) {
+        throw new WebAiError({
+            errorCode: 'provider.model-mismatch',
+            stage: 'provider-select-mode',
+            vendor: values.vendor || 'chatgpt',
+            retryHint: 'model-fallback',
+            message: `unsupported ${webAiVendorLabel(values.vendor || 'chatgpt')} reasoning effort: ${effort}`,
+            evidence: { effort },
+        });
+    }
 }
 
 function isSupportedWebAiModel(vendor, model) {
@@ -467,6 +492,14 @@ function isSupportedWebAiModel(vendor, model) {
         chatgpt: new Set(['instant', 'fast', 'gpt-5-3', 'gpt-5.3', 'thinking', 'think', 'gpt-5-5-thinking', 'gpt-5.5-thinking', 'pro', 'gpt-5-5-pro', 'gpt-5.5-pro']),
         gemini: new Set(['fast', 'flash', 'gemini-fast', 'thinking', 'think', 'gemini-thinking', 'pro', 'gemini-pro', '3.1-pro', 'deepthink', 'deep-think', 'deep_think', 'deep think', 'gemini-deepthink', 'gemini-deep-think']),
         grok: new Set(['auto', 'automatic', 'fast', 'quick', 'expert', 'thinking', 'think', 'grok-4.3', 'grok43', 'grok-43', 'beta', 'heavy']),
+    };
+    return Boolean(byVendor[String(vendor || 'chatgpt')]?.has(key));
+}
+
+function isSupportedWebAiEffort(vendor, effort) {
+    const key = String(effort || '').trim().toLowerCase();
+    const byVendor = {
+        chatgpt: new Set(['light', 'low', 'standard', 'normal', 'regular', 'default', 'extended', 'high', 'heavy']),
     };
     return Boolean(byVendor[String(vendor || 'chatgpt')]?.has(key));
 }

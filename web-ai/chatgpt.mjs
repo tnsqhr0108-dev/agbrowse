@@ -14,8 +14,9 @@ import {
     summarizeEnvelope,
     updateSession,
 } from './session.mjs';
-import { poolTab } from './tab-pool.mjs';
 import { WebAiError } from './errors.mjs';
+import { finalizeProviderTab } from './tab-finalizer.mjs';
+import { recordActiveLease } from './tab-lease-store.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
     attachLocalFileLive,
@@ -76,7 +77,7 @@ const CHATGPT_STOP_SELECTORS = [
 export const chatGptCapabilities = [
     defineCapability('chatgpt-active-tab-verification', async (deps) => probeHostMatches(await deps.getPage(), CHATGPT_HOSTS)),
     defineCapability('chatgpt-composer-visible', async (deps) => probeFirstVisibleSelector(await deps.getPage(), CHATGPT_COMPOSER_SELECTORS)),
-    defineCapability('chatgpt-model-alias-selectable', async (deps, input) => chatGptModelCapabilityProbe(await deps.getPage(), input.model)),
+    defineCapability('chatgpt-model-alias-selectable', async (deps, input) => chatGptModelCapabilityProbe(await deps.getPage(), input.model, { effort: input.reasoningEffort })),
     defineCapability('chatgpt-upload-surface-visible', async (deps, input) => {
         if (!input.filePath && input.inlineOnly !== false) return { state: 'unknown', evidence: { required: false }, next: 'send' };
         return probeFirstVisibleSelector(await deps.getPage(), CHATGPT_UPLOAD_SELECTORS, { failNext: 'inline-only' });
@@ -127,7 +128,7 @@ export async function sendWebAi(deps, input = {}) {
             ? renderQuestionEnvelopeWithContext(envelope, contextPack.composerText)
             : renderQuestionEnvelope(envelope)
         : renderQuestionEnvelope(envelope);
-    const selectedModel = await selectChatGptModel(page, input.model);
+    const selectedModel = await selectChatGptModel(page, input.model, { effort: input.reasoningEffort });
     await waitForStableAssistantCount(page);
     const assistantCount = await countAssistantMessages(page);
     const baseline = saveBaseline({
@@ -146,6 +147,15 @@ export async function sendWebAi(deps, input = {}) {
         envelopeSummary: { ...summarizeEnvelope(input, contextPack), assistantCount },
     });
     if (targetId) bindSessionToTab(session.sessionId, targetId);
+    if (targetId) await recordActiveLease({
+        owner: 'web-ai',
+        vendor: envelope.vendor,
+        sessionType: 'send-poll',
+        sessionId: session.sessionId,
+        targetId,
+        url: page.url(),
+        port: deps.getPort?.() || 9222,
+    });
 
     const adapter = createChatGptEditorAdapter(page, {
         insertText: async (text) => {
@@ -219,6 +229,7 @@ export async function sendWebAi(deps, input = {}) {
             ...(contextAttachmentPath ? [`context package attached: ${contextPack.attachments[0].displayPath}`] : []),
             ...attachmentWarnings,
             ...(selectedModel ? [`model selected: ${selectedModel.selected}${selectedModel.alreadySelected ? ' (already selected)' : ''}`] : []),
+            ...(selectedModel?.effort ? [`reasoning effort selected: ${selectedModel.effort}`] : []),
         ],
     };
 }
@@ -272,8 +283,7 @@ export async function pollWebAi(deps, input = {}) {
                         }
                     }
                     if (session) {
-                        updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
-                        poolTab(vendor, session.targetId, page.url());
+                        await finalizeProviderTab(deps, { vendor, session, page, answerText, warnings });
                     }
                     return {
                         ok: true,
@@ -304,8 +314,7 @@ export async function pollWebAi(deps, input = {}) {
         if (copiedText) {
             const answerText = cleanAssistantText(copiedText);
             if (session) {
-                updateSession(session.sessionId, { status: 'complete', conversationUrl: page.url(), answer: answerText });
-                poolTab(vendor, session.targetId, page.url());
+                await finalizeProviderTab(deps, { vendor, session, page, answerText });
             }
             return {
                 ok: true,

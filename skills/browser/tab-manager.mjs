@@ -99,9 +99,11 @@ async function listTabs(port) {
     return (await resp.json()).filter(t => t.type === 'page');
 }
 
-function isReusableBlankTab(tab) {
+function isReusableBlankTab(tab, allTabs = []) {
     const url = String(tab?.url || '').toLowerCase();
-    return tab?.id && (url === 'about:blank' || url === '');
+    if (!tab?.id || !(url === 'about:blank' || url === '')) return false;
+    // Safe automatic reuse: only the single startup blank is implicitly ours.
+    return allTabs.length === 1;
 }
 
 // ─── Tab operations ──────────────────────────────────────
@@ -120,7 +122,8 @@ export async function createTab(port, url = 'about:blank', opts = {}) {
 
     try {
         if (url !== 'about:blank' && opts.reuseBlank !== false) {
-            const blank = (await listTabs(port)).find(isReusableBlankTab);
+            const tabs = await listTabs(port);
+            const blank = tabs.find(tab => isReusableBlankTab(tab, tabs));
             if (blank?.id) {
                 const page = await waitForPageByTargetId(port, blank.id);
                 await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });

@@ -255,16 +255,20 @@ ChatGPT:
 - `instant`, `fast`, `gpt-5.3`
 - `thinking`, `think`, `gpt-5.5-thinking`
 - `pro`, `gpt-5.5-pro`
+- `--effort` / `--reasoning-effort` for ChatGPT:
+  - Pro: `standard`, `extended`
+  - Thinking: `light`, `standard`, `extended`, `heavy`
 
-2026-04-30 ChatGPT UI note:
+2026-05-03 ChatGPT UI note:
 
-- The visible model opener can be a bottom composer pill labeled `Heavy`
-  instead of the older top `model-switcher-dropdown-button`.
-- Treat a visible `Heavy` model pill as the active ChatGPT Pro/Heavy state.
-- For direct DOM fallback, open the model pill and select
-  `[data-testid="model-switcher-gpt-5-5-pro-thinking-effort"]` for Pro.
-- If selector automation fails, inspect with `agbrowse snapshot --interactive`
-  and click the visible `Heavy` model pill before sending.
+- The visible model opener can be a bottom composer pill such as `Pro`
+  without the older top `model-switcher-dropdown-button`.
+- Pro effort trigger: `[data-testid="model-switcher-gpt-5-5-pro-thinking-effort"]`
+  with `Standard` and `Extended`.
+- Thinking effort trigger:
+  `[data-testid="model-switcher-gpt-5-5-thinking-thinking-effort"]`
+  with `Light`, `Standard`, `Extended`, and `Heavy`.
+- Use regular Pro by selecting `--model pro --effort standard`.
 
 Gemini:
 

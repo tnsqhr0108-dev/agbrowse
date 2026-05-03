@@ -80,6 +80,27 @@ describe('tab lifecycle cleanup selection', () => {
         expect(selectTabsForCleanup({ ...base, includeUntracked: true }).map(tab => tab.targetId)).toEqual(['untracked']);
     });
 
+    it('counts only owned closeable leases toward managed max-tabs when lease metadata is present', () => {
+        const leaseByTargetId = new Map([
+            ['pooled-old', { targetId: 'pooled-old', owner: 'web-ai', state: 'pooled' }],
+            ['active', { targetId: 'active', owner: 'web-ai', state: 'active-session' }],
+        ]);
+        const selected = selectTabsForCleanup({
+            now: 10_000,
+            idleTimeoutMs: 60_000,
+            maxTabs: 1,
+            leaseByTargetId,
+            tabs: [
+                { targetId: 'untracked-a', lastActiveAt: null },
+                { targetId: 'untracked-b', lastActiveAt: null },
+                { targetId: 'active', lastActiveAt: 100 },
+                { targetId: 'pooled-old', lastActiveAt: 200 },
+            ],
+        });
+
+        expect(selected.map(tab => tab.targetId)).toEqual([]);
+    });
+
     it('does not pass Array.map index as tab display timestamp', () => {
         const source = readFileSync(new URL('../../skills/browser/browser.mjs', import.meta.url), 'utf8');
         expect(source).toContain('.map(tab => tabDisplayState(tab))');
@@ -95,10 +116,12 @@ describe('tab lifecycle cleanup selection', () => {
 
     it('persists tab pool across CLI processes and checks out pooled tabs once', () => {
         const source = readFileSync(new URL('../../web-ai/tab-pool.mjs', import.meta.url), 'utf8');
-        expect(source).toContain('web-ai-tab-pool.json');
-        expect(source).toContain('function loadPool');
-        expect(source).toContain('function savePool');
-        expect(source).toContain('savePool();');
-        expect(source).toContain('return { targetId: entry.targetId, url: entry.url }');
+        const leaseSource = readFileSync(new URL('../../web-ai/tab-lease-store.mjs', import.meta.url), 'utf8');
+        expect(source).toContain('checkoutPooledLease');
+        expect(source).toContain('releaseCompletedLease');
+        expect(leaseSource).toContain('web-ai-tab-leases.json');
+        expect(leaseSource).toContain('withLeaseLock');
+        expect(leaseSource).toContain('leaseKey');
+        expect(leaseSource).toContain('closeTab(port, lease.targetId)');
     });
 });
