@@ -312,43 +312,44 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
     const headless = resolveHeadlessMode(opts);
     // CDP already responding → reuse
     if (await isPortListening(port)) {
+        let resp;
         try {
-            const resp = await fetch(`http://127.0.0.1:${port}/json/version`, {
+            resp = await fetch(`http://127.0.0.1:${port}/json/version`, {
                 signal: AbortSignal.timeout(2000),
             });
-            if (resp.ok) {
-                const previousState = readPersistedState();
-                const isStaleState = previousState?.startedAt
-                    && Date.now() - Date.parse(previousState.startedAt) > 60 * 60 * 1000;
-                if (opts.headed === true && previousState?.headless === true) {
-                    throw new Error(
-                        `CDP port ${port} is already backed by a headless agbrowse Chrome. ` +
-                        `Run "agbrowse stop" first, then "agbrowse start --headed".`
-                    );
-                }
-                if (!previousState || previousState.port !== port || isStaleState) {
-                    console.warn(`[browser] warning: CDP port ${port} appears foreign or stale — agbrowse is attaching to an existing Chrome it did not start; verify --user-data-dir matches if you depend on profile state`);
-                }
-                const chromePath = opts.chromePath || previousState?.chromePath || CUSTOM_CHROME_PATH;
-                if (!headless) focusChromeApp(chromePath);
-                clearPersistedSnapshot();
-                writePersistedState({
-                    pid: previousState?.port === port ? previousState.pid ?? null : null,
-                    port,
-                    chromePath,
-                    startedAt: previousState?.startedAt || new Date().toISOString(),
-                    headless: previousState?.headless ?? headless,
-                    reused: true,
-                });
-                console.log(`[browser] CDP already listening on port ${port} — reusing existing instance`);
-                activePort = port;
-                return;
-            }
         } catch {
             throw new Error(
                 `Port ${port} is in use but not responding as CDP. ` +
                 `Another process may be occupying the port. Try --port <other> or stop the conflicting process.`
             );
+        }
+        if (resp.ok) {
+            const previousState = readPersistedState();
+            const isStaleState = previousState?.startedAt
+                && Date.now() - Date.parse(previousState.startedAt) > 60 * 60 * 1000;
+            if (opts.headed === true && previousState?.headless === true) {
+                throw new Error(
+                    `CDP port ${port} is already backed by a headless agbrowse Chrome. ` +
+                    `Run "agbrowse stop" first, then "agbrowse start --headed".`
+                );
+            }
+            if (!previousState || previousState.port !== port || isStaleState) {
+                console.warn(`[browser] warning: CDP port ${port} appears foreign or stale — agbrowse is attaching to an existing Chrome it did not start; verify --user-data-dir matches if you depend on profile state`);
+            }
+            const chromePath = opts.chromePath || previousState?.chromePath || CUSTOM_CHROME_PATH;
+            if (!headless) focusChromeApp(chromePath);
+            clearPersistedSnapshot();
+            writePersistedState({
+                pid: previousState?.port === port ? previousState.pid ?? null : null,
+                port,
+                chromePath,
+                startedAt: previousState?.startedAt || new Date().toISOString(),
+                headless: previousState?.headless ?? headless,
+                reused: true,
+            });
+            console.log(`[browser] CDP already listening on port ${port} — reusing existing instance`);
+            activePort = port;
+            return;
         }
     }
 

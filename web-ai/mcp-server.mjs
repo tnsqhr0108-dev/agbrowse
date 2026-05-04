@@ -85,7 +85,11 @@ async function callWebAiTool(name, args, deps, state) {
         if (!ref) throw new Error(`unknown ref for latest snapshot: ${args.ref}`);
         const page = await deps.getPage();
         if (!ref.name) throw new Error(`ref is not actionable without an accessible name: ${args.ref}`);
-        await page.getByRole(ref.role, { name: ref.name }).first().click({ timeout: 5_000 });
+        const locator = page.getByRole(ref.role, { name: ref.name });
+        const target = Number.isInteger(ref.occurrenceIndex) && ref.occurrenceIndex >= 0
+            ? locator.nth(ref.occurrenceIndex)
+            : locator.first();
+        await target.click({ timeout: 5_000 });
         return { ok: true, snapshotId: snapshot.snapshotId, ref: args.ref };
     }
     if (name === 'web_ai_submit_prompt') {

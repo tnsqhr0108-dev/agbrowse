@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { handleMcpMessage } from '../../web-ai/mcp-server.mjs';
 
-function fakePage() {
+function fakePage({ duplicateButtons = false, clicked = [] } = {}) {
     return {
         url: () => 'https://chatgpt.com/',
         accessibility: {
@@ -10,12 +10,20 @@ function fakePage() {
                 name: '',
                 children: [
                     { role: 'button', name: 'Send' },
+                    ...(duplicateButtons ? [{ role: 'button', name: 'Send' }] : []),
                 ],
             }),
         },
         locator: () => ({ elementHandle: async () => null }),
         evaluate: async () => 'hash-source',
-        getByRole: () => ({ first: () => ({ click: async () => undefined }) }),
+        getByRole: (role, options) => ({
+            first: () => ({
+                click: async () => clicked.push({ role, name: options.name, index: 0, via: 'first' }),
+            }),
+            nth: index => ({
+                click: async () => clicked.push({ role, name: options.name, index, via: 'nth' }),
+            }),
+        }),
     };
 }
 
@@ -58,5 +66,37 @@ describe('web-ai MCP server', () => {
 
         expect(staleClick.result.isError).toBe(true);
         expect(staleClick.result.content[0].text).toContain('stale snapshotId');
+    });
+
+    it('clicks duplicate role/name refs by snapshot occurrence instead of first match', async () => {
+        const state = {};
+        const clicked = [];
+        const deps = { getPage: async () => fakePage({ duplicateButtons: true, clicked }) };
+        const snapshotResponse = await handleMcpMessage({
+            jsonrpc: '2.0',
+            id: 5,
+            method: 'tools/call',
+            params: {
+                name: 'web_ai_snapshot',
+                arguments: { provider: 'chatgpt', compact: true },
+            },
+        }, deps, state);
+
+        const snapshot = snapshotResponse.result.structuredContent;
+        expect(snapshot.refs['@e1'].occurrenceIndex).toBe(0);
+        expect(snapshot.refs['@e2'].occurrenceIndex).toBe(1);
+
+        const click = await handleMcpMessage({
+            jsonrpc: '2.0',
+            id: 6,
+            method: 'tools/call',
+            params: {
+                name: 'web_ai_click_ref',
+                arguments: { snapshotId: snapshot.snapshotId, ref: '@e2' },
+            },
+        }, deps, state);
+
+        expect(click.result.structuredContent.ok).toBe(true);
+        expect(clicked).toEqual([{ role: 'button', name: 'Send', index: 1, via: 'nth' }]);
     });
 });

@@ -58,18 +58,24 @@ export function extractInteractiveRefs(snapshot, prefix = '@e') {
     }
     const refs = {};
     let counter = 1;
+    const occurrenceCounts = new Map();
     walkAx(snapshot, (node, depth, path) => {
         if (!isInteractiveNode(node)) return;
         const ref = `${prefix}${counter++}`;
         const name = truncateName(node.name || '');
+        const role = String(node.role || 'unknown');
+        const occurrenceKey = roleNameKey(role, name);
+        const occurrenceIndex = occurrenceCounts.get(occurrenceKey) || 0;
+        occurrenceCounts.set(occurrenceKey, occurrenceIndex + 1);
         refs[ref] = {
             ref,
-            role: String(node.role || 'unknown'),
+            role,
             name,
+            occurrenceIndex,
             selector: null,
             framePath: [],
             shadowPath: [],
-            signatureHash: hashElementSignature({ role: node.role, name, depth, path }),
+            signatureHash: hashElementSignature({ role, name, depth, path }),
         };
     });
     return refs;
@@ -127,7 +133,7 @@ async function captureAccessibilitySnapshot(page, { interactiveOnly, rootSelecto
 }
 
 function serializeAxTree(tree, options) {
-    const ctx = { ...options, refs: {}, nextRef: 1, nodeCount: 0 };
+    const ctx = { ...options, refs: {}, nextRef: 1, nodeCount: 0, occurrenceCounts: new Map() };
     const lines = serializeNode(tree || { role: 'document', name: '' }, 0, ctx, []);
     return { text: lines.join('\n'), refs: ctx.refs, nodeCount: ctx.nodeCount };
 }
@@ -143,9 +149,13 @@ function serializeNode(node, depth, ctx, path) {
 
     if (isInteractiveNode(node)) {
         const ref = `${ctx.refPrefix}${ctx.nextRef++}`;
+        const occurrenceKey = roleNameKey(role, rawName);
+        const occurrenceIndex = ctx.occurrenceCounts.get(occurrenceKey) || 0;
+        ctx.occurrenceCounts.set(occurrenceKey, occurrenceIndex + 1);
         attrs.push(`ref=${ref}`);
         ctx.refs[ref] = {
             ref, role, name: rawName,
+            occurrenceIndex,
             selector: null, framePath: [], shadowPath: [],
             signatureHash: hashElementSignature({ role, name: rawName, depth, path }),
         };
@@ -213,6 +223,10 @@ function formatAttrValue(value) {
 
 function hashElementSignature(input) {
     return `sha256:${createHash('sha256').update(JSON.stringify(input)).digest('hex').slice(0, 16)}`;
+}
+
+function roleNameKey(role, name) {
+    return `${String(role || 'unknown')}\u0000${String(name || '')}`;
 }
 
 export function hashDoctorField(value) {

@@ -18,6 +18,17 @@ describe('active tab persistence contract', () => {
         expect(browserSrc).toMatch(/headless,\s*\n\s*lockToken/);
     });
 
+    it('preserves the headed restart remediation when an existing agbrowse CDP is headless', () => {
+        const start = browserSrc.indexOf('async function launchChrome');
+        const end = browserSrc.indexOf('if (chromeProc && !chromeProc.killed)', start);
+        const block = browserSrc.slice(start, end);
+        expect(block).toMatch(/let resp;/);
+        expect(block).toMatch(/Port \$\{port\} is in use but not responding as CDP/);
+        expect(block).toMatch(/already backed by a headless agbrowse Chrome/);
+        expect(block.indexOf('Port ${port} is in use but not responding as CDP'))
+            .toBeLessThan(block.indexOf('already backed by a headless agbrowse Chrome'));
+    });
+
     it('persists tab-switch target id across CLI invocations', () => {
         expect(browserSrc).toMatch(/Target\.activateTarget/);
         expect(browserSrc).toMatch(/activeTargetId:\s*wanted\.id/);
