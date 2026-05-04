@@ -24,6 +24,9 @@ describe.sequential('CLI help', () => {
         expect(result.stdout).toContain('Configuration model:');
         expect(result.stdout).toContain('install-skills --target <dir>');
         expect(result.stdout).toContain('tab-cleanup');
+        expect(result.stdout).toContain('--force');
+        expect(result.stdout).toContain('leaseClosedTabs');
+        expect(result.stdout).toContain('--effort <alias>');
         expect(result.stdout).toContain('AGBROWSE_MAX_TABS');
         expect(result.stdout).toContain('--reuse-tab');
     });
@@ -33,6 +36,12 @@ describe.sequential('CLI help', () => {
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('Usage:');
         expect(result.stdout).toContain('Browser lifecycle:');
+    });
+
+    it('rejects tab-cleanup include-untracked without force before touching the browser', async () => {
+        const result = await execBrowser(['tab-cleanup', '--include-untracked']);
+        expect(result.code).not.toBe(0);
+        expect(result.stderr).toContain('tab-cleanup --include-untracked requires --force');
     });
 
     it('shows vision-click help when no target is given', async () => {

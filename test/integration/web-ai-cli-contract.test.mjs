@@ -8,6 +8,10 @@ describe('web-ai CLI contract', () => {
         expect(result.stdout).toContain('Usage:');
         expect(result.stdout).toContain('Provider:');
         expect(result.stdout).toContain('--context-from-files');
+        expect(result.stdout).toContain('--effort <alias>');
+        expect(result.stdout).toContain('Requires --model');
+        expect(result.stdout).toContain('Tab lease policy:');
+        expect(result.stdout).toContain('leaseClosedTabs');
         expect(result.stdout).toMatch(/agbrowse web-ai query\s+--vendor grok/);
     });
 
@@ -76,6 +80,14 @@ describe('web-ai CLI contract', () => {
         const thinking = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello', '--model', 'thinking', '--reasoning-effort', 'heavy']);
         expect(thinking.code).toBe(0);
         expect(thinking.stderr).not.toContain('unsupported ChatGPT reasoning effort');
+
+        const effortOnly = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello', '--effort', 'extended']);
+        expect(effortOnly.code).not.toBe(0);
+        expect(effortOnly.stderr).toContain('reasoning effort requires --model');
+
+        const proHeavy = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello', '--model', 'pro', '--effort', 'heavy']);
+        expect(proHeavy.code).not.toBe(0);
+        expect(proHeavy.stderr).toContain('unsupported ChatGPT reasoning effort');
 
         const invalid = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello', '--model', 'pro', '--effort', 'maximum']);
         expect(invalid.code).not.toBe(0);

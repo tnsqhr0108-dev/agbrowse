@@ -1760,7 +1760,7 @@ try {
       --max-tabs <N>       Override max tab limit for this cleanup
       --include-untracked  Also close tabs without activity metadata
       --force              Required with --include-untracked
-      --json               Output cleanup counts as JSON
+      --json               Output cleanup counts, leaseClosed, and leaseClosedTabs as JSON
     scroll <dir>           Scroll up|down|left|right [--amount N] [--ref eN]
 
   Wait:
@@ -1792,6 +1792,10 @@ try {
         --model <alias>                ChatGPT: pro/thinking/instant
                                        Gemini:  pro/thinking/fast + tool deepthink
                                        Grok:    heavy/expert/thinking/fast/auto
+        --effort <alias>               ChatGPT only; requires --model
+                                       Pro: standard/extended
+                                       Thinking: light/standard/extended/heavy
+        --reasoning-effort <alias>     Alias for --effort
         --url <conversation-or-provider-url>
         --inline-only | --file <path> | --context-from-files <glob>
         --context-transport <upload|inline>
@@ -1805,6 +1809,12 @@ try {
         --new-tab                      Create a new tab (default for send/query)
         --reuse-tab                    Reuse active tab (legacy behavior)
         --json                         JSON output (or AGBROWSE_JSON_ERRORS=1)
+
+      Tab lease policy:
+        Completed provider tabs are runtime leases. The warm pool keeps max 1
+        owned tab per owner/vendor/sessionType/origin/profile key for 5m, then
+        closes expired or overflow targets. Run tab-cleanup --json to inspect
+        leaseClosedTabs.
 
       Failure envelope when --json or AGBROWSE_JSON_ERRORS=1:
         { ok:false, status:"error", error:{ name, errorCode, stage, message,

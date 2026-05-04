@@ -53,7 +53,8 @@ Provider:
                         Gemini  models: fast, thinking, pro
                         Gemini  tool:   deepthink
                         Grok:   auto, fast, expert, thinking, heavy
-  --effort <alias>    ChatGPT reasoning effort
+  --effort <alias>    ChatGPT reasoning effort. Requires --model because
+                      Pro and Thinking expose different effort menus.
                         Pro: standard, extended
                         Thinking: light, standard, extended, heavy
   --reasoning-effort <alias>
@@ -94,6 +95,12 @@ Sessions (durable across shells, stored at $BROWSER_AGENT_HOME/web-ai-sessions.j
                       the runtime to switch tabs to the saved conversationUrl.
   --new-tab           Create a new tab for this send/query (default in Phase 9.1)
   --reuse-tab         Reuse the existing active tab (legacy single-tab behavior)
+
+Tab lease policy:
+  Completed provider tabs are runtime leases, not history storage.
+  The pool keeps at most one warm owned tab per owner/vendor/sessionType/origin/profile
+  key for 5 minutes; expired or overflow pooled tabs are closed with CDP.
+  Use "agbrowse tab-cleanup --json" to inspect leaseClosedTabs.
 
 Sessions subcommands:
   agbrowse web-ai sessions list   [--vendor <v>] [--status <s>] [--limit N] [--json]
@@ -474,7 +481,17 @@ function rejectFutureScope(values) {
         });
     }
     const effort = values.effort || values['reasoning-effort'];
-    if (effort && !isSupportedWebAiEffort(values.vendor || 'chatgpt', effort)) {
+    if (effort && !values.model) {
+        throw new WebAiError({
+            errorCode: 'provider.model-mismatch',
+            stage: 'provider-select-mode',
+            vendor: values.vendor || 'chatgpt',
+            retryHint: 'model-fallback',
+            message: `${webAiVendorLabel(values.vendor || 'chatgpt')} reasoning effort requires --model because effort menus differ by model`,
+            evidence: { effort },
+        });
+    }
+    if (effort && !isSupportedWebAiEffort(values.vendor || 'chatgpt', values.model, effort)) {
         throw new WebAiError({
             errorCode: 'provider.model-mismatch',
             stage: 'provider-select-mode',
@@ -496,12 +513,34 @@ function isSupportedWebAiModel(vendor, model) {
     return Boolean(byVendor[String(vendor || 'chatgpt')]?.has(key));
 }
 
-function isSupportedWebAiEffort(vendor, effort) {
-    const key = String(effort || '').trim().toLowerCase();
-    const byVendor = {
-        chatgpt: new Set(['light', 'low', 'standard', 'normal', 'regular', 'default', 'extended', 'high', 'heavy']),
-    };
-    return Boolean(byVendor[String(vendor || 'chatgpt')]?.has(key));
+function isSupportedWebAiEffort(vendor, model, effort) {
+    if (String(vendor || 'chatgpt') !== 'chatgpt') return false;
+    const effortKey = String(effort || '').trim().toLowerCase();
+    const normalizedEffort = ({
+        light: 'light',
+        low: 'light',
+        standard: 'standard',
+        normal: 'standard',
+        regular: 'standard',
+        default: 'standard',
+        extended: 'extended',
+        high: 'extended',
+        heavy: 'heavy',
+    })[effortKey];
+    if (!normalizedEffort) return false;
+    const modelKey = String(model || '').trim().toLowerCase();
+    const normalizedModel = ({
+        thinking: 'thinking',
+        think: 'thinking',
+        'gpt-5-5-thinking': 'thinking',
+        'gpt-5.5-thinking': 'thinking',
+        pro: 'pro',
+        'gpt-5-5-pro': 'pro',
+        'gpt-5.5-pro': 'pro',
+    })[modelKey];
+    if (normalizedModel === 'thinking') return ['light', 'standard', 'extended', 'heavy'].includes(normalizedEffort);
+    if (normalizedModel === 'pro') return ['standard', 'extended'].includes(normalizedEffort);
+    return false;
 }
 
 function webAiVendorLabel(vendor) {
