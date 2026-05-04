@@ -16,6 +16,9 @@ import { withSessionCommandLock } from './session-store.mjs';
 import { cleanupPoolTabs, getPooledTab } from './tab-pool.mjs';
 import { runMcpServer } from './mcp-server.mjs';
 import { runWebAiEval } from './eval-runner.mjs';
+import { createTraceId } from './trace/types.mjs';
+import { writeCommandTrace } from './trace/writer.mjs';
+import { loadAndEnforcePolicy } from './policy/enforce.mjs';
 export { parseDurationToMs };
 
 const VENDOR_DEFAULT_URLS = {
@@ -92,6 +95,9 @@ Attachments and context:
   --files-report                    Include file report metadata
   --allow-copy-markdown-fallback    Capture provider Copy button output after DOM response
   --allow-grok-context-pack         Override Grok hard-gate (Grok prefers inline + single --file)
+  --trace-dir <dir>                 Write redacted JSONL trace evidence for non-render commands
+  --policy <path>                   Enforce action policy before browser mutation
+  --unsafe-allow <name>             Explicit unsafe allowance; repeatable
 
 Sessions (durable across shells, stored at $BROWSER_AGENT_HOME/web-ai-sessions.json):
   --session <id>      Resume a session by id on poll / query / stop.
@@ -192,6 +198,18 @@ export async function runWebAiCli(argv = [], deps) {
         return await runWebAiCliInner(argv, deps);
     } catch (err) {
         const wrapped = wrapError(err);
+        const traceDir = readFlagValue(argv, '--trace-dir');
+        const command = argv[0] || 'help';
+        if (traceDir && command !== 'render') {
+            wrapped.traceId = wrapped.traceId || createTraceId(`${command}:${wrapped.errorCode}:${Date.now()}`);
+            await writeCommandTrace(traceDir, {
+                traceId: wrapped.traceId,
+                command: `web-ai ${command}`,
+                provider: readFlagValue(argv, '--vendor') || 'chatgpt',
+                status: 'error',
+                errorEnvelope: wrapped.toJSON(),
+            }).catch(() => null);
+        }
         emitCliError(wrapped, argv);
         wrapped.alreadyReported = true;
         throw wrapped;
@@ -207,6 +225,15 @@ function emitCliError(err, argv = []) {
     }
     console.error(`[web-ai error] ${err.errorCode}: ${err.message}`);
     if (err.retryHint) console.error(`[hint] retryHint: ${err.retryHint}`);
+}
+
+function readFlagValue(argv = [], flag) {
+    for (let i = 0; i < argv.length; i += 1) {
+        const arg = argv[i];
+        if (arg === flag) return argv[i + 1];
+        if (typeof arg === 'string' && arg.startsWith(`${flag}=`)) return arg.slice(flag.length + 1);
+    }
+    return undefined;
 }
 
 async function runWebAiCliInner(argv = [], deps) {
@@ -259,6 +286,9 @@ async function runWebAiCliInner(argv = [], deps) {
             'max-file-size': { type: 'string' },
             'files-report': { type: 'boolean', default: false },
             'context-transport': { type: 'string' },
+            'trace-dir': { type: 'string' },
+            policy: { type: 'string' },
+            'unsafe-allow': { type: 'string', multiple: true },
             config: { type: 'string' },
             fixtures: { type: 'string' },
             variant: { type: 'string', multiple: true },
@@ -347,8 +377,12 @@ async function runWebAiCliInner(argv = [], deps) {
         evalVariants: values.variant,
         evalConcurrency: values.concurrency,
         updateGolden: values['update-golden'] === true,
+        traceDir: values['trace-dir'],
+        policyPath: values.policy,
+        unsafeAllow: values['unsafe-allow'] || [],
     };
 
+    await enforceCliPolicy(command, input);
     await ensureHeadedBrowserForWebAi(deps, command, argv);
 
     const result = command === 'watch'
@@ -364,6 +398,28 @@ async function runWebAiCliInner(argv = [], deps) {
                         : isContextCommand(command)
                             ? await runContextCommand(command, input, values)
                             : await runCommand(command, deps, input);
+    const traceId = input.traceDir && command !== 'render'
+        ? createTraceId(`${command}:${Date.now()}`)
+        : null;
+    if (traceId) {
+        result.traceId = traceId;
+        await writeCommandTrace(input.traceDir, {
+            traceId,
+            command: `web-ai ${command}`,
+            provider: input.vendor || result.vendor || 'chatgpt',
+            modelAlias: input.model,
+            sessionId: input.session || result.sessionId,
+            url: result.url || input.url,
+            status: result.status,
+            evidence: {
+                prompt: input.prompt,
+                answerText: result.answerText,
+                pageText: result.pageText,
+                sourceContext: input.contextPackageText,
+            },
+            steps: [{ type: 'command', status: result.ok === false ? 'fail' : 'ok' }],
+        });
+    }
     if (isContextCommand(command) && values.json) console.log(renderContextDryRunReport(result, {
         mode: 'json',
         full: values.full || command === 'context-render',
@@ -383,6 +439,22 @@ async function runWebAiCliInner(argv = [], deps) {
     else if (command === 'sessions') printSessionsHuman(result);
     else printHuman(command, result);
     return result;
+}
+
+async function enforceCliPolicy(command, input) {
+    const mutating = ['send', 'query', 'stop'].includes(command);
+    const policyUrl = input.url || VENDOR_DEFAULT_URLS[input.vendor || 'chatgpt'];
+    const action = {
+        url: policyUrl,
+        upload: Boolean(input.filePath || input.contextFile || input.contextFromFiles?.length),
+        explicitUpload: Boolean(input.filePath || input.contextFile || input.contextFromFiles?.length),
+        fileAccess: Boolean(input.filePath || input.contextFile || input.contextFromFiles?.length),
+        clipboardRead: input.allowCopyMarkdownFallback === true,
+        evaluate: false,
+        unsafeAllow: input.unsafeAllow,
+    };
+    if (!mutating && !action.clipboardRead && !input.unsafeAllow?.length) return null;
+    return loadAndEnforcePolicy(input, action);
 }
 
 async function runEvalCommand(input) {

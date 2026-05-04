@@ -32,6 +32,8 @@ const TO_JSON_KEYS = [
     'mutationAllowed',
     'selectorsTried',
     'evidence',
+    'traceId',
+    'ruleId',
 ];
 
 export class WebAiError extends Error {
@@ -45,6 +47,8 @@ export class WebAiError extends Error {
         this.mutationAllowed = init.mutationAllowed === true;
         this.selectorsTried = Array.isArray(init.selectorsTried) ? init.selectorsTried : [];
         this.evidence = init.evidence ?? null;
+        this.traceId = init.traceId;
+        this.ruleId = init.ruleId;
         if (init.cause) this.cause = init.cause;
     }
 

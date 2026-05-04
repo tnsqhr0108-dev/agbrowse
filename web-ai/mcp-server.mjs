@@ -12,10 +12,16 @@ import {
     GROK_COPY_SELECTORS,
 } from './copy-markdown.mjs';
 import { allToolSchemas, isKnownWebAiTool } from './tool-schema.mjs';
+import { enforcePolicy } from './policy/enforce.mjs';
 
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 const JSON_RPC = '2.0';
 const PROVIDERS = new Set(['chatgpt', 'gemini', 'grok']);
+const VENDOR_DEFAULT_URLS = {
+    chatgpt: 'https://chatgpt.com',
+    gemini: 'https://gemini.google.com',
+    grok: 'https://grok.com',
+};
 
 function providerFromArgs(args = {}) {
     const provider = args.provider || args.vendor || 'chatgpt';
@@ -66,6 +72,7 @@ function copySelectorsForProvider(provider) {
 
 async function callWebAiTool(name, args, deps, state) {
     if (!isKnownWebAiTool(name)) throw new Error(`unknown tool: ${name}`);
+    const policy = normalizeMcpPolicy(args.policy === undefined ? {} : args.policy);
     if (name === 'web_ai_snapshot') {
         const page = await deps.getPage();
         const snapshot = await buildWebAiSnapshot(page, {
@@ -79,6 +86,8 @@ async function callWebAiTool(name, args, deps, state) {
         return snapshot;
     }
     if (name === 'web_ai_click_ref') {
+        const provider = providerFromArgs(args);
+        enforcePolicy(policy, { url: state.latestSnapshot?.url || args.url || VENDOR_DEFAULT_URLS[provider] });
         const snapshot = state.latestSnapshot;
         if (!snapshot || snapshot.snapshotId !== args.snapshotId) throw new Error('stale snapshotId');
         const ref = snapshot.refs?.[args.ref];
@@ -94,6 +103,13 @@ async function callWebAiTool(name, args, deps, state) {
     }
     if (name === 'web_ai_submit_prompt') {
         const provider = providerFromArgs(args);
+        enforcePolicy(policy, {
+            url: state.latestSnapshot?.url || args.url || VENDOR_DEFAULT_URLS[provider],
+            upload: Boolean(args.filePath),
+            explicitUpload: Boolean(args.filePath),
+            fileAccess: Boolean(args.filePath),
+            unsafeAllow: args.unsafeAllow || [],
+        });
         return sendByProvider(provider, deps, {
             ...args,
             vendor: provider,
@@ -114,7 +130,11 @@ async function callWebAiTool(name, args, deps, state) {
     }
     if (name === 'web_ai_copy_markdown') {
         const provider = providerFromArgs(args);
+        const fallbackUrl = state.latestSnapshot?.url || args.url || VENDOR_DEFAULT_URLS[provider];
+        const action = { url: fallbackUrl, clipboardRead: true, unsafeAllow: args.unsafeAllow || [] };
+        enforcePolicy(policy, action);
         const page = await deps.getPage();
+        enforcePolicy(policy, { ...action, url: page.url?.() || fallbackUrl });
         const copied = await captureCopiedResponseText(page, copySelectorsForProvider(provider));
         return { ok: copied.ok, vendor: provider, text: copied.text || '', status: copied.status || 'copied' };
     }
@@ -126,6 +146,11 @@ async function callWebAiTool(name, args, deps, state) {
         });
     }
     throw new Error(`unhandled tool: ${name}`);
+}
+
+function normalizeMcpPolicy(policy) {
+    if (policy && typeof policy === 'object' && !Array.isArray(policy)) return policy;
+    throw new Error('MCP policy must be an inline policy object');
 }
 
 export async function handleMcpMessage(message, deps, state = {}) {

@@ -1,0 +1,43 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { WebAiError } from '../errors.mjs';
+import { DEFAULT_WEB_AI_POLICY } from './default-policy.mjs';
+
+const POLICY_KEYS = new Set(Object.keys(DEFAULT_WEB_AI_POLICY));
+
+export async function loadPolicy(policyPath) {
+    if (!policyPath) return { ...DEFAULT_WEB_AI_POLICY };
+    const resolved = path.resolve(policyPath);
+    const cwd = process.cwd();
+    if (policyPath.split(/[\\/]+/).includes('..') || (resolved !== cwd && !resolved.startsWith(`${cwd}${path.sep}`))) {
+        throw policyError('policy.path-traversal', 'policy-load', 'policy path escapes current working directory', { ruleId: 'policyPath', policyPath });
+    }
+    const raw = await fs.readFile(resolved, 'utf8');
+    return normalizePolicy(JSON.parse(raw));
+}
+
+export function normalizePolicy(policy = {}) {
+    if (!policy || typeof policy !== 'object' || Array.isArray(policy)) {
+        throw policyError('policy.invalid-shape', 'policy-load', 'policy must be a JSON object', { ruleId: 'policySchema' });
+    }
+    const unknown = Object.keys(policy).filter(key => !POLICY_KEYS.has(key));
+    if (unknown.length) throw policyError('policy.unknown-key', 'policy-load', `unknown policy keys: ${unknown.join(', ')}`, { ruleId: 'policySchema', unknown });
+    const merged = { ...DEFAULT_WEB_AI_POLICY, ...policy };
+    if (merged.version !== 1) throw policyError('policy.version-unsupported', 'policy-load', 'policy version must be 1', { ruleId: 'version', version: merged.version });
+    if (!Array.isArray(merged.allowedOrigins) || !Array.isArray(merged.deniedOrigins)) {
+        throw policyError('policy.invalid-shape', 'policy-load', 'allowedOrigins and deniedOrigins must be arrays', { ruleId: 'originPolicy' });
+    }
+    return merged;
+}
+
+export function policyError(errorCode, stage, message, evidence = {}) {
+    return new WebAiError({
+        errorCode,
+        stage,
+        retryHint: 'policy',
+        message,
+        mutationAllowed: false,
+        ruleId: evidence.ruleId,
+        evidence,
+    });
+}
