@@ -6,7 +6,7 @@
  * Usage:  agbrowse <command> [args] [--flags]
  *
  * Commands:
- *   start [--port N] [--headless] [--chrome-path PATH]  Start Chrome with CDP
+ *   start [--port N] [--headless|--headed] [--chrome-path PATH]  Start Chrome with CDP
  *   stop                             Stop Chrome
  *   status                           Connection status
  *   snapshot [--interactive] [--max-nodes N]  Accessibility tree with ref IDs
@@ -36,8 +36,8 @@
  */
 
 import { parseArgs } from 'node:util';
-import { spawn } from 'node:child_process';
-import { join, dirname } from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { join, dirname, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
@@ -309,6 +309,7 @@ function findChrome(customChromePath = CUSTOM_CHROME_PATH) {
 }
 
 async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
+    const headless = resolveHeadlessMode(opts);
     // CDP already responding → reuse
     if (await isPortListening(port)) {
         try {
@@ -319,15 +320,24 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
                 const previousState = readPersistedState();
                 const isStaleState = previousState?.startedAt
                     && Date.now() - Date.parse(previousState.startedAt) > 60 * 60 * 1000;
+                if (opts.headed === true && previousState?.headless === true) {
+                    throw new Error(
+                        `CDP port ${port} is already backed by a headless agbrowse Chrome. ` +
+                        `Run "agbrowse stop" first, then "agbrowse start --headed".`
+                    );
+                }
                 if (!previousState || previousState.port !== port || isStaleState) {
                     console.warn(`[browser] warning: CDP port ${port} appears foreign or stale — agbrowse is attaching to an existing Chrome it did not start; verify --user-data-dir matches if you depend on profile state`);
                 }
+                const chromePath = opts.chromePath || previousState?.chromePath || CUSTOM_CHROME_PATH;
+                if (!headless) focusChromeApp(chromePath);
                 clearPersistedSnapshot();
                 writePersistedState({
                     pid: previousState?.port === port ? previousState.pid ?? null : null,
                     port,
-                    chromePath: opts.chromePath || previousState?.chromePath || CUSTOM_CHROME_PATH,
+                    chromePath,
                     startedAt: previousState?.startedAt || new Date().toISOString(),
+                    headless: previousState?.headless ?? headless,
                     reused: true,
                 });
                 console.log(`[browser] CDP already listening on port ${port} — reusing existing instance`);
@@ -350,7 +360,6 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
         mkdirSync(DATA_DIR, { recursive: true });
         const chrome = findChrome(opts.chromePath);
         const noSandbox = process.env.CHROME_NO_SANDBOX === '1';
-        const headless = opts.headless || process.env.CHROME_HEADLESS === '1';
 
         // Minimum window size to prevent responsive layout shifts
         // that cause Playwright "element is not stable" errors
@@ -381,8 +390,10 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
                 port,
                 chromePath: chrome,
                 startedAt: new Date().toISOString(),
+                headless,
                 lockToken: lockResult.token,
             });
+            if (!headless) focusChromeApp(chrome);
         } else {
             if (chromeProc && !chromeProc.killed) {
                 chromeProc.kill('SIGTERM');
@@ -402,6 +413,29 @@ async function launchChrome(port = DEFAULT_CDP_PORT, opts = {}) {
         activeLockToken = null;
         throw err;
     }
+}
+
+function resolveHeadlessMode(opts = {}) {
+    if (opts.headed === true) return false;
+    return opts.headless === true || process.env.CHROME_HEADLESS === '1';
+}
+
+function focusChromeApp(chromePath) {
+    if (process.platform !== 'darwin' || !chromePath) return;
+    const appName = macAppNameFromChromePath(chromePath);
+    if (!appName) return;
+    const result = spawnSync('open', ['-a', appName], { stdio: 'ignore' });
+    if (result.status !== 0) {
+        console.warn(`[browser] warning: Chrome started headed but macOS foreground activation failed for ${appName}`);
+    }
+}
+
+function macAppNameFromChromePath(chromePath) {
+    const marker = '.app/';
+    const idx = String(chromePath).indexOf(marker);
+    if (idx === -1) return null;
+    const appPath = String(chromePath).slice(0, idx + 4);
+    return basename(appPath, '.app');
 }
 
 function getPort() {
@@ -1191,6 +1225,9 @@ const browserDeps = {
     getCdpSession: () => getCdpSession(getPort()),
     getPort: () => getPort(),
     getTargetId: () => getActiveTargetId(getPort()),
+    getBrowserStatus: (port = getPort()) => getBrowserStatus(Number(port)),
+    readBrowserState: () => readPersistedState(),
+    ensureStarted: (options = {}) => launchChrome(Number(options.port || getPort()), options),
 };
 
 try {
@@ -1246,11 +1283,13 @@ try {
                 options: {
                     port: { type: 'string', default: String(DEFAULT_CDP_PORT) },
                     headless: { type: 'boolean', default: false },
+                    headed: { type: 'boolean', default: false },
                     'chrome-path': { type: 'string' },
                 }, strict: false,
             });
             await launchChrome(Number(values.port), {
                 headless: values.headless,
+                headed: values.headed,
                 chromePath: values['chrome-path'],
             });
             const r = await getBrowserStatus(Number(values.port));
@@ -1716,8 +1755,8 @@ try {
         vision-click  Screenshot-to-coordinate click helper skill
 
   Browser lifecycle:
-    start [--port <9222>] [--headless] [--chrome-path PATH]
-                           Start Chrome (headless for WSL/CI/Docker)
+    start [--port <9222>] [--headless|--headed] [--chrome-path PATH]
+                           Start Chrome (--headed overrides CHROME_HEADLESS=1)
     stop                   Stop Chrome
     status                 Connection status
     reset [--force]        Reset (clear profile + screenshots)
@@ -1823,6 +1862,8 @@ try {
       Sessions persist at $BROWSER_AGENT_HOME/web-ai-sessions.json
       (default ~/.browser-agent). Use --session to resume long Pro / Deep
       Think runs from a fresh shell.
+      Provider commands auto-start headed Chrome when CDP is not running.
+      Set AGBROWSE_WEB_AI_AUTO_START=0 to fail closed instead.
 
       Examples:
         agbrowse web-ai render --vendor chatgpt --prompt "hello" --json
@@ -1845,8 +1886,10 @@ try {
     AGBROWSE_MAX_TABS      Max open tabs before cleanup closes oldest (default: 10)
     AGBROWSE_TAB_IDLE      Idle threshold for cleanup (default: 30m)
     AGBROWSE_REUSE_TAB=1   Legacy web-ai behavior: reuse active tab
+    AGBROWSE_WEB_AI_AUTO_START=0
+                           Disable web-ai headed auto-start
     AGBROWSE_JSON_ERRORS=1 Force JSON failure envelopes regardless of --json
-    CHROME_HEADLESS=1      Force headless mode
+    CHROME_HEADLESS=1      Force headless mode unless start --headed is passed
     CHROME_NO_SANDBOX=1    Disable sandbox (Docker/CI)
     CHROME_BINARY_PATH     Custom Chrome/Chromium binary path
 

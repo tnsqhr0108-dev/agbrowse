@@ -11,6 +11,8 @@ standalone `agbrowse` Chrome/CDP runtime.
 ## Preconditions
 
 - Use the existing headed Chrome profile when provider login is required.
+- Provider commands auto-start headed Chrome when CDP is not running. Set
+  `AGBROWSE_WEB_AI_AUTO_START=0` to fail closed instead.
 - Do not start a separate Chrome/profile unless the user explicitly asks for an
   isolated run.
 - Prefer `agbrowse status` before mutation.

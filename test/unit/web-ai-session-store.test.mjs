@@ -84,6 +84,18 @@ describe('web-ai session-store insert/list/patch/prune', () => {
         expect(active.every(s => s.status === 'sent' || s.status === 'polling')).toBe(true);
     });
 
+    it('listStoredSessions excludes expired sent/polling sessions from active results', async () => {
+        const { insertSession, listStoredSessions, generateSessionId } = await freshStore();
+        const now = new Date().toISOString();
+        const expired = new Date(Date.now() - 1000).toISOString();
+        const future = new Date(Date.now() + 60_000).toISOString();
+        insertSession({ sessionId: generateSessionId(), vendor: 'chatgpt', createdAt: now, updatedAt: now, status: 'sent', deadlineAt: expired });
+        insertSession({ sessionId: generateSessionId(), vendor: 'chatgpt', createdAt: now, updatedAt: now, status: 'polling', deadlineAt: expired });
+        const current = insertSession({ sessionId: generateSessionId(), vendor: 'chatgpt', createdAt: now, updatedAt: now, status: 'sent', deadlineAt: future });
+        const active = listStoredSessions({ vendor: 'chatgpt', active: true });
+        expect(active.map(s => s.sessionId)).toEqual([current.sessionId]);
+    });
+
     it('pruneSessions removes records older than the cutoff', async () => {
         const { insertSession, listStoredSessions, pruneSessions, generateSessionId } = await freshStore();
         const old = new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString();
@@ -120,6 +132,22 @@ describe('web-ai session API on top of the store', () => {
         expect(findActiveSession({ vendor: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/b' }).sessionId).toBe(b.sessionId);
         expect(findActiveSession({ vendor: 'chatgpt' }).sessionId).toBe(b.sessionId);
         expect(findActiveSession({ vendor: 'gemini' })).toBeNull();
+    });
+
+    it('findActiveSession ignores stale sent sessions whose deadline already passed', async () => {
+        const { createSession, findActiveSession } = await freshSession();
+        createSession({ vendor: 'chatgpt', prompt: 'old', attachmentPolicy: 'inline-only' }, {
+            targetId: 'old-target',
+            conversationUrl: 'https://chatgpt.com/c/old',
+            deadlineAt: new Date(Date.now() - 1000).toISOString(),
+        });
+        const current = createSession({ vendor: 'chatgpt', prompt: 'new', attachmentPolicy: 'inline-only' }, {
+            targetId: 'new-target',
+            conversationUrl: 'https://chatgpt.com/c/new',
+            deadlineAt: new Date(Date.now() + 60_000).toISOString(),
+        });
+        expect(findActiveSession({ vendor: 'chatgpt' }).sessionId).toBe(current.sessionId);
+        expect(findActiveSession({ vendor: 'chatgpt', targetId: 'old-target' }).sessionId).toBe(current.sessionId);
     });
 
     it('updateSession changes status without dropping createdAt', async () => {

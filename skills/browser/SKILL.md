@@ -52,7 +52,7 @@ agbrowse web-ai query --vendor gemini --url https://gemini.google.com/app --inli
 ### Browser Management
 
 ```bash
-agbrowse start [--port <9222>] [--headless] [--chrome-path /path/to/chrome]
+agbrowse start [--port <9222>] [--headless|--headed] [--chrome-path /path/to/chrome]
 agbrowse stop
 agbrowse status
 agbrowse reset [--force]
@@ -214,7 +214,7 @@ If something goes wrong, follow this escalation path:
 | -------------------- | ------------------ | ----------------------------------------- |
 | `BROWSER_AGENT_HOME` | `~/.browser-agent` | Data directory (profile, screenshots)     |
 | `CDP_PORT`           | `9222`             | Default Chrome DevTools Protocol port     |
-| `CHROME_HEADLESS`    | `0`                | Set to `1` for headless mode              |
+| `CHROME_HEADLESS`    | `0`                | Set to `1` for headless mode; `start --headed` overrides it |
 | `CHROME_NO_SANDBOX`  | `0`                | Set to `1` to disable sandbox (Docker/CI) |
 | `CHROME_BINARY_PATH` | auto-detect        | Override Chrome/Chromium executable path  |
 
@@ -223,6 +223,7 @@ If something goes wrong, follow this escalation path:
 ```bash
 agbrowse start --headless               # CLI flag
 CHROME_HEADLESS=1 agbrowse start         # env var
+CHROME_HEADLESS=1 agbrowse start --headed  # force a visible headed Chrome
 ```
 
 - GUI 없는 환경(WSL, SSH, Docker, CI)에서 사용

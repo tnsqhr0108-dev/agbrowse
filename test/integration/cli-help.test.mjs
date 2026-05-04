@@ -23,10 +23,12 @@ describe.sequential('CLI help', () => {
         expect(result.stdout).toContain('Common flags:');
         expect(result.stdout).toContain('Configuration model:');
         expect(result.stdout).toContain('install-skills --target <dir>');
+        expect(result.stdout).toContain('--headless|--headed');
         expect(result.stdout).toContain('tab-cleanup');
         expect(result.stdout).toContain('--force');
         expect(result.stdout).toContain('leaseClosedTabs');
         expect(result.stdout).toContain('--effort <alias>');
+        expect(result.stdout).toContain('AGBROWSE_WEB_AI_AUTO_START=0');
         expect(result.stdout).toContain('AGBROWSE_MAX_TABS');
         expect(result.stdout).toContain('--reuse-tab');
     });

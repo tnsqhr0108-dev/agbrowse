@@ -8,6 +8,16 @@ const root = join(__dirname, '..', '..');
 const browserSrc = readFileSync(join(root, 'skills/browser/browser.mjs'), 'utf8');
 
 describe('active tab persistence contract', () => {
+    it('start supports headed override and foreground activation for visible local work', () => {
+        expect(browserSrc).toMatch(/headed:\s*\{\s*type:\s*'boolean'/);
+        expect(browserSrc).toMatch(/function resolveHeadlessMode/);
+        expect(browserSrc).toMatch(/opts\.headed === true\) return false/);
+        expect(browserSrc).toMatch(/function focusChromeApp/);
+        expect(browserSrc).toMatch(/spawnSync\('open', \['-a', appName\]/);
+        expect(browserSrc).toMatch(/headless:\s*previousState\?\.headless \?\? headless/);
+        expect(browserSrc).toMatch(/headless,\s*\n\s*lockToken/);
+    });
+
     it('persists tab-switch target id across CLI invocations', () => {
         expect(browserSrc).toMatch(/Target\.activateTarget/);
         expect(browserSrc).toMatch(/activeTargetId:\s*wanted\.id/);

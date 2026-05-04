@@ -184,15 +184,20 @@ export function patchSession(sessionId, patch) {
 
 export function listStoredSessions(filter = {}) {
     const store = readSessionStoreLocked();
-    const active = new Set(['sent', 'polling']);
     let rows = store.sessions;
     if (filter.sessionId) rows = rows.filter(s => s.sessionId === filter.sessionId);
     if (filter.vendor) rows = rows.filter(s => s.vendor === filter.vendor);
     if (filter.status) rows = rows.filter(s => s.status === filter.status);
-    if (filter.active === true) rows = rows.filter(s => active.has(s.status));
+    if (filter.active === true) rows = rows.filter(session => isSessionActive(session));
     rows = rows.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
     if (typeof filter.limit === 'number' && filter.limit > 0) rows = rows.slice(-filter.limit);
     return rows;
+}
+
+export function isSessionActive(session, now = Date.now()) {
+    if (!['sent', 'polling'].includes(session?.status)) return false;
+    const deadline = Date.parse(session.deadlineAt || '');
+    return !Number.isFinite(deadline) || deadline > now;
 }
 
 export function pruneSessions({ olderThanMs, before, status } = {}) {

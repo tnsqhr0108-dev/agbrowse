@@ -13,6 +13,8 @@ describe('web-ai CLI contract', () => {
         expect(result.stdout).toContain('Tab lease policy:');
         expect(result.stdout).toContain('leaseClosedTabs');
         expect(result.stdout).toContain('mcp-server');
+        expect(result.stdout).toContain('auto-start headed Chrome');
+        expect(result.stdout).toContain('AGBROWSE_WEB_AI_AUTO_START=0');
         expect(result.stdout).toMatch(/agbrowse web-ai query\s+--vendor grok/);
     });
 

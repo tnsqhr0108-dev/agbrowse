@@ -52,7 +52,7 @@ export const CORE_SKILL_GUIDE = [
     '',
     '## Decision Loop',
     '1. Check runtime: `agbrowse status`.',
-    '2. If not running: `agbrowse start` for headed local work or `agbrowse start --headless` for CI.',
+    '2. If not running: `agbrowse start --headed` for visible local work or `agbrowse start --headless` for CI.',
     '3. Open or reuse a page: `agbrowse navigate <url>` or `agbrowse tabs` then `agbrowse tab-switch <target>`.',
     '4. Observe before acting: `agbrowse snapshot --interactive --max-nodes 120`.',
     '5. Prefer refs: `agbrowse click e3`, `agbrowse type e5 "text" --submit`.',

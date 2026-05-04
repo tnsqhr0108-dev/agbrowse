@@ -30,6 +30,9 @@ const COMMANDS = new Set([
     'context-dry-run', 'context-render',
     'mcp-server',
 ]);
+
+const BROWSER_REQUIRED_COMMANDS = new Set(['status', 'send', 'poll', 'query', 'stop', 'watch', 'snapshot', 'doctor']);
+const BROWSER_REQUIRED_SESSION_COMMANDS = new Set(['resume', 'reattach']);
 export const WEB_AI_USAGE = `
 Usage:
   agbrowse web-ai <command> --vendor <chatgpt|gemini|grok> [options]
@@ -98,6 +101,11 @@ Sessions (durable across shells, stored at $BROWSER_AGENT_HOME/web-ai-sessions.j
                       the runtime to switch tabs to the saved conversationUrl.
   --new-tab           Create a new tab for this send/query (default in Phase 9.1)
   --reuse-tab         Reuse the existing active tab (legacy single-tab behavior)
+
+Browser:
+  Provider commands auto-start headed Chrome when CDP is not running.
+  Set AGBROWSE_WEB_AI_AUTO_START=0 to fail closed instead.
+  Existing headless CDP sessions are rejected; restart with "agbrowse start --headed".
 
 Tab lease policy:
   Completed provider tabs are runtime leases, not history storage.
@@ -318,6 +326,8 @@ async function runWebAiCliInner(argv = [], deps) {
         reuseTab: values['reuse-tab'] === true || process.env.AGBROWSE_REUSE_TAB === '1',
     };
 
+    await ensureHeadedBrowserForWebAi(deps, command, argv);
+
     const result = command === 'watch'
         ? await watchSession(deps, input)
         : command === 'snapshot'
@@ -471,6 +481,56 @@ async function runCommand(command, deps, input) {
         case 'stop': return runBoundCommand(command, deps, input, pollWebAi, stopWebAi);
         default: throw new Error(`unknown web-ai command: ${command}`);
     }
+}
+
+export function commandNeedsHeadedBrowser(command, argv = []) {
+    if (BROWSER_REQUIRED_COMMANDS.has(command)) return true;
+    if (command !== 'sessions') return false;
+    return BROWSER_REQUIRED_SESSION_COMMANDS.has(argv[1]);
+}
+
+export async function ensureHeadedBrowserForWebAi(deps = {}, command, argv = []) {
+    if (!commandNeedsHeadedBrowser(command, argv)) {
+        return { ok: true, status: 'skipped' };
+    }
+    const port = Number(deps.getPort?.() || process.env.CDP_PORT || 9222);
+    const status = deps.getBrowserStatus
+        ? await deps.getBrowserStatus(port)
+        : { running: true, tabs: null };
+    const state = deps.readBrowserState?.() || null;
+    if (!status?.running) {
+        if (process.env.AGBROWSE_WEB_AI_AUTO_START === '0') {
+            throw new WebAiError({
+                errorCode: 'cdp.unreachable',
+                stage: 'connect',
+                retryHint: 'start-headed',
+                message: `web-ai requires a headed browser on CDP port ${port}; run "agbrowse start --headed" first`,
+                mutationAllowed: false,
+            });
+        }
+        if (typeof deps.ensureStarted !== 'function') {
+            throw new WebAiError({
+                errorCode: 'cdp.unreachable',
+                stage: 'connect',
+                retryHint: 'start-headed',
+                message: `web-ai requires a headed browser on CDP port ${port}, but this runtime cannot auto-start it`,
+                mutationAllowed: false,
+            });
+        }
+        await deps.ensureStarted({ port, headed: true });
+        return { ok: true, status: 'started', port };
+    }
+    if (state?.headless === true) {
+        throw new WebAiError({
+            errorCode: 'cdp.headless',
+            stage: 'connect',
+            retryHint: 'restart-headed',
+            message: `web-ai requires headed Chrome, but agbrowse Chrome on port ${port} is headless. Run "agbrowse stop" then "agbrowse start --headed".`,
+            mutationAllowed: false,
+            evidence: { port, headless: true },
+        });
+    }
+    return { ok: true, status: 'ready', port };
 }
 
 function rejectFutureScope(values) {
