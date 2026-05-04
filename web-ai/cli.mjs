@@ -10,9 +10,11 @@ import { watchSession } from './watcher.mjs';
 import { buildWebAiSnapshot } from './ax-snapshot.mjs';
 import { runSessionsCommand, printSessionsHuman, parseDurationToMs } from './cli-sessions.mjs';
 import { createTab, listManagedTabs, waitForPageByTargetId } from '../skills/browser/tab-manager.mjs';
-import { cleanupIdleTabs } from '../skills/browser/tab-lifecycle.mjs';
+import { cleanupIdleTabs, isPinned } from '../skills/browser/tab-lifecycle.mjs';
 import { withSessionPage } from './tab-recovery.mjs';
 import { withSessionCommandLock } from './session-store.mjs';
+import { listSessions } from './session.mjs';
+import { listLeases } from './tab-lease-store.mjs';
 import { cleanupPoolTabs, getPooledTab } from './tab-pool.mjs';
 import { runMcpServer } from './mcp-server.mjs';
 import { runWebAiEval } from './eval-runner.mjs';
@@ -511,45 +513,23 @@ async function ensureProviderTab(deps, input) {
     await cleanupPoolTabs(port);
     await cleanupIdleTabs(port, { maxTabs: Number.POSITIVE_INFINITY });
 
-    // Phase 9.2: try tab pool first
-    const pooled = await getPooledTab(port, input.vendor || 'chatgpt', {
-        owner: 'web-ai',
-        sessionType: 'send-poll',
-        url: vendorUrl,
-        port,
-    });
-    if (pooled) {
-        const page = await waitForPageByTargetId(port, pooled.targetId);
-        if (page.url() !== vendorUrl) {
-            await page.goto(vendorUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        }
-        return {
-            ...deps,
-            getPage: async () => {
-                if (page.isClosed?.()) throw new Error(`bound tab closed: ${pooled.targetId}`);
-                return page;
-            },
-            getTargetId: async () => pooled.targetId,
-            getCdpSession: async () => page.context().newCDPSession(page),
-        };
-    }
-
     if (input.forceNewTab !== true) {
+        // Phase 9.2: try tab pool first
+        const pooled = await getPooledTab(port, input.vendor || 'chatgpt', {
+            owner: 'web-ai',
+            sessionType: 'send-poll',
+            url: vendorUrl,
+            port,
+        });
+        if (pooled) {
+            const page = await waitForPageByTargetId(port, pooled.targetId);
+            return bindProviderPage(deps, page, pooled.targetId, vendorUrl);
+        }
+
         const reusable = await findReusableProviderTab(port, input.vendor || 'chatgpt', vendorUrl);
         if (reusable) {
             const page = await waitForPageByTargetId(port, reusable.targetId);
-            if (page.url() !== vendorUrl) {
-                await page.goto(vendorUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-            }
-            return {
-                ...deps,
-                getPage: async () => {
-                    if (page.isClosed?.()) throw new Error(`bound tab closed: ${reusable.targetId}`);
-                    return page;
-                },
-                getTargetId: async () => reusable.targetId,
-                getCdpSession: async () => page.context().newCDPSession(page),
-            };
+            return bindProviderPage(deps, page, reusable.targetId, vendorUrl);
         }
     }
 
@@ -567,16 +547,46 @@ async function ensureProviderTab(deps, input) {
     };
 }
 
+function bindProviderPage(deps, page, targetId, vendorUrl) {
+    return {
+        ...deps,
+        getPage: async () => {
+            if (page.isClosed?.()) throw new Error(`bound tab closed: ${targetId}`);
+            return page;
+        },
+        getTargetId: async () => targetId,
+        getCdpSession: async () => page.context().newCDPSession(page),
+        prepareProviderPage: async () => {
+            if (page.url() !== vendorUrl) {
+                await page.goto(vendorUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+            }
+        },
+    };
+}
+
 async function findReusableProviderTab(port, vendor, targetUrl) {
     const origin = providerOrigin(vendor, targetUrl);
     if (!origin) return null;
     const activeTargets = await activeCommandTargetIds({ browserProfileKey: String(port) });
+    const activeSessionTargets = new Set(listSessions({ active: true }).map(session => session.targetId).filter(Boolean));
+    const leases = await listLeases();
+    const leaseByTargetId = new Map(leases.map(lease => [lease.targetId, lease]));
     const tabs = await listManagedTabs(port);
     return tabs
         .filter(tab => tab?.targetId && tab.type === 'page')
         .filter(tab => !activeTargets.has(tab.targetId))
+        .filter(tab => !activeSessionTargets.has(tab.targetId))
+        .filter(tab => !isPinned(tab.targetId))
+        .filter(tab => isReusableByLease(tab.targetId, leaseByTargetId))
         .filter(tab => providerOriginFromUrl(tab.url) === origin)
         .sort((a, b) => (Number(b.lastActiveAt) || 0) - (Number(a.lastActiveAt) || 0))[0] || null;
+}
+
+function isReusableByLease(targetId, leaseByTargetId) {
+    const lease = leaseByTargetId.get(targetId);
+    if (!lease) return true;
+    return ['web-ai', 'cli-jaw'].includes(lease.owner) &&
+        ['pooled', 'completed-session'].includes(lease.state);
 }
 
 function providerOrigin(vendor, fallbackUrl = '') {
@@ -657,7 +667,10 @@ async function withWebAiActiveCommand(command, deps, input, fn) {
         targetId,
         owner: 'cli',
         port: deps.getPort?.() || 9222,
-    }, fn);
+    }, async () => {
+        await deps.prepareProviderPage?.();
+        return fn();
+    });
 }
 
 async function runCommand(command, deps, input) {

@@ -134,6 +134,7 @@ describe('web-ai cli session flags', () => {
         expect(cliSrc).toMatch(/async function withWebAiActiveCommand\(command, deps, input, fn\)/);
         expect(cliSrc).toMatch(/command: `web-ai \$\{command\}`/);
         expect(cliSrc).toMatch(/owner: 'cli'/);
+        expect(cliSrc).toMatch(/await deps\.prepareProviderPage\?\.\(\)/);
         expect(cliSrc).toMatch(/return withWebAiActiveCommand\(command, sessionDeps, sessionInput/);
         expect(cliSrc).toMatch(/case 'send': return withWebAiActiveCommand/);
         expect(cliSrc).toMatch(/case 'query': return withWebAiActiveCommand/);
@@ -143,9 +144,15 @@ describe('web-ai cli session flags', () => {
         expect(cliSrc).toContain("import { createTab, listManagedTabs, waitForPageByTargetId }");
         expect(cliSrc).toMatch(/async function findReusableProviderTab\(port, vendor, targetUrl\)/);
         expect(cliSrc).toMatch(/activeCommandTargetIds\(\{ browserProfileKey: String\(port\) \}\)/);
+        expect(cliSrc).toMatch(/listSessions\(\{ active: true \}\)/);
+        expect(cliSrc).toMatch(/listLeases\(\)/);
+        expect(cliSrc).toMatch(/!isPinned\(tab\.targetId\)/);
+        expect(cliSrc).toMatch(/isReusableByLease\(tab\.targetId, leaseByTargetId\)/);
         expect(cliSrc).toMatch(/input\.forceNewTab !== true/);
         expect(cliSrc).toMatch(/const reusable = await findReusableProviderTab/);
+        expect(cliSrc).toMatch(/prepareProviderPage: async \(\) =>/);
         expect(cliSrc).toMatch(/page\.goto\(vendorUrl/);
+        expect(cliSrc).toMatch(/if \(input\.forceNewTab !== true\) \{\s*\/\/ Phase 9\.2: try tab pool first/s);
     });
 
     it('repairs bound session pages that are alive but navigated to another conversation', () => {
