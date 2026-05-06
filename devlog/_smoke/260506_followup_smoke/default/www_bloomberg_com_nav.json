@@ -1,0 +1,3 @@
+❌ page.goto: net::ERR_ABORTED at https://www.bloomberg.com/
+Call log:
+[2m  - navigating to "https://www.bloomberg.com/", waiting until "commit"[22m
