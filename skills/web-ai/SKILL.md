@@ -124,6 +124,16 @@ Completed session tabs are kept in a vendor-specific pool for reuse. The next
 `send` for the same vendor will reuse a pooled tab instead of creating a new one,
 reducing tab creation overhead in batch scenarios.
 
+| Pool setting | Default | Env Var |
+| --- | --- | --- |
+| TTL per pooled tab | 15 min | `AGBROWSE_PROVIDER_POOL_TTL` |
+| Max warm tabs per `(owner,vendor,sessionType,origin,profile)` | 3 | `AGBROWSE_PROVIDER_POOL_MAX_PER_KEY` |
+| Global cap on warm provider tabs | 8 | `AGBROWSE_PROVIDER_POOL_GLOBAL_MAX` |
+
+Use `--new-tab` (or its alias `--parallel`) on `send` / `query` to bypass pool
+reuse for a single call — needed when you want a Pro query to run alongside
+another in-flight Pro query without lease contention.
+
 ### Tab Lifecycle
 
 | Setting | Default | Env Var |

@@ -127,6 +127,8 @@ Sessions (durable across shells, stored at $BROWSER_AGENT_HOME/web-ai-sessions.j
                       the runtime to switch tabs to the saved conversationUrl.
   --new-tab           Force a fresh provider tab for this send/query
                       (default reuses pooled or inactive provider tabs first)
+  --parallel          Alias for --new-tab. Use when you want to run a Pro
+                      query without contending with another in-flight one.
   --reuse-tab         Reuse the existing active tab (legacy single-tab behavior)
 
 Browser:
@@ -136,8 +138,12 @@ Browser:
 
 Tab lease policy:
   Completed provider tabs are runtime leases, not history storage.
-  The pool keeps at most one warm owned tab per owner/vendor/sessionType/origin/profile
-  key for 5 minutes; expired or overflow pooled tabs are closed with CDP.
+  Defaults: maxPerKey=3, globalMax=8, TTL=15m. Per-key limit is the
+  number of warm pooled tabs allowed per
+  (owner,vendor,sessionType,origin,profile). Override via
+  AGBROWSE_PROVIDER_POOL_MAX_PER_KEY / _GLOBAL_MAX / _TTL.
+  Expired or overflow pooled tabs are closed with CDP.
+  Use --new-tab / --parallel to bypass pool reuse for a single call.
   Use "agbrowse tab-cleanup --json" to inspect leaseClosedTabs.
 
 Sessions subcommands:
@@ -367,6 +373,7 @@ async function runWebAiCliInner(argv = [], deps) {
             json: { type: 'boolean', default: false },
             'cache-metrics': { type: 'boolean', default: false },
             'new-tab': { type: 'boolean', default: false },
+            parallel: { type: 'boolean', default: false },
             'reuse-tab': { type: 'boolean', default: false },
         },
         strict: false,
@@ -430,8 +437,8 @@ async function runWebAiCliInner(argv = [], deps) {
         snapshotOption: values.snapshot,
         maxDepth: values['max-depth'],
         rootSelector: values['root-selector'],
-        forceNewTab: values['new-tab'] === true,
-        newTab: values['new-tab'] === true || (['send', 'query'].includes(command) && values['reuse-tab'] !== true && process.env.AGBROWSE_REUSE_TAB !== '1'),
+        forceNewTab: values['new-tab'] === true || values.parallel === true,
+        newTab: values['new-tab'] === true || values.parallel === true || (['send', 'query'].includes(command) && values['reuse-tab'] !== true && process.env.AGBROWSE_REUSE_TAB !== '1'),
         reuseTab: values['reuse-tab'] === true || process.env.AGBROWSE_REUSE_TAB === '1',
         evalConfig: values.config,
         evalFixtures: values.fixtures,

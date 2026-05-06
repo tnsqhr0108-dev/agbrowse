@@ -2864,14 +2864,17 @@ try {
         --navigate                     Allow resume to switch tabs if needed
          --new-tab                      Force a fresh provider tab for send/query
                                         (default reuses pooled/inactive provider tabs first)
+         --parallel                     Alias for --new-tab. Use to run a query
+                                        without contending with another in-flight one.
         --reuse-tab                    Reuse active tab (legacy behavior)
         --json                         JSON output (or AGBROWSE_JSON_ERRORS=1)
 
       Tab lease policy:
-        Completed provider tabs are runtime leases. The warm pool keeps max 1
-        owned tab per owner/vendor/sessionType/origin/profile key for 5m, then
-        closes expired or overflow targets. Run tab-cleanup --json to inspect
-        leaseClosedTabs.
+        Completed provider tabs are runtime leases. Defaults: maxPerKey=3,
+        globalMax=8, TTL=15m. Override via AGBROWSE_PROVIDER_POOL_MAX_PER_KEY,
+        AGBROWSE_PROVIDER_POOL_GLOBAL_MAX, AGBROWSE_PROVIDER_POOL_TTL.
+        Use --new-tab / --parallel to bypass pool reuse for a single call.
+        Run tab-cleanup --json to inspect leaseClosedTabs.
 
       Failure envelope when --json or AGBROWSE_JSON_ERRORS=1:
         { ok:false, status:"error", error:{ name, errorCode, stage, message,

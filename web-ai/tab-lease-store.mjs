@@ -61,9 +61,9 @@ const STORE_VERSION = 1;
 const LOCK_RETRY_MS = 25;
 const LOCK_RETRY_LIMIT = 200;
 const STALE_LOCK_MS = 30_000;
-const DEFAULT_POOL_TTL_MS = parseDuration(process.env.AGBROWSE_PROVIDER_POOL_TTL || '5m');
-const DEFAULT_POOL_MAX_PER_KEY = parseInt(process.env.AGBROWSE_PROVIDER_POOL_MAX_PER_KEY || '1', 10);
-const DEFAULT_POOL_GLOBAL_MAX = parseInt(process.env.AGBROWSE_PROVIDER_POOL_GLOBAL_MAX || '4', 10);
+const DEFAULT_POOL_TTL_MS = parseDuration(process.env.AGBROWSE_PROVIDER_POOL_TTL || '15m');
+const DEFAULT_POOL_MAX_PER_KEY = parseInt(process.env.AGBROWSE_PROVIDER_POOL_MAX_PER_KEY || '3', 10);
+const DEFAULT_POOL_GLOBAL_MAX = parseInt(process.env.AGBROWSE_PROVIDER_POOL_GLOBAL_MAX || '8', 10);
 
 function home() {
     return process.env.BROWSER_AGENT_HOME || join(homedir(), '.browser-agent');
