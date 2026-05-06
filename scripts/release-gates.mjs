@@ -295,6 +295,33 @@ const GATES = {
             }
         },
     },
+    'trace-browser-actions': {
+        description: 'action-timeline module aggregates events into ActionTimelineV1 (G11)',
+        async check() {
+            try {
+                const mod = await import('../web-ai/trace/action-timeline.mjs');
+                if (typeof mod.buildActionTimeline !== 'function') {
+                    return { ok: false, detail: 'web-ai/trace/action-timeline.mjs missing buildActionTimeline' };
+                }
+                if (mod.ACTION_TIMELINE_SCHEMA_VERSION !== 'action-timeline-v1') {
+                    return { ok: false, detail: `unexpected schema: ${mod.ACTION_TIMELINE_SCHEMA_VERSION}` };
+                }
+                const tl = mod.buildActionTimeline([
+                    { traceId: 'gate-t', eventId: 'a', t: 100, kind: 'observe', command: 'snapshot', outcome: 'ok' },
+                    { traceId: 'gate-t', eventId: 'b', t: 200, kind: 'mutate', command: 'click', target: '@e1', outcome: 'fail', errorCode: 'click.refMissing' },
+                ]);
+                if (tl.schemaVersion !== 'action-timeline-v1' || tl.stats.eventCount !== 2 || tl.stats.failCount !== 1 || tl.durationMs !== 100) {
+                    return { ok: false, detail: `fixture timeline wrong: ${JSON.stringify(tl.stats)} duration=${tl.durationMs}` };
+                }
+                let threw = false;
+                try { mod.buildActionTimeline([]); } catch { threw = true; }
+                if (!threw) return { ok: false, detail: 'empty input did not throw' };
+                return { ok: true, detail: `action-timeline fixture: events=${tl.stats.eventCount} ok=${tl.stats.okCount} fail=${tl.stats.failCount}` };
+            } catch (err) {
+                return { ok: false, detail: `trace-browser-actions gate threw: ${(err && err.message) || err}` };
+            }
+        },
+    },
 };
 
 function printResult(name, result) {
