@@ -449,6 +449,46 @@ const GATES = {
             }
         },
     },
+    'planner-loop-local': {
+        description: 'G01 experimental: planner-loop runs observe→propose→act→verify with G09 retry cap, no cloud',
+        async check() {
+            try {
+                const contract = await import('../web-ai/planner-contract.mjs');
+                if (contract.PLANNER_RESULT_SCHEMA_VERSION !== 'planner-result-v1') {
+                    return { ok: false, detail: `unexpected planner result schema: ${contract.PLANNER_RESULT_SCHEMA_VERSION}` };
+                }
+                const loop = await import('../web-ai/planner-loop.mjs');
+                if (typeof loop.runPlannerLoop !== 'function') {
+                    return { ok: false, detail: 'web-ai/planner-loop.mjs missing runPlannerLoop' };
+                }
+                // Fixture: 2-step plan with one transient retry must complete and stay within retry cap.
+                let actCalls = 0;
+                const result = await loop.runPlannerLoop(
+                    { id: 'gate-fix-1', description: 'gate fixture', stopConditions: [], maxSteps: 4 },
+                    {
+                        async observe() { return { observationId: `o${actCalls}`, bundle: { refs: [] } }; },
+                        async act() {
+                            actCalls += 1;
+                            if (actCalls === 1) return { ok: false, statusCode: 503, transient: true };
+                            return { ok: true };
+                        },
+                        async verify() { return { ok: true }; },
+                        async propose({ history }) {
+                            if (history.length === 0) return { kind: 'click', ref: '@e1' };
+                            return { kind: 'finalize', text: 'OK' };
+                        },
+                    },
+                );
+                if (result.outcome !== 'completed') return { ok: false, detail: `outcome=${result.outcome}` };
+                if (result.finalAnswer !== 'OK') return { ok: false, detail: `finalAnswer=${result.finalAnswer}` };
+                if (result.stats.retryCount !== 1) return { ok: false, detail: `retryCount=${result.stats.retryCount} (expected 1)` };
+                if (result.steps[0].attempts !== 2) return { ok: false, detail: `step1.attempts=${result.steps[0].attempts}` };
+                return { ok: true, detail: `planner-loop fixture: completed, retries=${result.stats.retryCount}, steps=${result.steps.length}` };
+            } catch (err) {
+                return { ok: false, detail: `planner-loop-local gate threw: ${(err && err.message) || err}` };
+            }
+        },
+    },
 };
 
 function printResult(name, result) {
