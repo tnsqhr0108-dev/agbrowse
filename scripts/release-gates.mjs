@@ -489,6 +489,33 @@ const GATES = {
             }
         },
     },
+    'extract-schema-fixtures': {
+        description: 'G05 experimental: extract-schema validator subset is fail-closed and version-frozen',
+        async check() {
+            try {
+                const mod = await import('../web-ai/extract-schema.mjs');
+                if (mod.EXTRACT_SCHEMA_VERSION !== 'extract-schema-v1') {
+                    return { ok: false, detail: `unexpected EXTRACT_SCHEMA_VERSION: ${mod.EXTRACT_SCHEMA_VERSION}` };
+                }
+                const schema = {
+                    type: 'object',
+                    properties: { title: { type: 'string' }, count: { type: 'integer' } },
+                    required: ['title'],
+                };
+                const ok = mod.validateExtraction(schema, { title: 'hi', count: 1 });
+                if (!ok.ok) return { ok: false, detail: `valid fixture rejected: ${JSON.stringify(ok.errors)}` };
+                const bad = mod.validateExtraction(schema, { count: 'x' });
+                if (bad.ok) return { ok: false, detail: 'invalid fixture incorrectly accepted' };
+                if (bad.errors.length < 2) return { ok: false, detail: `expected ≥2 errors, got ${bad.errors.length}` };
+                let threw = false;
+                try { mod.assertSupportedSchema({ type: 'unknown-type' }); } catch { threw = true; }
+                if (!threw) return { ok: false, detail: 'unsupported type did not throw capability.unsupported' };
+                return { ok: true, detail: `extract-schema: version=${mod.EXTRACT_SCHEMA_VERSION}, fail-closed validated` };
+            } catch (err) {
+                return { ok: false, detail: `extract-schema-fixtures gate threw: ${(err && err.message) || err}` };
+            }
+        },
+    },
 };
 
 function printResult(name, result) {
