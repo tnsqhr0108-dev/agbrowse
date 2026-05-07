@@ -4,7 +4,7 @@ Repo: https://github.com/lidge-jun/agbrowse
 
 ## Part 1: What This Fixes
 
-Six UX blockers from real-world agbrowse usage. Rounds 1-6 iterated. Round 6 had 5/6 PASS.
+Eight UX blockers from real-world agbrowse usage. Fixes 1-6 went through 7 rounds of GPT Pro audit (final: 6/6 PASS). Fixes 7-8 added post-audit.
 
 ### Round 6 → Round 7 changes:
 - **#1**: Added `'grok'` to `PROVIDER_FILE_ACCESS_PROVIDERS` set. Grok supports file upload (upload selectors + `attachLocalFileLive` in grok-live.mjs) but was missing from the default set, causing `--vendor grok --file ...` to fail without a custom policy.
@@ -390,6 +390,187 @@ The new-tab path via `createTab()` navigates to the URL as part of tab creation.
 
 ---
 
+### Fix 7 — Thinking Placeholder: Prevent "Stopped thinking" as Answer
+**Priority: P1** | **File: MODIFY `web-ai/chatgpt.mjs`**
+
+**Problem:** When ChatGPT Pro's extended thinking is interrupted (user or accidental stop-button click), the assistant turn text becomes something like `"Stopped thinking"`, `"Thought for 12s"`, or `"Thought for 3m 2s"`. `PLACEHOLDER_PATTERNS` (lines 46-57) covers `"thinking"` and `"pro thinking"` but NOT these variants. `isFinalAnswer()` passes them through, and agbrowse returns the thinking indicator text as the "answer".
+
+Additionally, `cleanAssistantText()` (line 691) strips `"Thought for Xs"` prefix but only as a leading prefix — if the entire text IS just `"Thought for 3m 2s"` with no actual content after, the cleaned result is empty string, which `filter(Boolean)` removes. That path is safe. But `"Stopped thinking"` has no such cleanup and becomes a false answer.
+
+**Two changes:** (A) Expand `cleanAssistantText` to strip all thinking-duration headers (not just `Xs`), then (B) add only whole-string placeholder patterns.
+
+**MODIFY `web-ai/chatgpt.mjs`** — Expand `cleanAssistantText` (~line 689-692):
+
+```diff
+ function cleanAssistantText(text) {
+     return String(text || '')
+-        .replace(/^Thought for\s+\d+s\s*/i, '')
++        .replace(/^Thought for\s+[\dm\s]+s(?:econds?)?\s*/i, '')
+         .trim();
+ }
+```
+
+This handles `"Thought for 3s"`, `"Thought for 3m 2s"`, `"Thought for 12 seconds"`, and `"Thought for 1m 30s Some actual answer"`. The answer content after the header is preserved.
+
+**MODIFY `web-ai/chatgpt.mjs`** — Add whole-string-only placeholders (~lines 46-57):
+
+```diff
+ const PLACEHOLDER_PATTERNS = [
+     /^answer now$/i,
+     /^pro thinking/i,
+     /^finalizing answer$/i,
+     /^instant$/i,
+     /^thinking$/i,
+     /^pro$/i,
+     /^configure\.{0,3}$/i,
+     /^reading documents?$/i,
+     /^analyzing files?$/i,
++    /^stopped thinking$/i,
++    /^reasoning$/i,
++    /^deep thinking$/i,
++    /^searching\.{0,3}$/i,
++    /^browsing\.{0,3}$/i,
+     /^\s*$/,
+ ];
+```
+
+**Why this is safe:**
+- All new patterns are anchored with both `^` and `$` (or the existing anchor-at-end via `$` implicitly when the pattern is the full string). `"Searching..."` and `"Browsing..."` use `\.{0,3}$` to match optional trailing dots AND anchor at end — so `"Searching the web for relevant results"` (a real answer) is NOT matched.
+- `"Stopped thinking"` and `"Reasoning"` are exact whole-string matches — no risk of matching real content.
+- `"Deep thinking"` is ChatGPT's UI indicator text, not user content.
+- `"Thought for Xm Ys"` is now handled by `cleanAssistantText` (stripped to empty → filtered by `filter(Boolean)` in `readAssistantMessages`), so it doesn't need a placeholder pattern.
+
+---
+
+### Fix 8 — Zip Default for Multi-File Upload Context Packages
+**Priority: P2** | **Files: MODIFY `web-ai/context-pack/builder.mjs`, MODIFY `web-ai/context-pack/renderer.mjs`**
+
+**Problem:** When `--context-from-files` resolves multiple files and transport is `upload`, agbrowse writes a single `.md` file containing all files concatenated as markdown code blocks. This has three issues:
+1. The `.md` file can exceed inline char limits for large multi-file contexts
+2. Binary files (images, PDFs) are excluded from the markdown render
+3. ChatGPT/Gemini can read zip contents natively — zip preserves original file paths and includes binary files
+
+**Two changes:** (A) Use `file.path` (not `file.absolutePath`) and zip from resolved paths. (B) For upload-mode zipping, collect raw file paths from the glob expansion (before binary exclusion) so binary files like images/PDFs are included in the zip.
+
+**MODIFY `web-ai/context-pack/file-selector.mjs`** — Export expanded paths for zip mode:
+
+Add to `buildContextPack` return value (~line 24-51):
+```diff
+ export async function buildContextPack(input = {}) {
+     const patterns = collectPatterns(input);
+     const expanded = await expandContextPaths(patterns.include, patterns.exclude, input.cwd, input.maxFileSize);
++    const allPaths = [...expanded];
+     const files = [];
+     const excluded = [];
+     // ... existing read logic ...
+-    return { files, excluded, warnings };
++    return { files, excluded, warnings, allPaths };
+ }
+```
+
+`expanded` is a string array of absolute paths from `expandContextPaths()`. `allPaths` is a snapshot taken BEFORE binary exclusion in the read loop. The zip path uses these to include binary files.
+
+**MODIFY `web-ai/context-pack/builder.mjs`** — Zip packaging for upload transport (~lines 68-83):
+
+```diff
++import { createWriteStream } from 'node:fs';
++import { resolve, relative } from 'node:path';
++import archiver from 'archiver';
++
+ const PACKAGE_DIR = join(process.env.BROWSER_AGENT_HOME || join(homedir(), '.browser-agent'), 'web-ai-context-packages');
+
++/** @param {BuilderInput} [input] */
+ export async function prepareContextForBrowser(input = {}) {
+     if (!hasContextPackaging(input)) return null;
+-    const result = await buildContextPackageResult({ ...input, strict: true });
++    const selected = await buildContextPack({ ...input, strict: true });
++    const result = buildContextRenderResult(input, selected.files, selected.excluded, selected.warnings);
+     if (result.budget.estimatedTokens > result.budget.maxInputTokens) {
+         throw overBudgetError(result.budget);
+     }
+     if (result.transport === 'inline') {
+         const inlineLimit = Number(input.inlineCharLimit || DEFAULT_INLINE_CHAR_LIMIT);
+         if (result.composerText.length > inlineLimit) {
+             throw inlineLimitError(result.composerText.length, inlineLimit);
+         }
+         return result;
+     }
+-    if (!result.attachmentText.trim()) throw new WebAiError({
++    const zipPaths = (selected.allPaths?.filter(Boolean).length ? selected.allPaths : selected.files.map(f => f.path));
++    if (!zipPaths.length) throw new WebAiError({
+         errorCode: 'context.over-budget',
+         stage: 'context-preflight',
+         retryHint: 'reduce-files',
+         message: 'context package attachment is empty',
+     });
+     await fs.mkdir(PACKAGE_DIR, { recursive: true });
+-    const filePath = join(PACKAGE_DIR, `web-ai-context-package-${Date.now()}.md`);
+-    await fs.writeFile(filePath, `${result.attachmentText}\n`, 'utf8');
+-    const stat = await fs.stat(filePath);
++    const cwd = input.cwd || process.cwd();
++    const filePath = join(PACKAGE_DIR, `web-ai-context-package-${Date.now()}.zip`);
++    await zipContextFiles(zipPaths, cwd, filePath);
++    const stat = await fs.stat(filePath);
+     result.attachments = [{
+         path: filePath,
+         displayPath: basename(filePath),
+         sizeBytes: stat.size,
+     }];
+     return result;
+ }
++
++/**
++ * @param {string[]} filePaths - Absolute paths to zip
++ * @param {string} cwd - Base directory for relative paths in the archive
++ * @param {string} outputPath
++ * @returns {Promise<void>}
++ */
++async function zipContextFiles(filePaths, cwd, outputPath) {
++    const archive = archiver('zip', { zlib: { level: 6 } });
++    const output = createWriteStream(outputPath);
++    const done = new Promise((resolve, reject) => {
++        output.on('close', resolve);
++        archive.on('error', reject);
++    });
++    archive.pipe(output);
++    for (const absPath of filePaths) {
++        const relPath = relative(cwd, absPath);
++        archive.file(absPath, { name: relPath });
++    }
++    await archive.finalize();
++    await done;
++}
+```
+
+Also update imports at top of builder.mjs:
+```diff
++import { buildContextPack } from './file-selector.mjs';
++import { buildContextRenderResult } from './renderer.mjs';
+```
+Note: `buildContextPackageResult` was a wrapper for `buildContextPack` + `buildContextRenderResult`. The zip path now calls them separately to access `selected.allPaths`.
+
+**Dependency:** `archiver` — cross-platform zip library, pure JS, no native bindings. Node.js `zlib` is built-in; `archiver` wraps it with a streaming API.
+
+```bash
+npm install archiver
+```
+
+**Integration notes:**
+- `attachLocalFileLive()` already accepts `.zip` files (not in `UNSUPPORTED_EXTENSIONS`)
+- `preflightAttachment()` passes `.zip` through without issues
+- ChatGPT natively reads zip contents (proven by our 7-round audit)
+- Gemini and Grok also accept zip uploads
+- `allPaths` includes binary files (images, PDFs) that were excluded from text rendering
+- The `--file` flag for explicit single-file upload is unchanged — this only affects `--context-from-files` upload transport
+
+**Backward compatibility:**
+- `--context-transport inline` is unchanged (uses `composerText`)
+- `--context-transport upload` now produces `.zip` instead of `.md`
+- `--inline-only` is unchanged
+- Single-file `--file` is unchanged (bypasses context packaging entirely)
+
+---
+
 ## Files Changed Summary
 
 | File | Action | Fixes |
@@ -399,8 +580,11 @@ The new-tab path via `createTab()` navigates to the URL as part of tab creation.
 | `web-ai/policy/enforce.mjs` | MODIFY | #1 (compat) |
 | `web-ai/mcp-server.mjs` | MODIFY | #1 |
 | `web-ai/cli.mjs` | MODIFY | #1, #2 |
-| `web-ai/chatgpt.mjs` | MODIFY | #3, #5, #6 |
+| `web-ai/chatgpt.mjs` | MODIFY | #3, #5, #6, #7 |
 | `web-ai/gemini-live.mjs` | MODIFY | #3 |
 | `web-ai/grok-live.mjs` | MODIFY | #3 |
 | `web-ai/active-command-store.mjs` | MODIFY | #4 |
 | `web-ai/tab-recovery.mjs` | MODIFY | #3, #6 |
+| `web-ai/context-pack/builder.mjs` | MODIFY | #8 |
+| `web-ai/context-pack/file-selector.mjs` | MODIFY | #8 |
+| `package.json` | MODIFY | #8 (add `archiver` dep) |
