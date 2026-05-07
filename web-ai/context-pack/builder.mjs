@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, posix as pathPosix } from 'node:path';
 import archiver from 'archiver';
 import { DEFAULT_INLINE_CHAR_LIMIT } from './constants.mjs';
 import { buildContextPack } from './file-selector.mjs';
@@ -144,8 +144,8 @@ async function zipContextFiles(files, attachmentText, outputPath) {
         archive.pipe(output);
         archive.append(Buffer.from(CONTEXT_MANIFEST + attachmentText, 'utf8'), { name: 'CONTEXT_PACKAGE.md' });
         for (const file of files) {
-            const name = file.relativePath.replace(/\\/g, '/');
-            if (name.startsWith('..') || name.startsWith('/')) continue;
+            const name = safeZipEntryName(file.relativePath);
+            if (!name) continue;
             archive.append(Buffer.from(file.content, 'utf8'), { name });
         }
         await archive.finalize();
@@ -154,4 +154,18 @@ async function zipContextFiles(files, attachmentText, outputPath) {
         await fs.rm(outputPath, { force: true }).catch(() => undefined);
         throw err;
     }
+}
+
+/** @param {string} relativePath */
+function safeZipEntryName(relativePath) {
+    const normalized = pathPosix.normalize(String(relativePath).replace(/\\/g, '/'));
+    if (
+        normalized === '.' ||
+        normalized === '..' ||
+        normalized.startsWith('../') ||
+        pathPosix.isAbsolute(normalized)
+    ) {
+        return null;
+    }
+    return normalized;
 }
