@@ -26,7 +26,9 @@ import { runMcpServer } from './mcp-server.mjs';
 import { runWebAiEval } from './eval-runner.mjs';
 import { createTraceId } from './trace/types.mjs';
 import { writeCommandTrace } from './trace/writer.mjs';
-import { loadAndEnforcePolicy } from './policy/enforce.mjs';
+import { enforcePolicy } from './policy/enforce.mjs';
+import { loadPolicy } from './policy/schema.mjs';
+import { applyProviderDefaults } from './policy/default-policy.mjs';
 import { activeCommandTargetIds, withActiveCommand } from './active-command-store.mjs';
 import { auditSources } from './source-audit.mjs';
 export { parseDurationToMs };
@@ -583,6 +585,7 @@ export function parseSourceAuditRatio(value) {
  */
 async function enforceCliPolicy(command, input) {
     const mutating = ['send', 'query', 'stop'].includes(command);
+    const provider = input.vendor || input.provider || 'chatgpt';
     const policyUrl = input.url || (/** @type {any} */ (VENDOR_DEFAULT_URLS))[input.vendor || 'chatgpt'];
     const action = {
         url: policyUrl,
@@ -594,7 +597,10 @@ async function enforceCliPolicy(command, input) {
         unsafeAllow: input.unsafeAllow,
     };
     if (!mutating && !action.clipboardRead && !input.unsafeAllow?.length) return null;
-    return loadAndEnforcePolicy(input, action);
+    const { policy, explicitKeys } = await loadPolicy(input.policyPath);
+    const effective = applyProviderDefaults(provider, policy, { explicitKeys });
+    enforcePolicy(effective, action);
+    return { ok: true, policy: effective };
 }
 
 /**

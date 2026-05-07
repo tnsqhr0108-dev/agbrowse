@@ -137,7 +137,7 @@ export async function reconcileSessionTabs(port) {
  * @param {unknown} err
  * @returns {boolean}
  */
-function isPageDeathError(err) {
+export function isPageDeathError(err) {
     const e = /** @type {{ message?: unknown }} */ (err);
     const msg = String(e?.message || err || '').toLowerCase();
     return (

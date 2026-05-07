@@ -73,7 +73,7 @@ describe('web-ai policy', () => {
     it('loads a local policy file', async () => {
         await fs.writeFile('tmp-policy.json', JSON.stringify({ version: 1, allowClipboardRead: true }));
         try {
-            const policy = await loadPolicy('tmp-policy.json');
+            const { policy } = await loadPolicy('tmp-policy.json');
             expect(policy.allowClipboardRead).toBe(true);
         } finally {
             await fs.rm('tmp-policy.json', { force: true });

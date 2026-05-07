@@ -25,17 +25,19 @@ const POLICY_KEYS = new Set(Object.keys(DEFAULT_WEB_AI_POLICY));
 
 /**
  * @param {string|null|undefined} policyPath
- * @returns {Promise<WebAiPolicy>}
+ * @returns {Promise<{ policy: WebAiPolicy, explicitKeys: Set<string> }>}
  */
 export async function loadPolicy(policyPath) {
-    if (!policyPath) return { ...DEFAULT_WEB_AI_POLICY };
+    if (!policyPath) return { policy: { ...DEFAULT_WEB_AI_POLICY }, explicitKeys: new Set() };
     const resolved = path.resolve(policyPath);
     const cwd = process.cwd();
     if (policyPath.split(/[\\/]+/).includes('..') || (resolved !== cwd && !resolved.startsWith(`${cwd}${path.sep}`))) {
         throw policyError('policy.path-traversal', 'policy-load', 'policy path escapes current working directory', { ruleId: 'policyPath', policyPath });
     }
     const raw = await fs.readFile(resolved, 'utf8');
-    return normalizePolicy(JSON.parse(raw));
+    const parsed = JSON.parse(raw);
+    const explicitKeys = new Set(Object.keys(parsed));
+    return { policy: normalizePolicy(parsed), explicitKeys };
 }
 
 /**

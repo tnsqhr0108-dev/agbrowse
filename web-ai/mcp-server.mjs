@@ -21,6 +21,7 @@ import { allToolSchemas, isKnownMcpTool, isKnownWebAiTool, validateWebAiToolInpu
 import { KeyedMutex } from '../skills/browser/keyed-mutex.mjs';
 import { isKnownBrowserTool, validateBrowserToolInput, getDeferredBrowserToolMetadata } from './browser-tool-schema.mjs';
 import { enforcePolicy } from './policy/enforce.mjs';
+import { applyProviderDefaults } from './policy/default-policy.mjs';
 import { withActiveCommand } from './active-command-store.mjs';
 import { requireLatestSnapshot, setLatestSnapshot } from './mcp-state.mjs';
 
@@ -187,7 +188,9 @@ async function callMcpTool(name, args, deps, state) {
     }
     if (name === 'web_ai_submit_prompt') {
         const provider = providerFromArgs(args);
-        enforcePolicy(policy, {
+        const rawPolicyKeys = new Set(Object.keys(args.policy === undefined ? {} : args.policy));
+        const effectivePolicy = applyProviderDefaults(provider, policy, { explicitKeys: rawPolicyKeys });
+        enforcePolicy(effectivePolicy, {
             url: state.latestSnapshot?.url || args.url || (/** @type {any} */ (VENDOR_DEFAULT_URLS))[provider],
             upload: Boolean(args.filePath),
             explicitUpload: Boolean(args.filePath),

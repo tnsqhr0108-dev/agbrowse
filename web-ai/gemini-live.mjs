@@ -29,6 +29,7 @@ import { WebAiError } from './errors.mjs';
 import { finalizeProviderTab } from './tab-finalizer.mjs';
 import { recordActiveLease } from './tab-lease-store.mjs';
 import { defineCapability, probeFirstVisibleSelector, probeHostMatches, runCapabilities, worstCapabilityState } from './capability.mjs';
+import { isPageDeathError } from './tab-recovery.mjs';
 
 const GEMINI_HOSTS = new Set(['gemini.google.com']);
 const INPUT_SELECTORS = [
@@ -419,6 +420,7 @@ export async function geminiPollWebAi(deps, input = {}) {
     const timeout = Math.max(1, Number(input.timeout || input.thinkingTime || 1200)) * 1000;
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
+        try {
         const responses = await readResponses(page);
         const next = responses.slice(baseline.assistantCount).at(-1);
         if (next && await hasCompletionSignal(page)) {
@@ -456,6 +458,20 @@ export async function geminiPollWebAi(deps, input = {}) {
             });
         }
         await page.waitForTimeout(2_000).catch(() => undefined);
+        } catch (pollErr) {
+            if (isPageDeathError(pollErr)) {
+                if (session) updateSession(session.sessionId, { status: 'crashed' });
+                return {
+                    ok: false, vendor: 'gemini', status: 'tab-crashed',
+                    url: baseline.url || '', ...(session ? { sessionId: session.sessionId } : {}),
+                    answerText: '', baseline, usedFallbacks: [],
+                    warnings: ['tab-crashed-during-poll'],
+                    error: String(pollErr?.message || pollErr),
+                    recoverable: true,
+                };
+            }
+            throw pollErr;
+        }
     }
     if (session) updateSession(session.sessionId, { status: 'timeout' });
     return { ok: false, vendor: 'gemini', status: 'timeout', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for gemini response' };

@@ -29,6 +29,7 @@ import { attachLocalFileLive, fileInfoFromPath } from './chatgpt-attachments.mjs
 import { captureCopiedResponseText, GROK_COPY_SELECTORS, preferCopiedText } from './copy-markdown.mjs';
 import { withAnswerArtifact } from './answer-artifact.mjs';
 import { selectGrokModel, grokModelCapabilityProbe } from './grok-model.mjs';
+import { isPageDeathError } from './tab-recovery.mjs';
 
 const GROK_HOSTS = new Set(['grok.com']);
 const COMPOSER_SELECTORS = ['.ProseMirror[contenteditable="true"]', '[contenteditable="true"].ProseMirror'];
@@ -266,6 +267,7 @@ export async function grokPollWebAi(deps, input = {}) {
     let stableText = '';
     let stableSince = 0;
     while (Date.now() < deadline) {
+        try {
         const answers = await readResponses(page);
         const latest = answers.slice(baseline.assistantCount).at(-1) || '';
         const streaming = await isStreaming(page);
@@ -310,6 +312,20 @@ export async function grokPollWebAi(deps, input = {}) {
             stableSince = 0;
         }
         await page.waitForTimeout(500).catch(() => undefined);
+        } catch (pollErr) {
+            if (isPageDeathError(pollErr)) {
+                if (session) updateSession(session.sessionId, { status: 'crashed' });
+                return {
+                    ok: false, vendor: 'grok', status: 'tab-crashed',
+                    url: baseline.url || '', ...(session ? { sessionId: session.sessionId } : {}),
+                    answerText: '', baseline, usedFallbacks: [],
+                    warnings: ['tab-crashed-during-poll'],
+                    error: String(pollErr?.message || pollErr),
+                    recoverable: true,
+                };
+            }
+            throw pollErr;
+        }
     }
     if (session) updateSession(session.sessionId, { status: 'timeout' });
     return { ok: false, vendor: 'grok', status: 'timeout', url: page.url(), ...(session ? { sessionId: session.sessionId } : {}), baseline, warnings: [], usedFallbacks: [], error: 'timed out waiting for grok response' };

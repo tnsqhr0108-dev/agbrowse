@@ -36,6 +36,7 @@ import { withAnswerArtifact } from './answer-artifact.mjs';
 import { resolveTargetForIntent } from './target-resolver.mjs';
 import { createTraceContext, getSessionTrace, recordTraceStep, summarizeTraceSteps } from './action-trace.mjs';
 import { appendTraceToSession } from './trace-persistence.mjs';
+import { isPageDeathError } from './tab-recovery.mjs';
 
 const CHATGPT_HOSTS = new Set(['chatgpt.com', 'chat.openai.com']);
 const ASSISTANT_SELECTORS = [
@@ -53,6 +54,11 @@ const PLACEHOLDER_PATTERNS = [
     /^configure\.{0,3}$/i,
     /^reading documents?$/i,
     /^analyzing files?$/i,
+    /^stopped thinking$/i,
+    /^reasoning$/i,
+    /^deep thinking$/i,
+    /^searching\.{0,3}$/i,
+    /^browsing\.{0,3}$/i,
     /^\s*$/,
 ];
 
@@ -312,6 +318,7 @@ export async function pollWebAi(deps, input = {}) {
     let stableText = '';
     let stableSince = 0;
     while (Date.now() <= deadline) {
+        try {
         if (session?.targetId) {
             const currentTargetId = await deps.getTargetId?.().catch(() => null);
             if (currentTargetId && currentTargetId !== session.targetId) {
@@ -387,6 +394,20 @@ export async function pollWebAi(deps, input = {}) {
             stableSince = 0;
         }
         await page.waitForTimeout(500);
+        } catch (pollErr) {
+            if (isPageDeathError(pollErr)) {
+                if (session) updateSession(session.sessionId, { status: 'crashed' });
+                return {
+                    ok: false, vendor, status: 'tab-crashed',
+                    url: baseline.url || '', ...(session ? { sessionId: session.sessionId } : {}),
+                    answerText: '', baseline, usedFallbacks: [],
+                    warnings: ['tab-crashed-during-poll'],
+                    error: String(pollErr?.message || pollErr),
+                    recoverable: true,
+                };
+            }
+            throw pollErr;
+        }
     }
 
     if (input.allowCopyMarkdownFallback === true && stableText) {
@@ -717,7 +738,7 @@ function isFinalAnswer(text) {
  */
 function cleanAssistantText(text) {
     return String(text || '')
-        .replace(/^Thought for\s+\d+s\s*/i, '')
+        .replace(/^Thought for\s+[\dm\s]+s(?:econds?)?\s*/i, '')
         .trim();
 }
 

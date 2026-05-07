@@ -24,7 +24,7 @@ import { loadPolicy, normalizePolicy, policyError } from './schema.mjs';
  * @returns {Promise<WebAiPolicy>}
  */
 export async function loadAndEnforcePolicy(input = {}, action = {}) {
-    const policy = await loadPolicy(input.policyPath);
+    const { policy } = await loadPolicy(input.policyPath);
     enforcePolicy(policy, action);
     return policy;
 }
