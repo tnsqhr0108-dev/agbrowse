@@ -175,7 +175,7 @@ function fail(name, message) {
  * @param {string} [pathPrefix]
  * @returns {void}
  */
-function validateSchema(name, schema, value, pathPrefix = '') {
+export function validateSchema(name, schema, value, pathPrefix = '') {
     if (schema.type === 'object') {
         if (value === null || typeof value !== 'object' || Array.isArray(value)) {
             throw fail(name, `${pathPrefix || 'input'} must be object`);

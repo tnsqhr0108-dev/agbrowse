@@ -30,8 +30,8 @@ describe('web-ai policy MCP', () => {
         expect(deps.getPage).not.toHaveBeenCalled();
     });
 
-    it('allows copy markdown policy path when explicitly unsafe-allowed', async () => {
-        const deps = { getPage: vi.fn(() => { throw new Error('browser reached after policy pass'); }) };
+    it('rejects client-supplied unsafeAllow in MCP args', async () => {
+        const deps = { getPage: vi.fn(() => { throw new Error('should not reach'); }) };
         const response = await handleMcpMessage({
             jsonrpc: '2.0',
             id: 1,
@@ -39,6 +39,22 @@ describe('web-ai policy MCP', () => {
             params: {
                 name: 'web_ai_copy_markdown',
                 arguments: { provider: 'chatgpt', unsafeAllow: ['clipboard-read'] },
+            },
+        }, deps, {});
+        expect(response.result.isError).toBe(true);
+        expect(response.result.content[0].text).toContain('unsafeAllow is server-side policy');
+        expect(deps.getPage).not.toHaveBeenCalled();
+    });
+
+    it('allows copy markdown when policy explicitly enables clipboardRead', async () => {
+        const deps = { getPage: vi.fn(() => { throw new Error('browser reached after policy pass'); }) };
+        const response = await handleMcpMessage({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'tools/call',
+            params: {
+                name: 'web_ai_copy_markdown',
+                arguments: { provider: 'chatgpt', policy: { version: 1, allowClipboardRead: true } },
             },
         }, deps, {});
         expect(response.result.isError).toBe(true);
@@ -56,8 +72,7 @@ describe('web-ai policy MCP', () => {
                 name: 'web_ai_copy_markdown',
                 arguments: {
                     provider: 'chatgpt',
-                    unsafeAllow: ['clipboard-read'],
-                    policy: { version: 1, deniedOrigins: ['https://chatgpt.com'] },
+                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://chatgpt.com'] },
                 },
             },
         }, deps, {});
@@ -82,7 +97,7 @@ describe('web-ai policy MCP', () => {
             method: 'tools/call',
             params: {
                 name: 'web_ai_copy_markdown',
-                arguments: { provider: 'chatgpt', unsafeAllow: ['clipboard-read'], policy },
+                arguments: { provider: 'chatgpt', policy: { ...policy, allowClipboardRead: true } },
             },
         }, deps, state);
         const submitResponse = await handleMcpMessage({
@@ -119,8 +134,7 @@ describe('web-ai policy MCP', () => {
                 arguments: {
                     provider: 'chatgpt',
                     url: 'https://chatgpt.com/',
-                    unsafeAllow: ['clipboard-read'],
-                    policy: { version: 1, deniedOrigins: ['https://evil.test'] },
+                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://evil.test'] },
                 },
             },
         }, deps, state);
@@ -188,8 +202,7 @@ describe('web-ai policy MCP', () => {
                 arguments: {
                     provider: 'chatgpt',
                     url: 'https://chatgpt.com/',
-                    unsafeAllow: ['clipboard-read'],
-                    policy: { version: 1, deniedOrigins: ['https://evil.test'] },
+                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://evil.test'] },
                 },
             },
         }, deps, {});
@@ -216,8 +229,7 @@ describe('web-ai policy MCP', () => {
                 name: 'web_ai_copy_markdown',
                 arguments: {
                     provider: 'chatgpt',
-                    unsafeAllow: ['clipboard-read'],
-                    policy: { version: 1, deniedOrigins: ['https://evil.test'] },
+                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://evil.test'] },
                 },
             },
         }, deps, state);
@@ -251,7 +263,7 @@ describe('web-ai policy MCP', () => {
                 name: 'web_ai_copy_markdown',
                 arguments: {
                     provider: 'chatgpt',
-                    unsafeAllow: ['clipboard-read'],
+                    policy: { version: 1, allowClipboardRead: true },
                 },
             },
         }, deps, {});

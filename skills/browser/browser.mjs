@@ -32,7 +32,7 @@
  *   tab-cleanup [--provider chatgpt --keep-provider-tabs 1]  Close idle/overflow tabs
  *   text [--format html]             Get page text
  *   get-dom [--selector CSS] [--max-chars N]  Get current DOM
- *   console [--duration ms] [--clear] [--reload]  Read buffered console logs
+ *   console [--duration ms] [--clear] [--reload] [--expression js --unsafe-allow evaluate]  Read buffered console logs
  *   network [--duration ms] [--filter text] [--reload]  Inspect network requests
  *   evaluate <js> --unsafe-allow evaluate  Execute JavaScript
  *   scroll <dir> [--amount N] [--json]  Scroll page
@@ -1758,6 +1758,10 @@ async function captureConsole(port, opts = {}) {
         await page.reload({ waitUntil: 'domcontentloaded' });
     }
     if (opts.expression) {
+        enforcePolicy(opts.policy || {}, {
+            evaluate: true,
+            unsafeAllow: opts.unsafeAllow || [],
+        });
         await page.evaluate(opts.expression);
     }
     if (duration > 0) {
@@ -2415,8 +2419,10 @@ try {
             break;
         }
         case 'console': {
+            const consoleUnsafeIndex = process.argv.indexOf('--unsafe-allow');
+            const consoleUnsafeAllow = consoleUnsafeIndex === -1 ? [] : [process.argv[consoleUnsafeIndex + 1]].filter(Boolean);
             const { values } = parseArgs({
-                args: process.argv.slice(3),
+                args: process.argv.slice(3).filter((arg, index, args) => arg !== '--unsafe-allow' && args[index - 1] !== '--unsafe-allow'),
                 options: {
                     duration: { type: 'string' },
                     expression: { type: 'string' },
@@ -2433,6 +2439,7 @@ try {
                 limit,
                 clear: values.clear,
                 reload: values.reload,
+                unsafeAllow: consoleUnsafeAllow,
             });
             for (const log of r.logs) {
                 console.log(`[${log.type}] ${log.text}`);

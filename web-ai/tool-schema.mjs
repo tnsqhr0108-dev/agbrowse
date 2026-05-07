@@ -1,5 +1,5 @@
 // @ts-check
-import { BROWSER_TOOLS, isKnownBrowserTool } from './browser-tool-schema.mjs';
+import { BROWSER_TOOLS, isKnownBrowserTool, validateSchema } from './browser-tool-schema.mjs';
 
 /**
  * @typedef {{ description: string, inputSchema: Record<string, unknown> }} ToolDefinition
@@ -142,6 +142,19 @@ export function isKnownMcpTool(toolName) {
  */
 export function isKnownWebAiTool(toolName) {
     return Boolean(WEB_AI_TOOLS[toolName]);
+}
+
+/**
+ * @param {string} toolName
+ * @param {unknown} input
+ * @returns {boolean}
+ */
+export function validateWebAiToolInput(toolName, input) {
+    const tool = WEB_AI_TOOLS[toolName];
+    if (!tool) throw new Error(`unknown web-ai tool: ${toolName}`);
+    const schema = { ...tool.inputSchema, additionalProperties: true };
+    validateSchema(toolName, schema, input ?? {});
+    return true;
 }
 
 export { BROWSER_TOOLS, isKnownBrowserTool };

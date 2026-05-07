@@ -17,7 +17,8 @@ import {
     GEMINI_COPY_SELECTORS,
     GROK_COPY_SELECTORS,
 } from './copy-markdown.mjs';
-import { allToolSchemas, isKnownMcpTool } from './tool-schema.mjs';
+import { allToolSchemas, isKnownMcpTool, isKnownWebAiTool, validateWebAiToolInput } from './tool-schema.mjs';
+import { KeyedMutex } from '../skills/browser/keyed-mutex.mjs';
 import { isKnownBrowserTool, validateBrowserToolInput, getDeferredBrowserToolMetadata } from './browser-tool-schema.mjs';
 import { enforcePolicy } from './policy/enforce.mjs';
 import { withActiveCommand } from './active-command-store.mjs';
@@ -28,6 +29,16 @@ const JSON_RPC = '2.0';
 const WEB_AI_SCOPE = 'web_ai';
 const BROWSER_SCOPE = 'browser';
 const PROVIDERS = new Set(['chatgpt', 'gemini', 'grok']);
+const tabMutex = new KeyedMutex();
+
+/**
+ * @param {Record<string, unknown>} args
+ */
+function rejectClientPolicyFields(args) {
+    if (args && Object.prototype.hasOwnProperty.call(args, 'unsafeAllow')) {
+        throw new Error('unsafeAllow is server-side policy and cannot be set by MCP clients');
+    }
+}
 const VENDOR_DEFAULT_URLS = {
     chatgpt: 'https://chatgpt.com',
     gemini: 'https://gemini.google.com',
@@ -133,6 +144,8 @@ async function callMcpTool(name, args, deps, state) {
     }
     if (!isKnownMcpTool(name)) throw new Error(`unknown tool: ${name}`);
     if (isKnownBrowserTool(name)) validateBrowserToolInput(name, args || {});
+    if (isKnownWebAiTool(name)) validateWebAiToolInput(name, args || {});
+    rejectClientPolicyFields(args || {});
     const policy = normalizeMcpPolicy(args.policy === undefined ? {} : args.policy);
     if (name === 'browser_snapshot') {
         const page = await deps.getPage();
@@ -179,15 +192,18 @@ async function callMcpTool(name, args, deps, state) {
             upload: Boolean(args.filePath),
             explicitUpload: Boolean(args.filePath),
             fileAccess: Boolean(args.filePath),
-            unsafeAllow: args.unsafeAllow || [],
         });
-        return withMcpActiveCommand(name, provider, deps, args, () => sendByProvider(provider, deps, {
-            ...args,
-            vendor: provider,
-            inlineOnly: args.inlineOnly !== false,
-            attachmentPolicy: 'inline-only',
-            reasoningEffort: args.effort || args.reasoningEffort,
-        }));
+        const targetId = await deps.getTargetId?.().catch(() => 'default');
+        const tabKey = targetId || 'default';
+        return tabMutex.runExclusive(tabKey, () =>
+            withMcpActiveCommand(name, provider, deps, args, () => sendByProvider(provider, deps, {
+                ...args,
+                vendor: provider,
+                inlineOnly: args.inlineOnly !== false,
+                attachmentPolicy: 'inline-only',
+                reasoningEffort: args.effort || args.reasoningEffort,
+            })),
+        );
     }
     if (name === 'web_ai_wait_response' || name === 'web_ai_session_resume') {
         const session = getSession(args.sessionId);
@@ -202,7 +218,7 @@ async function callMcpTool(name, args, deps, state) {
     if (name === 'web_ai_copy_markdown') {
         const provider = providerFromArgs(args);
         const fallbackUrl = state.latestSnapshot?.url || args.url || (/** @type {any} */ (VENDOR_DEFAULT_URLS))[provider];
-        const action = { url: fallbackUrl, clipboardRead: true, unsafeAllow: args.unsafeAllow || [] };
+        const action = { url: fallbackUrl, clipboardRead: true };
         enforcePolicy(policy, action);
         const page = await deps.getPage();
         enforcePolicy(policy, { ...action, url: page.url?.() || fallbackUrl });
