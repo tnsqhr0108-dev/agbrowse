@@ -37,7 +37,7 @@ const FINALIZABLE_STATUSES = new Set(['complete', 'completed']);
  */
 
 /**
- * @typedef {{ finalized: false, reason: string } | { finalized: true, pool: unknown }} FinalizeResult
+ * @typedef {{ finalized: false, reason: string } | { finalized: true, pool: unknown, archived?: boolean }} FinalizeResult
  */
 
 /**
@@ -57,7 +57,7 @@ export async function finalizeProviderTab(deps, {
     if (!session?.sessionId || !session.targetId || !FINALIZABLE_STATUSES.has(status)) {
         return { finalized: false, reason: 'not-finalizable' };
     }
-    const conversationUrl = page?.url?.() || session.conversationUrl || session.originalUrl || null;
+    const conversationUrl = page?.url?.() || session.conversationUrl || session.originalUrl || undefined;
     updateSession(session.sessionId, {
         status: 'complete',
         conversationUrl,
@@ -77,7 +77,7 @@ export async function finalizeProviderTab(deps, {
         session: { ...session, conversationUrl, status: 'complete' },
     });
 
-    if (shouldArchive && page) {
+    if (shouldArchive && page && conversationUrl) {
         try {
             const archiveResult = await archiveConversation(page, { conversationUrl });
             if (archiveResult.ok) {

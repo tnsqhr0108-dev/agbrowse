@@ -940,8 +940,9 @@ async function runCommand(command, deps, input) {
             if (input.research === 'deep') {
                 return deepResearchWebAi(deps, input);
             }
-            const result = await queryWebAi(deps, input);
-            if (result.ok && input.followUps?.length && result.sessionId) {
+            const hasFollowUps = input.followUps?.length > 0;
+            const result = await queryWebAi(deps, { ...input, skipFinalize: hasFollowUps });
+            if (result.ok && hasFollowUps && result.sessionId) {
                 const { sendMultiTurn } = await import('./chatgpt-multi-turn.mjs');
                 const session = getSession(result.sessionId);
                 if (session) {

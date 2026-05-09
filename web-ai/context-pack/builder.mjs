@@ -4,6 +4,7 @@ import { createWriteStream } from 'node:fs';
 import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join, posix as pathPosix } from 'node:path';
+/** @ts-ignore — archiver has no bundled types and @types/archiver is not installed */
 import archiver from 'archiver';
 import { DEFAULT_INLINE_CHAR_LIMIT } from './constants.mjs';
 import { buildContextPack } from './file-selector.mjs';
@@ -136,7 +137,7 @@ async function zipContextFiles(files, attachmentText, outputPath) {
     const archive = archiver('zip', { zlib: { level: 6 } });
     const output = createWriteStream(outputPath);
     const done = new Promise((resolve, reject) => {
-        output.on('close', resolve);
+        output.on('close', () => resolve(undefined));
         output.on('error', reject);
         archive.on('error', reject);
     });

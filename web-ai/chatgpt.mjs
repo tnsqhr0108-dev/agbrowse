@@ -48,6 +48,13 @@ const ASSISTANT_SELECTORS = [
     '[data-turn="assistant"]',
     'article[data-testid^="conversation-turn"]',
 ];
+const FINISHED_ACTIONS_SELECTOR = [
+    'button[data-testid="copy-turn-action-button"]',
+    'button[data-testid="good-response-turn-action-button"]',
+    'button[data-testid="bad-response-turn-action-button"]',
+    'button[aria-label="Share"]',
+].join(', ');
+
 const PLACEHOLDER_PATTERNS = [
     /^answer now$/i,
     /^pro thinking/i,
@@ -356,9 +363,18 @@ export async function pollWebAi(deps, input = {}) {
         const newAnswers = answers.slice(baseline.assistantCount).filter(isFinalAnswer);
         const latest = newAnswers.at(-1) || '';
         const streaming = await isStreaming(page);
+        const finished = !streaming && latest ? await isResponseFinished(page) : false;
         if (latest && !streaming) {
             if (latest === stableText) {
-                if (Date.now() - stableSince >= 1500) {
+                const elapsedStable = Date.now() - stableSince;
+                const textLen = latest.length;
+                const minStableMs = finished
+                    ? 1000
+                    : textLen < 16 ? 8000
+                    : textLen < 40 ? 3000
+                    : textLen < 500 ? 2000
+                    : 3000;
+                if (elapsedStable >= minStableMs) {
                     const usedFallbacks = [];
                     const warnings = [];
                     let answerText = latest;
@@ -397,7 +413,7 @@ export async function pollWebAi(deps, input = {}) {
                             }
                         } catch { /* image collection is best-effort */ }
                     }
-                    if (session) {
+                    if (session && !input.skipFinalize) {
                         await finalizeProviderTab(deps, { vendor, session: /** @type {any} */ (session), page, answerText, warnings, archiveFlag: input.archiveFlag });
                     }
                     return withAnswerArtifact({
@@ -448,7 +464,7 @@ export async function pollWebAi(deps, input = {}) {
         const copiedText = preferCopiedText(stableText, copied);
         if (copiedText) {
             const answerText = cleanAssistantText(copiedText);
-            if (session) {
+            if (session && !input.skipFinalize) {
                 await finalizeProviderTab(deps, { vendor, session: /** @type {any} */ (session), page, answerText, archiveFlag: input.archiveFlag });
             }
             return withAnswerArtifact({
@@ -462,6 +478,7 @@ export async function pollWebAi(deps, input = {}) {
                 usedFallbacks: ['copy-markdown'],
                 warnings: [],
                 ...(traceSummary ? { traceSummary } : {}),
+                responseStableMs: stableSince ? Date.now() - stableSince : 0,
             });
         }
         if (session) updateSession(session.sessionId, { status: 'timeout' });
@@ -494,6 +511,32 @@ async function isStreaming(page) {
 }
 
 /**
+ * @param {any} page
+ */
+async function isResponseFinished(page) {
+    try {
+        return await page.evaluate((finishedSelector) => {
+            const ASSISTANT_TURN_SELECTORS = [
+                '[data-message-author-role="assistant"]',
+                '[data-turn="assistant"]',
+                'article[data-testid^="conversation-turn"]',
+            ];
+            const CONVERSATION_TURN = 'article[data-testid^="conversation-turn"], div[data-testid^="conversation-turn"], section[data-testid^="conversation-turn"]';
+            const turns = Array.from(document.querySelectorAll(CONVERSATION_TURN));
+            for (let i = turns.length - 1; i >= 0; i--) {
+                const turn = turns[i];
+                const isAssistant = ASSISTANT_TURN_SELECTORS.some(s => turn.matches?.(s) || turn.querySelector(s));
+                if (!isAssistant) continue;
+                return Boolean(turn.querySelector(finishedSelector));
+            }
+            return false;
+        }, FINISHED_ACTIONS_SELECTOR);
+    } catch {
+        return false;
+    }
+}
+
+/**
  * @param {any} deps
  * @param {any} input
  */
@@ -504,6 +547,9 @@ export async function queryWebAi(deps, input = {}) {
         timeout: input.timeout,
         session: sent.sessionId,
         allowCopyMarkdownFallback: input.allowCopyMarkdownFallback === true,
+        outputImage: input.outputImage,
+        archiveFlag: input.archiveFlag,
+        skipFinalize: input.skipFinalize,
     });
     return {
         ...result,

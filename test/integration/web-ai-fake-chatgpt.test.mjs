@@ -38,7 +38,7 @@ describe('web-ai fake ChatGPT fixture', () => {
             markdown: 'OK',
             exactnessScore: 1,
         });
-        expect(result.answerArtifact.responseStableMs).toBeGreaterThanOrEqual(1500);
+        expect(result.answerArtifact.responseStableMs).toBeGreaterThanOrEqual(1000);
         expect(result.baseline.assistantCount).toBe(1);
         expect(result.usedFallbacks).toContain('copy-markdown');
         expect(result.baseline.promptHash).toMatch(/^[a-f0-9]{64}$/);
@@ -91,6 +91,10 @@ function createFakeChatGptPage() {
             }
         },
         evaluate: async (_fn, arg, legacySendSelectors) => {
+            if (typeof arg === 'string' && arg.includes('copy-turn-action-button')) {
+                const lastAnswer = page.assistantTexts.at(-1) || '';
+                return lastAnswer && lastAnswer !== 'Pro thinking...';
+            }
             if (arg?.selectorSet?.copyButtonSelectors) {
                 page.copyMarkdownSelectors = arg.selectorSet.copyButtonSelectors;
                 return { ok: true, text: 'OK' };
