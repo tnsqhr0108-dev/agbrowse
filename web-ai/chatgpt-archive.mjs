@@ -8,10 +8,10 @@
 
 /**
  * Resolve archive policy based on flag and session state.
- * @param {{ archiveFlag?: string, session: any }} opts
+ * @param {{ archiveFlag?: string, session: any, artifactStatus?: { required?: boolean, ok?: boolean, stage?: string, error?: string } }} opts
  * @returns {ArchivePolicyResult}
  */
-export function resolveArchivePolicy({ archiveFlag = 'auto', session }) {
+export function resolveArchivePolicy({ archiveFlag = 'auto', session, artifactStatus = null }) {
     if (archiveFlag === 'never') {
         return { shouldArchive: false, reason: 'archive-disabled' };
     }
@@ -23,6 +23,10 @@ export function resolveArchivePolicy({ archiveFlag = 'auto', session }) {
 
     if (isTemporaryChatgptUrl(session?.originalUrl) || isTemporaryChatgptUrl(conversationUrl)) {
         return { shouldArchive: false, reason: 'temporary-chat' };
+    }
+
+    if (artifactStatus?.required === true && artifactStatus.ok === false) {
+        return { shouldArchive: false, reason: 'artifact-save-failed' };
     }
 
     if (archiveFlag === 'always') {

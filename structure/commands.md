@@ -39,6 +39,7 @@ aliases: [agbrowse commands, agbrowse CLI 표면, web-ai commands]
 | `stop` | Yes | active provider tab에 Escape 전송 |
 | `watch` | Yes | persisted session을 terminal 상태까지 감시 |
 | `snapshot` | Yes | active provider tab의 compact accessibility snapshot 출력 |
+| `project-sources list/add` | list/add Yes, add `--dry-run` No | ChatGPT Project Sources append-only 관리. 명시적 `--chatgpt-url` 필요 |
 | `observe-bundle` | Yes | URL/title/viewport/DPR/refs/boxes/screenshot/text를 묶은 ObservationBundleV1 출력 (G06) |
 | `observe-actions` | Yes | snapshot을 캡처해 instruction-aware ActionCandidate 랭킹 반환 (G02) |
 | `upload <ref> <file...>` | Yes | file input ref에 file을 set (Playwright `setInputFiles`, G03) |
@@ -111,6 +112,10 @@ JSON 모드에서는 실패가 parseable envelope로 나온다. 이 shape는 MCP
 `web_ai_*` 입력은 strict schema로 검증한다. Runtime에서 쓰는 호환 alias
 (`vendor`, `policy`, submit의 `filePath`/`reasoningEffort` 등)만 명시적으로
 허용하고, 오탈자/미등록 top-level field는 command 실행 전에 fail-fast한다.
+Submit MCP는 `maxUploadFileSize`만 live upload cap으로 허용한다. Generated
+image output, Deep Research, batch follow-ups, archive mutation, Project
+Sources, context package fields는 이 release에서 CLI-only/deferred이며 MCP
+tool description에도 그 제한을 명시한다.
 
 ## MCP-ready vs CLI-ready Matrix (G04)
 
@@ -185,5 +190,6 @@ JSON 모드에서는 실패가 parseable envelope로 나온다. 이 shape는 MCP
 - 2026-05-06: G02 — `agbrowse observe-actions <instruction>` CLI 추가. Pure `buildObserveActions(snapshot, instruction, opts)` API가 ranked `ActionCandidate[]`를 반환한다 (`gate:observe-actions-fixtures`).
 - 2026-05-06: G04 — MCP-ready vs CLI-ready matrix와 deferred-tool envelope 동작을 commands.md에 명시했다 (`structure/mcp_scope.md` 결정 기록과 `gate:mcp-deferred-metadata` 게이트 동기).
 - 2026-05-13: Oracle follow-up guardrail — `web_ai_*` MCP 입력을 strict schema로 고정하고 documented compatibility alias만 허용하도록 명시했다.
+- 2026-05-13: Oracle parity closeout — `project-sources`, generated images, batch follow-ups, Deep Research, live upload cap, and MCP deferred advanced fields를 CLI/help/docs 계약에 맞췄다.
 - 2026-05-06: Phase 9.1 multi-tab의 `new-tab`, `tab-close` 명령을 root command 표에 추가해 README와 일치시켰다.
 - 2026-05-05: root CLI, web-ai, MCP tool, provider alias, failure envelope, drift 검사 기준을 source-of-truth 문서로 추가했다.

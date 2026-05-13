@@ -199,7 +199,9 @@ export async function geminiSendWebAi(deps, input = {}) {
     }, { selector: inputSel, text: rendered.composerText });
     const uploadPath = input.filePath || contextPack?.attachments?.[0]?.path;
     if (uploadPath) {
-        const uploaded = await attachGeminiLocalFileLive(page, fileInfoFromPath(uploadPath));
+        const uploaded = await attachGeminiLocalFileLive(page, fileInfoFromPath(uploadPath), {
+            maxUploadBytes: input.maxUploadFileSize,
+        });
         if (!uploaded.ok) throw new WebAiError({
             errorCode: 'provider.attachment-evidence-missing',
             stage: 'attachment-verify',
@@ -289,11 +291,13 @@ function fileInfoFromPath(filePath) {
  * @param {any} page
  * @param {any} file
  */
-async function attachGeminiLocalFileLive(page, file) {
+async function attachGeminiLocalFileLive(page, file, options = {}) {
     /** @type {any[]} */
     const usedFallbacks = [];
     const warnings = [];
-    const preflight = preflightAttachment(file);
+    const preflight = preflightAttachment(file, {
+        maxUploadBytes: options.maxUploadBytes,
+    });
     if (!preflight.ok) {
         return { ok: false, error: preflight.rejectedReason || 'preflight rejected', usedFallbacks };
     }

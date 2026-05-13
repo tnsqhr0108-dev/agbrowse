@@ -35,8 +35,19 @@ describe('web-ai tool input validation', () => {
             prompt: 'hello',
             filePath: '/tmp/context.txt',
             reasoningEffort: 'high',
+            maxUploadFileSize: 1024,
             policy: { version: 1 },
         })).toBe(true);
+    });
+
+    it('intentionally rejects deferred advanced MCP fields', () => {
+        for (const field of ['outputImage', 'research', 'browserResearchMode', 'followUps', 'archive', 'project_sources']) {
+            expect(() => validateWebAiToolInput('web_ai_submit_prompt', {
+                provider: 'chatgpt',
+                prompt: 'hello',
+                [field]: field === 'followUps' ? ['next'] : 'value',
+            })).toThrow(new RegExp(`unknown property ${field}`));
+        }
     });
 
     it('rejects unknown web_ai input fields', () => {

@@ -339,6 +339,7 @@ agbrowse web-ai send              # submit and return a sessionId
 agbrowse web-ai poll              # wait for completion
 agbrowse web-ai query             # send + poll
 agbrowse web-ai stop              # press Escape on the active tab
+agbrowse web-ai project-sources   # list/add ChatGPT Project Sources
 agbrowse web-ai context-dry-run   # preview a context package
 agbrowse web-ai context-render    # render full prompt + context text
 ```
@@ -390,6 +391,9 @@ agbrowse web-ai poll --vendor chatgpt --session "$SID" --timeout 1800
 `poll` resolves the session in priority order: `--session <id>` > active
 target id > vendor latest > legacy baseline. Each completion / timeout
 updates the session record with `status`, `conversationUrl`, and `answer`.
+Completed sessions also expose local artifact descriptors in
+`agbrowse web-ai sessions show <id>` when transcript, report, or image
+artifacts were saved.
 
 **Session-to-tab binding** (Phase 9.1): every session owns its own tab.
 The record stores `targetId`, `tabId`, and `tabState` (`createdAt`,
@@ -556,6 +560,103 @@ agbrowse web-ai query \
 Upload success is not input-only. The runtime verifies visible attachment
 evidence before send and sent-turn evidence after send where the provider DOM
 exposes it.
+
+`--max-upload-file-size <bytes>` sets the per-file cap for live provider
+uploads through `--file`. This is intentionally separate from context package
+selection: `--max-context-file-size <bytes>` is the preferred context budget
+flag, while `--max-file-size <bytes>` remains a legacy alias for that context
+budget.
+
+## Generated Images
+
+ChatGPT generated-image output is beta and opt-in:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --url https://chatgpt.com/ \
+  --inline-only \
+  --output-image ./out.png \
+  --prompt "Create an image of a small robot holding a banana."
+```
+
+When ChatGPT returns multiple images for one `--output-image ./out.png`
+request, agbrowse writes sibling files as `out.png`, `out-2.png`,
+`out-3.png`. Explicit image output is fail-closed: if no generated image can be
+detected or saved, the command returns `provider.image-output` instead of
+silently succeeding.
+
+Image input remains regular upload:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --file ./input.png \
+  --prompt "Describe this image."
+```
+
+## Batch Follow-Ups
+
+ChatGPT batch follow-ups are explicit and sequential in the same command:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --inline-only \
+  --prompt "Analyze this design." \
+  --follow-up "Summarize the risks." \
+  --follow-up "List the next three actions."
+```
+
+This is an in-command batch mode. For a later follow-up in the same saved
+conversation window, use `query --session <id> --prompt <text>`:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --session "$SID" \
+  --inline-only \
+  --output-image ./next.png \
+  --prompt "Create another image in this same conversation."
+```
+
+`--follow-up` is ChatGPT-only and cannot be combined with `--research deep`.
+
+## Deep Research
+
+`--research deep` activates ChatGPT Deep Research mode as an experimental beta:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --inline-only \
+  --research deep \
+  --timeout 1800 \
+  --prompt "Research the current official status and cite sources."
+```
+
+Deep Research saves a report artifact when available, records
+`researchMode: "deep"` in the session, and skips auto archive. Account blocks
+or missing provider UI surfaces are reported explicitly; do not treat this as a
+ready cross-provider capability.
+
+## ChatGPT Project Sources
+
+Project Sources are append-only and require an explicit ChatGPT project URL:
+
+```bash
+agbrowse web-ai project-sources list \
+  --chatgpt-url https://chatgpt.com/g/project_123 --json
+
+agbrowse web-ai project-sources add \
+  --chatgpt-url https://chatgpt.com/g/project_123 \
+  --file ./docs/context.md \
+  --dry-run summary
+```
+
+`--dry-run` validates the project URL and local files without browser mutation.
+Live `add` waits for upload evidence before reporting `uploaded: true`. Delete,
+replace, and clear operations are intentionally unsupported.
 
 ## Context Packages
 

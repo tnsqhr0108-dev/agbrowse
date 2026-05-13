@@ -1,6 +1,6 @@
 // @ts-check
 import { updateSession } from './session.mjs';
-import { saveReport, appendArtifactRecord } from './session-artifacts.mjs';
+import { trySaveReport, appendArtifactRecord } from './session-artifacts.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 
 /**
@@ -279,10 +279,9 @@ export async function sendDeepResearch(page, deps, { prompt, session, timeoutMs 
                             conversationUrl: page.url(),
                         });
 
-                        try {
-                            const desc = saveReport(session.sessionId, report);
-                            appendArtifactRecord(session.sessionId, desc);
-                        } catch { /* best-effort */ }
+                        const saved = trySaveReport(session.sessionId, report);
+                        if (saved.ok) appendArtifactRecord(session.sessionId, saved.descriptor);
+                        else warnings.push(`artifact-save-failed:${saved.stage}:${saved.error}`);
 
                         return {
                             ok: true,
@@ -312,10 +311,9 @@ export async function sendDeepResearch(page, deps, { prompt, session, timeoutMs 
     });
 
     if (finalReport.text) {
-        try {
-            const desc = saveReport(session.sessionId, finalReport);
-            appendArtifactRecord(session.sessionId, desc);
-        } catch { /* best-effort */ }
+        const saved = trySaveReport(session.sessionId, finalReport);
+        if (saved.ok) appendArtifactRecord(session.sessionId, saved.descriptor);
+        else warnings.push(`artifact-save-failed:${saved.stage}:${saved.error}`);
     }
 
     return {

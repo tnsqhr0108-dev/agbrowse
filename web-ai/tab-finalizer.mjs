@@ -1,7 +1,7 @@
 // @ts-check
 import { updateSession } from './session.mjs';
 import { poolTab } from './tab-pool.mjs';
-import { saveTranscript, appendArtifactRecord } from './session-artifacts.mjs';
+import { trySaveTranscript, appendArtifactRecord } from './session-artifacts.mjs';
 import { resolveArchivePolicy, archiveConversation } from './chatgpt-archive.mjs';
 
 const FINALIZABLE_STATUSES = new Set(['complete', 'completed']);
@@ -31,13 +31,15 @@ const FINALIZABLE_STATUSES = new Set(['complete', 'completed']);
  * @property {FinalizeSession} [session]
  * @property {FinalizePage} [page]
  * @property {string} [answerText]
+ * @property {string} [artifactText]
  * @property {string} [status]
  * @property {unknown[]} [warnings]
  * @property {string} [archiveFlag]
+ * @property {string} [sessionType]
  */
 
 /**
- * @typedef {{ finalized: false, reason: string } | { finalized: true, pool: unknown, archived?: boolean }} FinalizeResult
+ * @typedef {{ finalized: false, reason: string } | { finalized: true, pool: unknown, archived?: boolean, archiveSkippedReason?: string, artifactStatus?: unknown }} FinalizeResult
  */
 
 /**
@@ -50,31 +52,44 @@ export async function finalizeProviderTab(deps, {
     session,
     page,
     answerText,
+    artifactText,
     status = 'complete',
     warnings = [],
     archiveFlag,
+    sessionType = 'send-poll',
 } = {}) {
     if (!session?.sessionId || !session.targetId || !FINALIZABLE_STATUSES.has(status)) {
         return { finalized: false, reason: 'not-finalizable' };
     }
     const conversationUrl = page?.url?.() || session.conversationUrl || session.originalUrl || undefined;
+    const baseWarnings = Array.isArray(warnings) ? warnings : [];
     updateSession(session.sessionId, {
         status: 'complete',
         conversationUrl,
         answer: answerText,
-        warnings,
+        warnings: baseWarnings,
         completedAt: new Date().toISOString(),
     });
+    /** @type {{ required: boolean, ok: boolean, descriptor?: unknown, stage?: string, error?: string }} */
+    let artifactStatus = { required: false, ok: true };
     if (answerText) {
-        try {
-            const desc = saveTranscript(session.sessionId, answerText);
-            appendArtifactRecord(session.sessionId, desc);
-        } catch (_) { /* artifact save is best-effort */ }
+        const saved = trySaveTranscript(session.sessionId, artifactText || answerText);
+        artifactStatus = saved.ok
+            ? { required: true, ok: true, descriptor: saved.descriptor }
+            : { required: true, ok: false, stage: saved.stage, error: saved.error };
+        if (saved.ok) {
+            appendArtifactRecord(session.sessionId, saved.descriptor);
+        } else {
+            updateSession(session.sessionId, {
+                warnings: [...baseWarnings, `artifact-save-failed:${saved.stage}:${saved.error}`],
+            });
+        }
     }
 
     const { shouldArchive } = resolveArchivePolicy({
         archiveFlag: archiveFlag || 'auto',
         session: { ...session, conversationUrl, status: 'complete' },
+        artifactStatus,
     });
 
     if (shouldArchive && page && conversationUrl) {
@@ -91,8 +106,14 @@ export async function finalizeProviderTab(deps, {
     const result = await poolTab(vendor || session.vendor || 'chatgpt', session.targetId, conversationUrl, {
         port,
         owner: 'web-ai',
-        sessionType: 'send-poll',
+        sessionType,
         sessionId: session.sessionId,
     });
-    return { finalized: true, pool: result, archived: false };
+    return {
+        finalized: true,
+        pool: result,
+        archived: false,
+        archiveSkippedReason: artifactStatus.required && artifactStatus.ok === false ? 'artifact-save-failed' : undefined,
+        artifactStatus,
+    };
 }

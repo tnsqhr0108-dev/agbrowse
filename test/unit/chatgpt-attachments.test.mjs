@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { attachLocalFileLive } from '../../web-ai/chatgpt-attachments.mjs';
+import {
+    attachLocalFileLive,
+    buildAttachmentReadyExpression,
+    isImageAttachmentPath,
+    preflightAttachment,
+    scoreFileInputCandidate,
+    sendButtonTimeoutMs,
+} from '../../web-ai/chatgpt-attachments.mjs';
 
 describe('ChatGPT attachment upload surface', () => {
     it('prefers a resolver-selected upload target before scanning legacy selectors', async () => {
@@ -30,6 +37,39 @@ describe('ChatGPT attachment upload surface', () => {
         expect(chatgptSrc).toContain('sent-attachment-evidence-unavailable');
         expect(chatgptSrc).toContain('sent attachment evidence unavailable after submit');
         expect(chatgptSrc).not.toMatch(/if \\(!sentAttachment\\.ok\\) throw/);
+    });
+
+    it('applies explicit live upload caps during preflight', () => {
+        const result = preflightAttachment({
+            path: '/tmp/large.txt',
+            basename: 'large.txt',
+            sizeBytes: 101,
+        }, {
+            maxUploadBytes: 100,
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.rejectedReason).toContain('cap 100');
+    });
+
+    it('scores image-only file inputs only for image attachments', () => {
+        expect(isImageAttachmentPath('/tmp/photo.png')).toBe(true);
+        expect(isImageAttachmentPath('/tmp/archive.zip')).toBe(false);
+        expect(scoreFileInputCandidate({ accept: 'image/png,image/jpeg' }, { isImageAttachment: false })).toBe(Number.NEGATIVE_INFINITY);
+        expect(scoreFileInputCandidate({ accept: 'image/png,image/jpeg' }, { isImageAttachment: true })).toBeGreaterThan(0);
+    });
+
+    it('uses longer send readiness timeout when attachments are present', () => {
+        expect(sendButtonTimeoutMs([])).toBe(5_000);
+        expect(sendButtonTimeoutMs(['context.pdf'])).toBe(15_000);
+    });
+
+    it('builds scoped attachment readiness expression with nested label and count fallback terms', () => {
+        const expression = buildAttachmentReadyExpression(['context.pdf']);
+        expect(expression).toContain('Remove attachment');
+        expect(expression).toContain('removeCount');
+        expect(expression).toContain('contenteditable');
+        expect(expression).toContain('context.pdf');
     });
 });
 

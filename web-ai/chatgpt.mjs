@@ -27,6 +27,7 @@ import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
     attachLocalFileLive,
     fileInfoFromPath,
+    sendButtonTimeoutMs,
     verifySentTurnAttachmentLive,
 } from './chatgpt-attachments.mjs';
 import { selectChatGptModel, chatGptModelCapabilityProbe } from './chatgpt-model.mjs';
@@ -38,7 +39,7 @@ import { createTraceContext, getSessionTrace, recordTraceStep, summarizeTraceSte
 import { appendTraceToSession } from './trace-persistence.mjs';
 import { isPageDeathError } from './tab-recovery.mjs';
 import { waitForConversationReady, isProviderUrl } from './navigation-ready.mjs';
-import { collectImages } from './chatgpt-images.mjs';
+import { collectImages, isImageOnlyGeneratedImageChromeText } from './chatgpt-images.mjs';
 import { resolveArtifactsDir } from './session-artifacts.mjs';
 import { sendDeepResearch } from './chatgpt-deep-research.mjs';
 
@@ -242,6 +243,7 @@ export async function sendWebAi(deps, input = {}) {
             const uploadResolution = await resolveOptionalChatGptUploadTarget(page, traceCtx);
             const upload = await attachLocalFileLive(page, fileInfoFromPath(uploadPath), {
                 uploadTarget: /** @type {any} */ (uploadResolution?.target || null),
+                maxUploadBytes: input.maxUploadFileSize,
             });
             if (!upload.ok) throw new WebAiError({
                 errorCode: 'provider.attachment-evidence-missing',
@@ -258,7 +260,9 @@ export async function sendWebAi(deps, input = {}) {
         await adapter.submitPrompt({
             sendTarget: /** @type {any} */ (sendResolution?.target || null),
         });
-        await adapter.verifyPromptCommitted(rendered.composerText, commitBaseline);
+        await adapter.verifyPromptCommitted(rendered.composerText, commitBaseline, {
+            timeoutMs: sendButtonTimeoutMs(uploadPath ? [uploadPath] : []),
+        });
         if (uploadPath) {
             const sentAttachment = await verifySentTurnAttachmentLive(page, fileInfoFromPath(uploadPath));
             if (!sentAttachment.ok) {
@@ -391,24 +395,45 @@ export async function pollWebAi(deps, input = {}) {
                         }
                     }
                     if (session && input.outputImage !== undefined) {
+                        const cdp = await deps.getCdpSession?.();
+                        if (!cdp) {
+                            throw new WebAiError({
+                                errorCode: 'provider.image-output',
+                                stage: 'image-output',
+                                vendor: 'chatgpt',
+                                retryHint: 'start-headed',
+                                message: 'CDP session unavailable for explicit generated-image output',
+                            });
+                        }
                         try {
-                            const cdp = await deps.getCdpSession?.();
-                            if (cdp) {
-                                try {
-                                    const imgResult = await collectImages(cdp, {
-                                        baselineAssistantCount: baseline?.assistantCount || 0,
-                                        outputPath: input.outputImage || null,
-                                        sessionId: input.outputImage ? null : session.sessionId,
-                                        waitTimeoutMs: 60_000,
-                                    });
-                                    if (imgResult.savedPaths.length) {
-                                        answerText += imgResult.markdownSuffix;
-                                    }
-                                } finally {
-                                    await cdp.detach?.().catch(() => undefined);
-                                }
+                            const imgResult = await collectImages(cdp, {
+                                baselineAssistantCount: baseline?.assistantCount || 0,
+                                outputPath: input.outputImage || null,
+                                sessionId: input.outputImage ? null : session.sessionId,
+                                waitTimeoutMs: 60_000,
+                            });
+                            warnings.push(...(imgResult.warnings || []));
+                            if (imgResult.errors?.length) {
+                                throw new WebAiError({
+                                    errorCode: 'provider.image-output',
+                                    stage: 'image-output',
+                                    vendor: 'chatgpt',
+                                    retryHint: 'check-generated-image-or-disable-output-image',
+                                    message: imgResult.errors.join('; '),
+                                    mutationAllowed: true,
+                                });
                             }
-                        } catch { /* image collection is best-effort */ }
+                            if (imgResult.savedPaths.length) {
+                                if (isImageOnlyGeneratedImageChromeText(answerText)) {
+                                    answerText = imgResult.images.length === 1
+                                        ? 'Generated image.'
+                                        : `Generated ${imgResult.images.length} images.`;
+                                }
+                                answerText += imgResult.markdownSuffix;
+                            }
+                        } finally {
+                            await cdp.detach?.().catch(() => undefined);
+                        }
                     }
                     if (session && !input.skipFinalize) {
                         await finalizeProviderTab(deps, { vendor, session: /** @type {any} */ (session), page, answerText, warnings, archiveFlag: input.archiveFlag });
@@ -589,6 +614,19 @@ export async function deepResearchWebAi(deps, input = {}) {
         session,
         timeoutMs,
     });
+    if (result.ok) {
+        const refreshed = getSession(session.sessionId) || session;
+        await finalizeProviderTab(deps, {
+            vendor: 'chatgpt',
+            session: /** @type {any} */ (refreshed),
+            page,
+            answerText: result.reportText || '',
+            artifactText: result.reportText || '',
+            warnings: result.warnings || [],
+            archiveFlag: input.archiveFlag,
+            sessionType: 'deep-research',
+        });
+    }
     return {
         ...result,
         vendor: envelope.vendor,

@@ -179,7 +179,21 @@ export function printSessionsHuman(result) {
         return;
     }
     if (result.status === 'show') {
-        console.log(JSON.stringify(result.session, null, 2));
+        const session = result.session;
+        console.log(`${session.sessionId}  ${session.vendor || 'unknown'}  ${session.status || 'unknown'}`);
+        if (session.conversationUrl || session.originalUrl) console.log(`URL: ${session.conversationUrl || session.originalUrl}`);
+        if (session.artifacts?.length) {
+            console.log('Artifacts:');
+            for (const artifact of session.artifacts) {
+                const details = [
+                    artifact.mimeType,
+                    Number.isFinite(artifact.sizeBytes) ? `${artifact.sizeBytes} bytes` : null,
+                ].filter(Boolean).join(', ');
+                console.log(`- ${artifact.kind}: ${artifact.path}${details ? ` (${details})` : ''}`);
+            }
+        } else {
+            console.log('Artifacts: none');
+        }
         return;
     }
     if (result.status === 'pruned') {

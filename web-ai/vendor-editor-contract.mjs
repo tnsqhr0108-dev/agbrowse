@@ -27,7 +27,7 @@ import { UPLOAD_BUTTON_SELECTORS as CHATGPT_UPLOAD_BUTTON_SELECTORS } from './ch
  * @property {() => Promise<EditorAdapterBaseline>} getCommitBaseline
  * @property {(text: string) => Promise<void>} insertPrompt
  * @property {(submitOptions?: ComposerOptions) => Promise<SubmitResult>} submitPrompt
- * @property {(prompt: string, baseline?: Partial<EditorAdapterBaseline>) => Promise<{ turnsCount: number }>} verifyPromptCommitted
+ * @property {(prompt: string, baseline?: Partial<EditorAdapterBaseline>, verifyOptions?: ComposerOptions) => Promise<{ turnsCount: number }>} verifyPromptCommitted
  */
 
 /**
@@ -70,8 +70,8 @@ export function createChatGptEditorAdapter(page, options = {}) {
         async submitPrompt(submitOptions = {}) {
             return submitPromptFromComposer(page, { ...options, ...submitOptions });
         },
-        async verifyPromptCommitted(prompt, baseline = {}) {
-            return verifyPromptCommitted(page, prompt, { baselineTurns: baseline.turnsCount });
+        async verifyPromptCommitted(prompt, baseline = {}, verifyOptions = {}) {
+            return verifyPromptCommitted(page, prompt, { ...verifyOptions, baselineTurns: baseline.turnsCount });
         },
     };
 }

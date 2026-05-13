@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { execBrowser } from '../helpers/exec-browser.mjs';
 
 describe('web-ai CLI contract', () => {
@@ -15,6 +18,15 @@ describe('web-ai CLI contract', () => {
         expect(result.stdout).toContain('mcp-server');
         expect(result.stdout).toContain('auto-start headed Chrome');
         expect(result.stdout).toContain('AGBROWSE_WEB_AI_AUTO_START=0');
+        expect(result.stdout).toContain('project-sources');
+        expect(result.stdout).toContain('--output-image <path>');
+        expect(result.stdout).toContain('--follow-up <text>');
+        expect(result.stdout).toContain('--research deep');
+        expect(result.stdout).toContain('--max-upload-file-size <bytes>');
+        expect(result.stdout).toContain('--max-context-file-size <bytes>');
+        expect(result.stdout).toContain('out.png, out-2.png, out-3.png');
+        expect(result.stdout).toContain('query --session <id> sends a new prompt');
+        expect(result.stdout).toContain('--session "$SID"');
         expect(result.stdout).toMatch(/agbrowse web-ai query\s+--vendor grok/);
     });
 
@@ -200,5 +212,48 @@ describe('web-ai CLI contract', () => {
         expect(result.stdout).toContain('[CONTEXT PACKAGE]');
         expect(result.stdout).toContain('### File: web-ai/question.mjs');
         expect(result.stdout).not.toContain('[USER REQUEST]');
+    });
+
+    it('rejects Deep Research combined with batch follow-ups before browser mutation', async () => {
+        const result = await execBrowser([
+            'web-ai',
+            'render',
+            '--vendor',
+            'chatgpt',
+            '--prompt',
+            'hello',
+            '--research',
+            'deep',
+            '--follow-up',
+            'next',
+        ]);
+        expect(result.code).not.toBe(0);
+        expect(result.stderr).toContain('cannot be combined with --follow-up');
+    });
+
+    it('supports project-sources dry-run without CDP', async () => {
+        const tmpDir = mkdtempSync(join(tmpdir(), 'agbrowse-project-sources-cli-'));
+        try {
+            const file = join(tmpDir, 'source.txt');
+            writeFileSync(file, 'source');
+            const result = await execBrowser([
+                'web-ai',
+                'project-sources',
+                'add',
+                '--chatgpt-url',
+                'https://chatgpt.com/g/project_123',
+                '--file',
+                file,
+                '--dry-run',
+                'summary',
+                '--json',
+            ]);
+            expect(result.code).toBe(0);
+            const parsed = JSON.parse(result.stdout);
+            expect(parsed.ok).toBe(true);
+            expect(parsed.uploads[0]).toMatchObject({ name: 'source.txt', uploaded: false });
+        } finally {
+            rmSync(tmpDir, { recursive: true, force: true });
+        }
     });
 });

@@ -1,6 +1,6 @@
 // @ts-check
 import { updateSession } from './session.mjs';
-import { saveTranscript, appendArtifactRecord } from './session-artifacts.mjs';
+import { trySaveTranscript, appendArtifactRecord } from './session-artifacts.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 
 /**
@@ -22,6 +22,8 @@ import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
  * @property {TurnResult[]} turns
  * @property {string|null} finalAnswer
  * @property {string[]} warnings
+ * @property {'complete'|'partial'} finalStatus
+ * @property {string} transcriptMarkdown
  */
 
 /**
@@ -168,14 +170,6 @@ export async function sendMultiTurn(page, deps, { followUps, session, timeoutPer
                 followUpCount: allTurns.length,
             });
 
-            try {
-                const transcript = allTurns
-                    .map(t => `## Turn ${t.index}\n\n**User:** ${t.prompt}\n\n**Assistant:** ${t.answer || '(no response)'}`)
-                    .join('\n\n---\n\n');
-                const desc = saveTranscript(session.sessionId, transcript);
-                appendArtifactRecord(session.sessionId, desc);
-            } catch { /* best-effort */ }
-
             if (!result.ok) {
                 updateSession(session.sessionId, { status: 'partial' });
                 allWarnings.push(`turn-${turnIndex - 1}-failed`);
@@ -200,25 +194,45 @@ export async function sendMultiTurn(page, deps, { followUps, session, timeoutPer
                 followUpCount: allTurns.length,
             });
 
-            try {
-                const transcript = allTurns
-                    .map(t => `## Turn ${t.index}\n\n**User:** ${t.prompt}\n\n**Assistant:** ${t.answer || '(no response)'}`)
-                    .join('\n\n---\n\n');
-                const desc = saveTranscript(session.sessionId, transcript);
-                appendArtifactRecord(session.sessionId, desc);
-            } catch { /* best-effort */ }
-
             allWarnings.push(`turn-${turnIndex - 1}-error`);
             break;
         }
     }
+    const allTurns = [...existingTurns, ...turns];
+    const transcriptMarkdown = renderMultiTurnTranscript(allTurns);
+    const ok = turns.length === followUps.length && turns.every(t => t.status === 'complete');
+    if (!ok && transcriptMarkdown) {
+        const saved = trySaveTranscript(session.sessionId, transcriptMarkdown);
+        if (saved.ok) appendArtifactRecord(session.sessionId, saved.descriptor);
+        else allWarnings.push(`artifact-save-failed:${saved.stage}:${saved.error}`);
+    }
+    updateSession(session.sessionId, {
+        status: ok ? 'complete' : 'partial',
+        conversationUrl: page.url(),
+        answer: finalAnswer,
+        followUpCount: allTurns.length,
+        turns: allTurns,
+        ...(ok ? { completedAt: new Date().toISOString() } : {}),
+    });
 
     return {
-        ok: turns.every(t => t.status === 'complete'),
+        ok,
         sessionId: session.sessionId,
         conversationUrl: page.url(),
         turns,
         finalAnswer,
         warnings: allWarnings,
+        finalStatus: ok ? 'complete' : 'partial',
+        transcriptMarkdown,
     };
+}
+
+/**
+ * @param {TurnResult[]} turns
+ * @returns {string}
+ */
+export function renderMultiTurnTranscript(turns) {
+    return turns
+        .map(t => `## Turn ${t.index}\n\n**User:** ${t.prompt}\n\n**Assistant:** ${t.answer || '(no response)'}`)
+        .join('\n\n---\n\n');
 }

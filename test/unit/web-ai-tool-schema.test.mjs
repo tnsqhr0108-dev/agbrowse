@@ -29,6 +29,9 @@ describe('web-ai MCP tool schema', () => {
             expect(schema.inputSchema.type).toBe('object');
             expect(schema.inputSchema.additionalProperties).toBe(false);
         }
+        const submit = toolSchemaForMcp('web_ai_submit_prompt');
+        expect(submit.description).toContain('CLI-only/deferred');
+        expect(submit.inputSchema.properties.maxUploadFileSize).toMatchObject({ type: 'number', minimum: 1 });
     });
 
     it('exposes Phase 18 browser tools from the shared schema source', () => {

@@ -106,6 +106,34 @@ describe('web-ai sessions list / show / prune via runSessionsCommand', () => {
         expect(result.session.sessionId).toBe(s.sessionId);
     });
 
+    it('human show lists artifact descriptors without printing the full answer', async () => {
+        const logs = [];
+        const originalLog = console.log;
+        console.log = (line = '') => logs.push(String(line));
+        try {
+            const { runWebAiCli } = await import('../../web-ai/cli.mjs');
+            const { createSession } = await import('../../web-ai/session.mjs');
+            const { appendArtifactRecord } = await import('../../web-ai/session-artifacts.mjs');
+            const s = createSession({ vendor: 'chatgpt', prompt: 'x', attachmentPolicy: 'inline-only' });
+            appendArtifactRecord(s.sessionId, {
+                kind: 'transcript',
+                label: 'Conversation transcript',
+                path: 'transcript.md',
+                mimeType: 'text/markdown',
+                sizeBytes: 12,
+                savedAt: new Date().toISOString(),
+            });
+
+            await runWebAiCli(['sessions', 'show', s.sessionId]);
+
+            expect(logs.join('\n')).toContain('Artifacts:');
+            expect(logs.join('\n')).toContain('transcript.md');
+            expect(logs.join('\n')).not.toContain('"answer"');
+        } finally {
+            console.log = originalLog;
+        }
+    });
+
     it('prune --older-than 7d removes old sessions only', async () => {
         const { runWebAiCli } = await import('../../web-ai/cli.mjs');
         const { createSession } = await import('../../web-ai/session.mjs');

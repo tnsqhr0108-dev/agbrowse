@@ -35,7 +35,7 @@ const ADD_SOURCE_SELECTORS = [
  * @param {string} url
  * @returns {{ ok: boolean, error?: string }}
  */
-function validateProjectUrl(url) {
+export function validateProjectSourcesUrl(url) {
     if (!url) return { ok: false, error: 'project URL is required' };
     if (!PROJECT_URL_PATTERN.test(url)) {
         return { ok: false, error: `not a valid ChatGPT project URL: ${url}` };
@@ -46,16 +46,18 @@ function validateProjectUrl(url) {
 /**
  * Validate local file paths for upload.
  * @param {string[]} filePaths
+ * @param {{ cwd?: string, maxFileSize?: number }} [options]
  * @returns {{ valid: Array<{ path: string, name: string, size: number }>, errors: string[] }}
  */
-function validateFiles(filePaths) {
+export function validateProjectSourceFiles(filePaths, options = {}) {
     /** @type {Array<{ path: string, name: string, size: number }>} */
     const valid = [];
     const errors = [];
-    const MAX_SIZE = 512 * 1024 * 1024;
+    const maxSize = Number.isFinite(options.maxFileSize) ? Number(options.maxFileSize) : 512 * 1024 * 1024;
+    const cwd = options.cwd || process.cwd();
 
     for (const fp of filePaths) {
-        const abs = resolve(fp);
+        const abs = resolve(cwd, fp);
         if (!existsSync(abs)) {
             errors.push(`file not found: ${fp}`);
             continue;
@@ -72,13 +74,66 @@ function validateFiles(filePaths) {
             errors.push(`not a regular file: ${fp}`);
             continue;
         }
-        if (stat.size > MAX_SIZE) {
-            errors.push(`file too large (${stat.size} bytes, max ${MAX_SIZE}): ${fp}`);
+        if (stat.size > maxSize) {
+            errors.push(`file too large (${stat.size} bytes, max ${maxSize}): ${fp}`);
             continue;
         }
         valid.push({ path: real, name: basename(real), size: stat.size });
     }
     return { valid, errors };
+}
+
+/**
+ * @returns {string}
+ */
+export function buildProjectSourcesListExpression() {
+    return `(() => {
+        const selectors = ${JSON.stringify(SOURCE_ENTRY_SELECTORS)};
+        for (const sel of selectors) {
+            const els = document.querySelectorAll(sel);
+            if (els.length) {
+                return JSON.stringify(Array.from(els).map(el => ({
+                    name: el.textContent?.trim() || '',
+                    type: el.getAttribute('data-type') || 'file',
+                })).filter(row => row.name));
+            }
+        }
+        return '[]';
+    })()`;
+}
+
+/**
+ * @param {string[]} fileNames
+ * @returns {string}
+ */
+export function buildProjectSourcesUploadEvidenceExpression(fileNames) {
+    return `(() => {
+        const expected = ${JSON.stringify(fileNames)};
+        const text = document.body?.innerText || '';
+        const present = expected.filter(name => text.includes(name));
+        const fileInputs = Array.from(document.querySelectorAll('input[type="file"]'));
+        const inputFileCount = fileInputs.reduce((sum, input) => sum + (input.files?.length || 0), 0);
+        return JSON.stringify({
+            expected,
+            present,
+            inputFileCount,
+            ok: present.length === expected.length || inputFileCount >= expected.length,
+        });
+    })()`;
+}
+
+/**
+ * @param {any} cdpSession
+ * @param {string} expression
+ * @returns {Promise<any>}
+ */
+async function evaluateJsonExpression(cdpSession, expression) {
+    const { result } = await cdpSession.send('Runtime.evaluate', {
+        expression,
+        returnByValue: true,
+    });
+    if (!result?.value) return null;
+    return JSON.parse(result.value);
 }
 
 /**
@@ -88,7 +143,7 @@ function validateFiles(filePaths) {
  * @returns {Promise<{ ok: boolean, sources: ProjectSource[], warnings: string[] }>}
  */
 export async function listProjectSources(cdpSession, { projectUrl }) {
-    const urlCheck = validateProjectUrl(projectUrl);
+    const urlCheck = validateProjectSourcesUrl(projectUrl);
     if (!urlCheck.ok) {
         return { ok: false, sources: [], warnings: [urlCheck.error || 'invalid-url'] };
     }
@@ -98,25 +153,9 @@ export async function listProjectSources(cdpSession, { projectUrl }) {
         await cdpSession.send('Page.navigate', { url: projectUrl });
         await new Promise(r => setTimeout(r, 3000));
 
-        const { result } = await cdpSession.send('Runtime.evaluate', {
-            expression: `(() => {
-                const selectors = ${JSON.stringify(SOURCE_ENTRY_SELECTORS)};
-                for (const sel of selectors) {
-                    const els = document.querySelectorAll(sel);
-                    if (els.length) {
-                        return JSON.stringify(Array.from(els).map(el => ({
-                            name: el.textContent?.trim() || '',
-                            type: el.getAttribute('data-type') || 'file',
-                        })));
-                    }
-                }
-                return '[]';
-            })()`,
-            returnByValue: true,
-        });
-
-        const sources = result?.value ? JSON.parse(result.value) : [];
-        return { ok: true, sources, warnings: [] };
+        const sources = await evaluateJsonExpression(cdpSession, buildProjectSourcesListExpression()) || [];
+        const warnings = sources.length ? [] : ['project-sources-empty-or-unrecognized-dom'];
+        return { ok: true, sources, warnings };
     } catch (err) {
         return { ok: false, sources: [], warnings: [err?.message || 'list-failed'] };
     }
@@ -129,12 +168,12 @@ export async function listProjectSources(cdpSession, { projectUrl }) {
  * @returns {Promise<{ ok: boolean, uploads: UploadResult[], warnings: string[], errors: string[] }>}
  */
 export async function addProjectSource(cdpSession, { projectUrl, filePaths, dryRun = false }) {
-    const urlCheck = validateProjectUrl(projectUrl);
+    const urlCheck = validateProjectSourcesUrl(projectUrl);
     if (!urlCheck.ok) {
         return { ok: false, uploads: [], warnings: [], errors: [urlCheck.error || 'invalid-url'] };
     }
 
-    const { valid, errors } = validateFiles(filePaths);
+    const { valid, errors } = validateProjectSourceFiles(filePaths);
     if (!valid.length) {
         return { ok: false, uploads: [], warnings: [], errors: errors.length ? errors : ['no valid files'] };
     }
@@ -146,6 +185,9 @@ export async function addProjectSource(cdpSession, { projectUrl, filePaths, dryR
             warnings: ['dry-run-no-upload'],
             errors,
         };
+    }
+    if (!cdpSession) {
+        return { ok: false, uploads: [], warnings: [], errors: ['CDP session required for project-sources add'] };
     }
 
     try {
@@ -196,11 +238,16 @@ export async function addProjectSource(cdpSession, { projectUrl, filePaths, dryR
         });
 
         await new Promise(r => setTimeout(r, 3000));
+        const evidence = await evaluateJsonExpression(
+            cdpSession,
+            buildProjectSourcesUploadEvidenceExpression(valid.map(f => f.name)),
+        ).catch((err) => ({ ok: false, error: err?.message || String(err) }));
+        const uploaded = evidence?.ok === true;
 
         return {
-            ok: true,
-            uploads: valid.map(f => ({ name: f.name, type: 'file', uploaded: true })),
-            warnings: [],
+            ok: uploaded,
+            uploads: valid.map(f => ({ name: f.name, type: 'file', uploaded })),
+            warnings: uploaded ? [] : ['upload-evidence-missing'],
             errors,
         };
     } catch (err) {

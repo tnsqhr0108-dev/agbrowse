@@ -22,6 +22,7 @@ import { withSessionCommandLock } from './session-store.mjs';
 import { listSessions, getSession } from './session.mjs';
 import { listLeases } from './tab-lease-store.mjs';
 import { cleanupPoolTabs, getPooledTab } from './tab-pool.mjs';
+import { finalizeProviderTab } from './tab-finalizer.mjs';
 import { runMcpServer } from './mcp-server.mjs';
 import { runWebAiEval } from './eval-runner.mjs';
 import { createTraceId } from './trace/types.mjs';
@@ -48,7 +49,7 @@ const COMMANDS = new Set([
     'project-sources',
 ]);
 
-const BROWSER_REQUIRED_COMMANDS = new Set(['status', 'send', 'poll', 'query', 'stop', 'watch', 'snapshot', 'doctor']);
+const BROWSER_REQUIRED_COMMANDS = new Set(['status', 'send', 'poll', 'query', 'stop', 'watch', 'snapshot', 'doctor', 'project-sources']);
 const BROWSER_REQUIRED_SESSION_COMMANDS = new Set(['resume', 'reattach', 'doctor']);
 export const WEB_AI_USAGE = `
 Usage:
@@ -66,6 +67,7 @@ Commands:
   sessions <sub>      Manage persisted sessions: list | show | resume | reattach | doctor | prune
   context-dry-run     Build a context package without sending
   context-render      Render full prompt/context package text
+  project-sources     ChatGPT Project Sources list/add; append-only, explicit project URL required
   mcp-server          Run stdio MCP bridge exposing web-ai tools
   eval                Run offline provider DOM fixture evals; never opens Chrome
   claim-audit         Scan repo docs for forbidden hosted/cloud/stealth claims (G10).
@@ -103,12 +105,24 @@ model to use web search and cite sources inline):
 Attachments and context:
   --inline-only                     Required for send/query without files
   --file <path>                     Upload a single file
+  --output-image <path>             Save generated ChatGPT images. If several
+                                    images are returned, siblings are written
+                                    as out.png, out-2.png, out-3.png.
+  --follow-up <text>                Repeatable ChatGPT batch follow-up prompt
+                                    in the same command. For a later follow-up
+                                    in an existing conversation, use query
+                                    --session <id> --prompt <text>. Not
+                                    compatible with --research deep.
+  --research deep                   Experimental ChatGPT Deep Research mode.
+                                    ChatGPT only; not compatible with follow-ups.
+  --max-upload-file-size <bytes>    Per-file live upload cap for --file.
+  --max-context-file-size <bytes>   Preferred name for per-file context budget.
   --context-from-files <glob|path>  Add files to a context package; repeatable
   --context-exclude <glob>          Exclude from the package; repeatable
   --context-file <path>             Use a prebuilt context package file
   --context-transport <upload|inline>
   --max-input <chars>               Inline prompt budget
-  --max-file-size <bytes>           Per-file context budget
+  --max-file-size <bytes>           Legacy alias for --max-context-file-size
   --files-report                    Include file report metadata
   --allow-copy-markdown-fallback    Capture provider Copy button output after DOM response
   --allow-grok-context-pack         Override Grok hard-gate (Grok prefers inline + single --file)
@@ -124,6 +138,9 @@ Sessions (durable across shells, stored at $BROWSER_AGENT_HOME/web-ai-sessions.j
   --session <id>      Resume a session by id on poll / query / stop.
                       Resolution priority: --session > active target id >
                       vendor latest > legacy baseline.
+                      query --session <id> sends a new prompt in the same
+                      saved conversation tab; poll/sessions resume only wait
+                      for an already-sent response.
   --deadline <iso>    Override the session deadline (default now + --timeout
                       or the vendor polling default).
   --navigate          When sessions reattach finds a tab mismatch, allow
@@ -166,6 +183,14 @@ Watcher:
 Snapshot:
   agbrowse web-ai snapshot --vendor <v> [--interactive] [--compact] [--json]
                       Compact Playwright-MCP-style accessibility snapshot.
+
+Project Sources:
+  agbrowse web-ai project-sources list --chatgpt-url <project-url> [--json]
+  agbrowse web-ai project-sources add  --chatgpt-url <project-url> --file <path>... [--dry-run summary] [--json]
+                      ChatGPT Project Sources are append-only in agbrowse.
+                      --dry-run validates URL and files without browser mutation.
+                      Always pass the explicit ChatGPT project URL; active tab
+                      inference is intentionally unsupported.
 
 MCP:
   agbrowse web-ai mcp-server
@@ -217,6 +242,13 @@ Examples:
   agbrowse web-ai query   --vendor gemini  --model deepthink --inline-only --prompt "Reply OK"
   agbrowse web-ai query   --vendor chatgpt --context-from-files "src/**/*.ts" \\
                                           --context-transport upload --prompt "Review this"
+  agbrowse web-ai query   --vendor chatgpt --inline-only --output-image ./out.png \\
+                                          --prompt "Create a diagram image"
+  agbrowse web-ai query   --vendor chatgpt --inline-only --follow-up "Summarize risks" \\
+                                          --prompt "Analyze this design"
+  agbrowse web-ai query   --vendor chatgpt --session "$SID" --inline-only \\
+                                          --output-image ./next.png \\
+                                          --prompt "Create another image in this same conversation"
 
   # Long-running Pro: send returns sessionId; resume from any shell later.
   SID=$(agbrowse web-ai send --vendor chatgpt --inline-only \\
@@ -356,6 +388,8 @@ async function runWebAiCliInner(argv = [], deps) {
             'context-file': { type: 'string' },
             'max-input': { type: 'string' },
             'max-file-size': { type: 'string' },
+            'max-context-file-size': { type: 'string' },
+            'max-upload-file-size': { type: 'string' },
             'files-report': { type: 'boolean', default: false },
             'context-transport': { type: 'string' },
             'trace-dir': { type: 'string' },
@@ -433,7 +467,8 @@ async function runWebAiCliInner(argv = [], deps) {
         contextExclude: values['context-exclude'] || [],
         contextFile: values['context-file'],
         maxInput: values['max-input'],
-        maxFileSize: values['max-file-size'],
+        maxFileSize: values['max-context-file-size'] || values['max-file-size'],
+        maxUploadFileSize: values['max-upload-file-size'],
         filesReport: values['files-report'],
         contextTransport: values['context-transport'],
         inlineOnly: values['inline-only'],
@@ -966,11 +1001,25 @@ async function runCommand(command, deps, input) {
                         session,
                         timeoutPerTurn: (input.timeout || 120) * 1000,
                     });
+                    if (multiResult.ok) {
+                        const refreshed = getSession(session.sessionId) || session;
+                        await finalizeProviderTab(deps, {
+                            vendor: 'chatgpt',
+                            session: /** @type {any} */ (refreshed),
+                            page,
+                            answerText: multiResult.finalAnswer || result.answerText,
+                            artifactText: multiResult.transcriptMarkdown,
+                            warnings: [...(result.warnings || []), ...multiResult.warnings],
+                            archiveFlag: input.archiveFlag,
+                            sessionType: 'multi-turn',
+                        });
+                    }
                     return {
                         ...result,
                         answerText: multiResult.finalAnswer || result.answerText,
                         turns: multiResult.turns,
                         followUpCount: multiResult.turns.length,
+                        finalStatus: multiResult.finalStatus,
                         warnings: [...(result.warnings || []), ...multiResult.warnings],
                     };
                 }
@@ -1101,6 +1150,38 @@ function rejectFutureScope(values) {
             retryHint: 'model-fallback',
             message: `unsupported ${webAiVendorLabel(values.vendor || 'chatgpt')} reasoning effort: ${effort}`,
             evidence: { effort },
+        });
+    }
+    const vendor = values.vendor || 'chatgpt';
+    const followUps = Array.isArray(values['follow-up']) ? values['follow-up'] : [];
+    if (followUps.length > 0 && vendor !== 'chatgpt') {
+        throw new WebAiError({
+            errorCode: 'capability.unsupported',
+            stage: 'multi-turn',
+            vendor,
+            retryHint: 'use-chatgpt-or-inline-prompt',
+            message: '--follow-up is currently supported only for ChatGPT batch follow-ups',
+            mutationAllowed: false,
+        });
+    }
+    if (values.research === 'deep' && vendor !== 'chatgpt') {
+        throw new WebAiError({
+            errorCode: 'capability.unsupported',
+            stage: 'deep-research',
+            vendor,
+            retryHint: 'use-chatgpt-or-disable-research',
+            message: '--research deep is currently supported only for ChatGPT',
+            mutationAllowed: false,
+        });
+    }
+    if (values.research === 'deep' && followUps.length > 0) {
+        throw new WebAiError({
+            errorCode: 'capability.unsupported',
+            stage: 'deep-research',
+            vendor,
+            retryHint: 'choose-research-or-follow-ups',
+            message: '--research deep cannot be combined with --follow-up batch prompts',
+            mutationAllowed: false,
         });
     }
 }
@@ -1299,6 +1380,30 @@ async function runProjectSourcesCommand(args, deps) {
         });
     }
     const { listProjectSources, addProjectSource } = await import('./chatgpt-project-sources.mjs');
+    const filePaths = values.file || [];
+    const dryRun = values['dry-run'] !== undefined;
+    if (sub === 'add' && !filePaths.length) {
+        throw new WebAiError({
+            errorCode: 'internal.unhandled',
+            stage: 'project-sources',
+            message: '--file is required for project-sources add',
+        });
+    }
+    if (sub === 'add' && dryRun) {
+        const result = await addProjectSource(null, {
+            projectUrl,
+            filePaths,
+            dryRun: true,
+        });
+        if (values.json) console.log(JSON.stringify(result, null, 2));
+        else {
+            for (const u of result.uploads) console.log(`○ ${u.name}`);
+            for (const e of result.errors || []) console.error(`[error] ${e}`);
+            for (const w of result.warnings || []) console.error(`[warning] ${w}`);
+        }
+        return result;
+    }
+    await ensureHeadedBrowserForWebAi(deps, 'project-sources', ['project-sources', ...args]);
     const cdpSession = await deps.getCdpSession?.();
     if (!cdpSession) {
         throw new WebAiError({
@@ -1318,18 +1423,10 @@ async function runProjectSourcesCommand(args, deps) {
             }
             return result;
         }
-        const filePaths = values.file || [];
-        if (!filePaths.length) {
-            throw new WebAiError({
-                errorCode: 'internal.unhandled',
-                stage: 'project-sources',
-                message: '--file is required for project-sources add',
-            });
-        }
         const result = await addProjectSource(cdpSession, {
             projectUrl,
             filePaths,
-            dryRun: values['dry-run'] !== undefined,
+            dryRun,
         });
         if (values.json) console.log(JSON.stringify(result, null, 2));
         else {

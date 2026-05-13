@@ -1,6 +1,6 @@
 // @ts-check
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, join } from 'node:path';
 import { homedir } from 'node:os';
 import { updateSession, getSession } from './session.mjs';
 
@@ -15,6 +15,10 @@ const BROWSER_AGENT_HOME = process.env.BROWSER_AGENT_HOME || join(homedir(), '.b
  * @property {number} [sizeBytes]
  * @property {string} [sourceUrl]
  * @property {string} savedAt
+ */
+
+/**
+ * @typedef {{ ok: true, descriptor: ArtifactDescriptor } | { ok: false, stage: string, error: string }} ArtifactSaveResult
  */
 
 /**
@@ -70,6 +74,24 @@ export function saveTranscript(sessionId, markdown) {
 }
 
 /**
+ * Save a transcript artifact and convert filesystem failures into a result.
+ * @param {string} sessionId
+ * @param {string} markdown
+ * @returns {ArtifactSaveResult}
+ */
+export function trySaveTranscript(sessionId, markdown) {
+    try {
+        return { ok: true, descriptor: saveTranscript(sessionId, markdown) };
+    } catch (err) {
+        return {
+            ok: false,
+            stage: 'artifact-transcript',
+            error: /** @type {Error} */ (err)?.message || String(err),
+        };
+    }
+}
+
+/**
  * Save a Deep Research report artifact.
  * @param {string} sessionId
  * @param {{ text: string, sources?: string[] }} report
@@ -93,6 +115,24 @@ export function saveReport(sessionId, { text, sources }) {
         sizeBytes: Buffer.byteLength(content, 'utf8'),
         savedAt: new Date().toISOString(),
     };
+}
+
+/**
+ * Save a Deep Research report artifact and convert failures into a result.
+ * @param {string} sessionId
+ * @param {{ text: string, sources?: string[] }} report
+ * @returns {ArtifactSaveResult}
+ */
+export function trySaveReport(sessionId, report) {
+    try {
+        return { ok: true, descriptor: saveReport(sessionId, report) };
+    } catch (err) {
+        return {
+            ok: false,
+            stage: 'artifact-report',
+            error: /** @type {Error} */ (err)?.message || String(err),
+        };
+    }
 }
 
 /**
@@ -120,6 +160,24 @@ export function saveImageArtifact(sessionId, { filename, buffer, mimeType, sourc
 }
 
 /**
+ * Save an image artifact and convert failures into a result.
+ * @param {string} sessionId
+ * @param {{ filename: string, buffer: Buffer, mimeType: string, sourceUrl?: string }} image
+ * @returns {ArtifactSaveResult}
+ */
+export function trySaveImageArtifact(sessionId, image) {
+    try {
+        return { ok: true, descriptor: saveImageArtifact(sessionId, image) };
+    } catch (err) {
+        return {
+            ok: false,
+            stage: 'artifact-image',
+            error: /** @type {Error} */ (err)?.message || String(err),
+        };
+    }
+}
+
+/**
  * Append an artifact descriptor to a session's artifacts array.
  * @param {string} sessionId
  * @param {ArtifactDescriptor} descriptor
@@ -129,6 +187,6 @@ export function appendArtifactRecord(sessionId, descriptor) {
     const session = getSession(sessionId);
     if (!session) return null;
     const artifacts = /** @type {ArtifactDescriptor[]} */ (session.artifacts || []);
-    artifacts.push(descriptor);
-    return updateSession(sessionId, { artifacts });
+    const withoutDuplicate = artifacts.filter((artifact) => !(artifact.kind === descriptor.kind && artifact.path === descriptor.path));
+    return updateSession(sessionId, { artifacts: [...withoutDuplicate, descriptor] });
 }

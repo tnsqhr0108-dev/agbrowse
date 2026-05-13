@@ -28,6 +28,7 @@ agbrowse web-ai send
 agbrowse web-ai poll
 agbrowse web-ai query
 agbrowse web-ai stop
+agbrowse web-ai project-sources
 agbrowse web-ai context-dry-run
 agbrowse web-ai context-render
 ```
@@ -234,6 +235,98 @@ agbrowse web-ai query \
 
 Upload must verify visible attachment evidence and sent-turn evidence where the
 provider exposes it. Input-only success is not enough.
+
+Use `--max-upload-file-size <bytes>` for live `--file` uploads. Use
+`--max-context-file-size <bytes>` for context package selection; legacy
+`--max-file-size <bytes>` is the context-budget alias, not the live upload cap.
+
+## Generated Images
+
+Use ChatGPT only:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --inline-only \
+  --output-image ./out.png \
+  --prompt "Create an image of a small robot holding a banana."
+```
+
+If multiple images are generated, `./out.png` becomes the first file and
+siblings are written as `out-2.png`, `out-3.png`. Treat explicit
+`--output-image` as fail-closed: if the provider does not produce or expose an
+image, the command should fail with `provider.image-output`.
+
+Image input is normal upload:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --file ./input.png \
+  --prompt "Describe this image."
+```
+
+## Batch Follow-Ups
+
+`--follow-up <text>` is repeatable and sends explicit caller-provided prompts
+sequentially in the same ChatGPT command run:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --inline-only \
+  --prompt "Analyze this design." \
+  --follow-up "Summarize risks."
+```
+
+Never invent follow-ups. For a later follow-up in the same saved conversation
+window, use `query --session <id> --prompt <text>`:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --session "$SID" \
+  --inline-only \
+  --output-image ./next.png \
+  --prompt "Create another image in this same conversation."
+```
+
+Do not combine `--follow-up` with `--research deep`.
+
+## Deep Research
+
+`--research deep` is ChatGPT-only experimental beta. Use longer timeouts and
+expect account/security blocks to fail explicitly:
+
+```bash
+agbrowse web-ai query \
+  --vendor chatgpt \
+  --inline-only \
+  --research deep \
+  --timeout 1800 \
+  --prompt "Research the current official status and cite sources."
+```
+
+Deep Research saves a report artifact when available and skips auto archive.
+Do not claim cross-provider Deep Research support.
+
+## ChatGPT Project Sources
+
+Project Sources are append-only and always require an explicit project URL:
+
+```bash
+agbrowse web-ai project-sources list \
+  --chatgpt-url https://chatgpt.com/g/project_123 --json
+
+agbrowse web-ai project-sources add \
+  --chatgpt-url https://chatgpt.com/g/project_123 \
+  --file ./docs/context.md \
+  --dry-run summary
+```
+
+Use `--dry-run` before mutation. It validates URL and files without opening or
+mutating Chrome. Do not infer the project from the active tab. Delete, replace,
+and clear are intentionally unsupported.
 
 ## Context Package Upload
 

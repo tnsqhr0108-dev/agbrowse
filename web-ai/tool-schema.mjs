@@ -9,6 +9,7 @@ import { BROWSER_TOOLS, isKnownBrowserTool, policySchema, validateSchema } from 
 const providerEnum = ['chatgpt', 'gemini', 'grok'];
 const providerSchema = { type: 'string', enum: providerEnum };
 const optionalUrlSchema = { type: 'string' };
+const MCP_WEB_AI_DEFERRED_NOTE = ' Note: generated image output, Deep Research, multi-turn follow-ups, archive mutation, Project Sources, and context package fields are CLI-only/deferred in MCP for this release.';
 
 /**
  * @param {Record<string, unknown>} properties
@@ -46,7 +47,7 @@ export const WEB_AI_TOOLS = {
         }, ['snapshotId', 'ref']),
     },
     web_ai_submit_prompt: {
-        description: 'Submit prompt to ChatGPT/Gemini/Grok web UI.',
+        description: `Submit prompt to ChatGPT/Gemini/Grok web UI.${MCP_WEB_AI_DEFERRED_NOTE}`,
         inputSchema: objectSchema({
             provider: { ...providerSchema, default: 'chatgpt' },
             vendor: providerSchema,
@@ -60,6 +61,7 @@ export const WEB_AI_TOOLS = {
             url: optionalUrlSchema,
             inlineOnly: { type: 'boolean', default: true },
             timeout: { type: 'number' },
+            maxUploadFileSize: { type: 'number', minimum: 1 },
             policy: policySchema,
         }, ['prompt']),
     },

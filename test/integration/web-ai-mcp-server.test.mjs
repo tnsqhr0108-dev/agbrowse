@@ -44,6 +44,9 @@ describe('web-ai MCP server', () => {
         expect(submitPrompt.inputSchema.properties.policy.additionalProperties).toBe(false);
         expect(submitPrompt.inputSchema.properties.filePath.type).toBe('string');
         expect(submitPrompt.inputSchema.properties.reasoningEffort.type).toBe('string');
+        expect(submitPrompt.inputSchema.properties.maxUploadFileSize.type).toBe('number');
+        expect(submitPrompt.description).toContain('generated image output');
+        expect(submitPrompt.description).toContain('CLI-only/deferred');
     });
 
     it('rejects unknown web_ai input fields before command execution', async () => {
