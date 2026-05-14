@@ -20,6 +20,9 @@ export function resolvePublicEndpointCandidates(rawUrl) {
         ...openLibraryCandidates(url),
         ...waybackCandidates(url),
         ...youtubeCandidates(url),
+        ...xTwitterCandidates(url),
+        ...v2exCandidates(url),
+        ...lobstersCandidates(url),
     ];
 }
 
@@ -65,11 +68,18 @@ function hackerNewsCandidates(url) {
     if (url.hostname !== 'news.ycombinator.com') return [];
     const id = url.searchParams.get('id');
     if (!id || !/^\d+$/.test(id)) return [];
-    return [{
-        label: 'hacker-news-item-api',
-        url: `https://hacker-news.firebaseio.com/v0/item/${id}.json`,
-        source: 'public_endpoint',
-    }];
+    return [
+        {
+            label: 'hacker-news-item-api',
+            url: `https://hacker-news.firebaseio.com/v0/item/${id}.json`,
+            source: 'public_endpoint',
+        },
+        {
+            label: 'hacker-news-algolia-item-api',
+            url: `https://hn.algolia.com/api/v1/items/${id}`,
+            source: 'public_endpoint',
+        },
+    ];
 }
 
 /**
@@ -247,7 +257,7 @@ function waybackCandidates(url) {
     if (!/^https?:\/\//i.test(archivedUrl)) return [];
     return [{
         label: 'wayback-cdx-api',
-        url: `https://web.archive.org/cdx?url=${encodeURIComponent(archivedUrl)}&output=json&fl=timestamp,original,statuscode,mimetype,digest&filter=statuscode:200&limit=5`,
+        url: `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(archivedUrl)}&output=json&fl=timestamp,original,statuscode,mimetype,digest&filter=statuscode:200&limit=5`,
         source: 'public_endpoint',
     }];
 }
@@ -276,4 +286,52 @@ function youtubeVideoUrl(url) {
     if (!['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) return '';
     const id = url.searchParams.get('v');
     return id ? `https://www.youtube.com/watch?v=${encodeURIComponent(id)}` : '';
+}
+
+/**
+ * @param {URL} url
+ */
+function xTwitterCandidates(url) {
+    const hostname = url.hostname.replace(/^www\./, '');
+    if (!['x.com', 'twitter.com'].includes(hostname)) return [];
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length < 3 || parts[1] !== 'status' || !/^\d+$/.test(parts[2])) return [];
+    return [{
+        label: 'x-twitter-oembed',
+        url: `https://publish.twitter.com/oembed?url=${encodeURIComponent(url.href)}`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {URL} url
+ */
+function v2exCandidates(url) {
+    if (!['v2ex.com', 'www.v2ex.com'].includes(url.hostname)) return [];
+    const match = url.pathname.match(/^\/t\/(\d+)/);
+    if (!match) return [];
+    return [{
+        label: 'v2ex-topic-api',
+        url: `https://www.v2ex.com/api/topics/show.json?id=${match[1]}`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {URL} url
+ */
+function lobstersCandidates(url) {
+    if (!['lobste.rs', 'www.lobste.rs'].includes(url.hostname)) return [];
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts[0] !== 's' || !parts[1]) return [];
+    const clone = new URL(url.href);
+    clone.hostname = 'lobste.rs';
+    clone.pathname = `/${parts.join('/')}.json`;
+    clone.search = '';
+    clone.hash = '';
+    return [{
+        label: 'lobsters-story-json',
+        url: clone.href,
+        source: 'public_endpoint',
+    }];
 }

@@ -24,7 +24,8 @@ It covers:
 - public endpoint candidates;
 - expanded public endpoint resolvers for GitHub, Reddit, Hacker News,
   Wikipedia, npm, PyPI, arXiv, Bluesky, Mastodon-compatible statuses, Stack
-  Exchange, dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, and YouTube oEmbed;
+  Exchange, dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed,
+  X/Twitter oEmbed, HN Algolia, V2EX, Lobsters, and generic oEmbed discovery;
 - discovered RSS/Atom feed candidates;
 - neutral fetch and metadata extraction;
 - reader adapter normalization;

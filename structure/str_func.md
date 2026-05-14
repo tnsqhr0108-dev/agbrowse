@@ -21,7 +21,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | 경로 | 파일 수 | 라인 수 | 역할 |
 | --- | ---: | ---: | --- |
 | `bin/` | 2 | 6 | published bin wrapper |
-| `skills/browser/` | 23 | 7067 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics |
+| `skills/browser/` | 23 | 7158 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics |
 | `skills/vision-click/` | 3 | 831 | screenshot to coordinate click helper |
 | `skills/web-ai/` | 1 | 468 | bundled agent workflow skill |
 | `web-ai/` | 89 | 19633 | provider automation, sessions, MCP, eval, policy, trace |
@@ -30,12 +30,12 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | `web-ai/policy/` | 4 | 228 | mutation and content-boundary guardrails |
 | `web-ai/trace/` | 5 | 444 | trace ID, redaction, report, writer helpers |
 | `scripts/` | 9 | 1385 | eval runner, release scripts, named release gates, strict-baseline / module-graph / bin smoke checks |
-| `test/unit/` | 84 | 8038 | deterministic module tests |
+| `test/unit/` | 84 | 8090 | deterministic module tests |
 | `test/integration/` | 16 | 1979 | CLI, MCP, policy, provider fixture tests |
 | `test/e2e/` | 1 | 50 | browser smoke coverage |
 | `test/spec/` | 2 | 35 | high-level contract specs |
 | `docs/` | 8 | 1597 | adoption, trace, production-readiness, comparison, benchmark, EXTERNAL_CDP, migration docs |
-| `devlog/` | 241 | 27613 | phased plan, research, implementation notes (incl. strict-migration phases) |
+| `devlog/` | 241 | 27620 | phased plan, research, implementation notes (incl. strict-migration phases) |
 
 `structure/` 자체는 이 문서가 검증 대상으로 삼는 source tree 밖의 문서 허브라서 위 집계에서 제외한다. `verify-counts.sh`는 이 표의 경로별 파일 수와 라인 수를 live source 기준으로 비교한다.
 

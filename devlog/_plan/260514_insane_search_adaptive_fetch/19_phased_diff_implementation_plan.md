@@ -161,6 +161,11 @@ DOI/CrossRef works API
 OpenLibrary works/books JSON
 Wayback CDX
 YouTube oEmbed
+X/Twitter oEmbed
+HN Algolia item API
+V2EX topic API
+Lobsters story JSON
+generic oEmbed discovery
 RSS/Atom discovery candidates
 ```
 

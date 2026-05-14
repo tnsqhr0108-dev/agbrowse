@@ -169,8 +169,9 @@ Start with a safe v1 in agbrowse:
   `safetyFlags`.
 - Phase 0 public endpoint resolvers for GitHub, Reddit, Hacker News, arXiv,
   Wikipedia, npm/PyPI, Bluesky, Mastodon-compatible statuses, Stack Exchange,
-  dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed, RSS/Atom, and
-  media metadata when an installed tool exists.
+  dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed,
+  X/Twitter oEmbed, HN Algolia, V2EX, Lobsters, generic oEmbed discovery,
+  RSS/Atom, and media metadata when an installed tool exists.
 - Phase 1 neutral fetch, metadata extraction, and opt-in third-party public
   readers such as Jina Reader.
 - Phase 2 browser render and existing CDP network inspection.

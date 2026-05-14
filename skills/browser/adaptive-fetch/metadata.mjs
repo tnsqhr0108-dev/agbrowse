@@ -19,6 +19,7 @@ export function extractMetadataFromHtml(html = '', finalUrl = '') {
     );
     const canonicalUrl = resolveMaybeUrl(getLinkHref(html, 'canonical'), finalUrl);
     const feedUrls = extractFeedUrls(html, finalUrl);
+    const oEmbedUrls = extractOembedUrls(html, finalUrl);
     const jsonLd = extractJsonLdBlocks(html);
     const text = htmlToReadableText(html);
     return {
@@ -30,6 +31,7 @@ export function extractMetadataFromHtml(html = '', finalUrl = '') {
             canonicalUrl,
             description,
             feedUrls,
+            oEmbedUrls,
             openGraph: extractOpenGraph(html),
             jsonLd,
         },
@@ -38,6 +40,7 @@ export function extractMetadataFromHtml(html = '', finalUrl = '') {
             description ? 'description' : null,
             canonicalUrl ? 'canonical' : null,
             feedUrls.length > 0 ? 'feed-link' : null,
+            oEmbedUrls.length > 0 ? 'oembed-link' : null,
             jsonLd.length > 0 ? 'json-ld' : null,
         ].filter(Boolean),
         warnings: [],
@@ -90,6 +93,27 @@ export function extractFeedUrls(html = '', base = '') {
         const href = getTagAttr(tag, 'href');
         if (!href || !/\balternate\b/.test(rel)) continue;
         if (!/(application\/rss\+xml|application\/atom\+xml|application\/feed\+json|text\/xml|application\/xml)/i.test(type)) continue;
+        const resolved = resolveMaybeUrl(href, base);
+        if (resolved && !urls.includes(resolved)) urls.push(resolved);
+    }
+    return urls;
+}
+
+/**
+ * @param {string} html
+ * @param {string} base
+ */
+export function extractOembedUrls(html = '', base = '') {
+    const urls = [];
+    const re = /<link\b[^>]*>/gi;
+    let match;
+    while ((match = re.exec(html))) {
+        const tag = match[0];
+        const rel = getTagAttr(tag, 'rel').toLowerCase();
+        const type = getTagAttr(tag, 'type').toLowerCase();
+        const href = getTagAttr(tag, 'href');
+        if (!href || !/\balternate\b/.test(rel)) continue;
+        if (!/(application\/json\+oembed|text\/xml\+oembed|application\/xml\+oembed)/i.test(type)) continue;
         const resolved = resolveMaybeUrl(href, base);
         if (resolved && !urls.includes(resolved)) urls.push(resolved);
     }

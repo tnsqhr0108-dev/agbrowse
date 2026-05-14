@@ -124,7 +124,8 @@ requests that boundary.
 
 Public endpoint candidates cover GitHub, Reddit, Hacker News, Wikipedia, npm,
 PyPI, arXiv, Bluesky, Mastodon-compatible statuses, Stack Exchange, dev.to,
-DOI/CrossRef, OpenLibrary, Wayback CDX, and YouTube oEmbed before browser
+DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed, X/Twitter oEmbed,
+HN Algolia, V2EX, Lobsters, and generic oEmbed discovery before browser
 escalation.
 
 ### Snapshot Output Example

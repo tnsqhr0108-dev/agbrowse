@@ -80,6 +80,8 @@ export async function runAdaptiveFetch(input, deps = {}) {
     const fetchedUrls = new Set();
     /** @type {string[]} */
     const discoveredFeedUrls = [];
+    /** @type {string[]} */
+    const discoveredOembedUrls = [];
     for (const candidate of candidateUrls) {
         let fetched;
         try {
@@ -106,6 +108,9 @@ export async function runAdaptiveFetch(input, deps = {}) {
         for (const feedUrl of readerCandidate.metadata?.feedUrls || []) {
             if (!fetchedUrls.has(feedUrl) && !discoveredFeedUrls.includes(feedUrl)) discoveredFeedUrls.push(feedUrl);
         }
+        for (const oEmbedUrl of readerCandidate.metadata?.oEmbedUrls || []) {
+            if (!fetchedUrls.has(oEmbedUrl) && !discoveredOembedUrls.includes(oEmbedUrl)) discoveredOembedUrls.push(oEmbedUrl);
+        }
         const scored = scoreReaderCandidate(readerCandidate);
         appendAttempt(trace, {
             source: readerCandidate.source,
@@ -119,10 +124,13 @@ export async function runAdaptiveFetch(input, deps = {}) {
         if (readerCandidate.text || readerCandidate.title) readerCandidates.push(readerCandidate);
     }
     if (options.browserMode !== 'required' && options.publicEndpoints) {
-        for (const feedUrl of discoveredFeedUrls) {
+        for (const discovered of [
+            ...discoveredFeedUrls.map(url => ({ url, label: 'rss-atom-discovered' })),
+            ...discoveredOembedUrls.map(url => ({ url, label: 'oembed-discovered' })),
+        ]) {
             let fetched;
             try {
-                fetched = await fetchTextCandidate(feedUrl, {
+                fetched = await fetchTextCandidate(discovered.url, {
                     maxBytes: options.maxBytes,
                     timeoutMs: options.timeoutMs,
                     allowPrivateNetwork: options.allowPrivateNetwork,
@@ -132,15 +140,15 @@ export async function runAdaptiveFetch(input, deps = {}) {
                 appendAttempt(trace, {
                     source: 'public_endpoint',
                     verdict: 'error',
-                    url: feedUrl,
-                    reason: (/** @type {any} */ (error)).message || 'feed-candidate-error',
+                    url: discovered.url,
+                    reason: (/** @type {any} */ (error)).message || `${discovered.label}-error`,
                 });
                 continue;
             }
-            fetchedUrls.add(fetched.finalUrl || feedUrl);
+            fetchedUrls.add(fetched.finalUrl || discovered.url);
             const readerCandidate = fromFetchResult(fetched, {
                 source: 'public_endpoint',
-                label: 'rss-atom-discovered',
+                label: discovered.label,
             });
             const scored = scoreReaderCandidate(readerCandidate);
             appendAttempt(trace, {

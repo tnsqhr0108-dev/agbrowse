@@ -58,7 +58,7 @@ challenge solving, login/paywall crossing, stealth, private credential 사용은
 
 현재 known public endpoint resolver는 GitHub, Reddit, Hacker News, Wikipedia,
 npm, PyPI, arXiv, Bluesky, Mastodon-compatible statuses, Stack Exchange,
-dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed를 포함한다.
+dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed, X/Twitter oEmbed, HN Algolia, V2EX, Lobsters, generic oEmbed discovery를 포함한다.
 
 | 명령 | Browser 필요 | 역할 |
 | --- | ---: | --- |

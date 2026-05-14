@@ -20,8 +20,11 @@ describe('adaptive fetch endpoint resolvers', () => {
             ['https://dev.to/alice/my-post', 'devto-article-api', 'dev.to/api/articles/alice/my-post'],
             ['https://doi.org/10.1000/example.doi', 'crossref-work-api', 'api.crossref.org/works/10.1000%2Fexample.doi'],
             ['https://openlibrary.org/works/OL45883W/Foo', 'openlibrary-works-json', 'openlibrary.org/works/OL45883W.json'],
-            ['https://web.archive.org/web/20200101000000/https://example.com/a', 'wayback-cdx-api', 'web.archive.org/cdx?url=https%3A%2F%2Fexample.com%2Fa'],
+            ['https://web.archive.org/web/20200101000000/https://example.com/a', 'wayback-cdx-api', 'web.archive.org/cdx/search/cdx?url=https%3A%2F%2Fexample.com%2Fa'],
             ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'youtube-oembed', 'youtube.com/oembed'],
+            ['https://x.com/alice/status/123456789', 'x-twitter-oembed', 'publish.twitter.com/oembed'],
+            ['https://www.v2ex.com/t/12345', 'v2ex-topic-api', 'v2ex.com/api/topics/show.json?id=12345'],
+            ['https://lobste.rs/s/abc123/title', 'lobsters-story-json', 'lobste.rs/s/abc123/title.json'],
         ];
         for (const [input, label, urlPart] of cases) {
             const [candidate] = resolvePublicEndpointCandidates(input);
@@ -33,5 +36,12 @@ describe('adaptive fetch endpoint resolvers', () => {
     it('treats reddit json as a candidate without mutating already-json URLs', () => {
         expect(resolvePublicEndpointCandidates('https://www.reddit.com/r/test/comments/abc/title/')[0].url).toContain('.json');
         expect(resolvePublicEndpointCandidates('https://www.reddit.com/r/test/comments/abc/title/.json')).toEqual([]);
+    });
+
+    it('adds Hacker News Algolia item API alongside Firebase item API', () => {
+        expect(resolvePublicEndpointCandidates('https://news.ycombinator.com/item?id=123').map(c => c.label)).toEqual([
+            'hacker-news-item-api',
+            'hacker-news-algolia-item-api',
+        ]);
     });
 });
