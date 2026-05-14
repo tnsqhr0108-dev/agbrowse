@@ -153,6 +153,14 @@ Hacker News item/user APIs
 arXiv export/API pages
 Wikipedia REST/page summary
 npm/PyPI package metadata
+Bluesky public AT Protocol
+Mastodon-compatible public status/account APIs
+Stack Exchange question API
+dev.to article JSON
+DOI/CrossRef works API
+OpenLibrary works/books JSON
+Wayback CDX
+YouTube oEmbed
 RSS/Atom discovery candidates
 ```
 

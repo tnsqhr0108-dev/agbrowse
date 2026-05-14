@@ -11,14 +11,25 @@ const SENSITIVE_QUERY_KEYS = new Set([
     'api_key',
     'apikey',
     'auth',
+    'auth_token',
+    'authorization',
+    'awsaccesskeyid',
+    'client_secret',
     'code',
+    'credential',
+    'credentials',
     'key',
     'password',
+    'passwd',
     'secret',
     'session',
+    'session_id',
     'sig',
     'signature',
     'token',
+    'x_amz_security_token',
+    'x_amz_signature',
+    'jwt',
 ]);
 
 const SENSITIVE_HEADER_KEYS = new Set([
@@ -37,13 +48,16 @@ const SPECIAL_USE_IPV6_CIDRS = [
     ['64:ff9b::', 96],
     ['64:ff9b:1::', 48],
     ['100::', 64],
+    ['100:0:0:1::', 64],
     ['2001::', 23],
     ['2001:2::', 48],
     ['2001:10::', 28],
     ['2001:20::', 28],
     ['2001:db8::', 32],
     ['2002::', 16],
+    ['2620:4f:8000::', 48],
     ['3fff::', 20],
+    ['5f00::', 16],
     ['fc00::', 7],
     ['fe80::', 10],
     ['fec0::', 10],
@@ -200,7 +214,7 @@ function ipv6ToBigInt(ip) {
 export function hasSensitiveQueryParams(rawUrl) {
     const parsed = rawUrl instanceof URL ? rawUrl : new URL(String(rawUrl));
     for (const key of parsed.searchParams.keys()) {
-        if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) return true;
+        if (isSensitiveQueryKey(key)) return true;
     }
     return false;
 }
@@ -228,7 +242,7 @@ export function redactTraceValue(value) {
     try {
         const parsed = new URL(text);
         for (const key of [...parsed.searchParams.keys()]) {
-            if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) parsed.searchParams.set(key, '[redacted]');
+            if (isSensitiveQueryKey(key)) parsed.searchParams.set(key, '[redacted]');
         }
         parsed.username = parsed.username ? '[redacted]' : '';
         parsed.password = parsed.password ? '[redacted]' : '';
@@ -238,7 +252,7 @@ export function redactTraceValue(value) {
     }
     return text
         .replace(/(bearer\s+)[a-z0-9._~+/=-]+/ig, '$1[redacted]')
-        .replace(/\b(access_token|api_key|apikey|auth|password|secret|session|token)=([^&\s]+)/ig, '$1=[redacted]');
+        .replace(/\b(access_token|api_key|apikey|auth|auth_token|password|passwd|secret|session|session_id|sig|signature|token|jwt|x-amz-security-token|x-amz-signature|awsaccesskeyid|client_secret)=([^&\s]+)/ig, '$1=[redacted]');
 }
 
 /**
@@ -251,4 +265,21 @@ export function redactHeaders(headers = {}) {
         redacted[key] = SENSITIVE_HEADER_KEYS.has(key.toLowerCase()) ? '[redacted]' : redactTraceValue(value);
     }
     return redacted;
+}
+
+/**
+ * @param {string} key
+ */
+function isSensitiveQueryKey(key) {
+    const normalized = String(key)
+        .toLowerCase()
+        .replace(/\[\]$/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return SENSITIVE_QUERY_KEYS.has(normalized)
+        || /\b(token|secret|password|passwd|signature|credential|session|jwt|authorization)\b/.test(normalized)
+        || /(^|_)api_?key($|_)/.test(normalized)
+        || /(^|_)access_?key_?id($|_)/.test(normalized)
+        || /(^|_)auth(_|$)/.test(normalized)
+        || /(^|_)sig($|_)/.test(normalized);
 }

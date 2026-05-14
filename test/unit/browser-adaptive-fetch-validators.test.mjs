@@ -11,9 +11,12 @@ describe('adaptive fetch validators', () => {
         expect(() => validateFetchUrl('http://[::ffff:8.8.8.8]/')).toThrow(/private or local host/);
         expect(() => validateFetchUrl('http://[::ffff:192.168.1.1]/')).toThrow(/private or local host/);
         expect(() => validateFetchUrl('http://[64:ff9b:1::1]/')).toThrow(/private or local host/);
+        expect(() => validateFetchUrl('http://[100:0:0:1::1]/')).toThrow(/private or local host/);
         expect(() => validateFetchUrl('http://[2001:2::1]/')).toThrow(/private or local host/);
         expect(() => validateFetchUrl('http://[2001:db8::1]/')).toThrow(/private or local host/);
+        expect(() => validateFetchUrl('http://[2620:4f:8000::1]/')).toThrow(/private or local host/);
         expect(() => validateFetchUrl('http://[fec0::1]/')).toThrow(/private or local host/);
+        expect(() => validateFetchUrl('http://[5f00::1]/')).toThrow(/private or local host/);
         expect(() => validateFetchUrl('https://user:pass@example.com/')).toThrow(/credential-bearing/);
     });
 

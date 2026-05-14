@@ -4,21 +4,24 @@ import { appendAttempt, createAttemptTrace, summarizeAttempts } from '../../skil
 describe('adaptive fetch trace', () => {
     it('redacts sensitive URL and header material in attempts', () => {
         const trace = createAttemptTrace({
-            url: 'https://example.com/?token=secret',
+            url: 'https://example.com/?token=secret&client_secret=hidden',
             browserMode: 'auto',
             browserSession: 'none',
         });
         appendAttempt(trace, {
             source: 'fetch',
             verdict: 'blocked',
-            url: 'https://example.com/?api_key=abc',
+            url: 'https://example.com/?api_key=abc&X-Amz-Signature=sig&AWSAccessKeyId=key',
             requestHeaders: {
                 authorization: 'Bearer abc',
                 accept: 'text/html',
             },
         });
         expect(trace.url).toContain('token=[redacted]');
+        expect(trace.url).toContain('client_secret=[redacted]');
         expect(trace.attempts[0].url).toContain('api_key=[redacted]');
+        expect(trace.attempts[0].url).toContain('X-Amz-Signature=[redacted]');
+        expect(trace.attempts[0].url).toContain('AWSAccessKeyId=[redacted]');
         expect(trace.attempts[0].requestHeaders.authorization).toBe('[redacted]');
         expect(trace.attempts[0].requestHeaders.accept).toBe('text/html');
     });

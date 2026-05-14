@@ -122,6 +122,11 @@ user-authorized representations. It must not solve challenges, cross
 logins/paywalls, use stealth, or use existing cookies unless the user explicitly
 requests that boundary.
 
+Public endpoint candidates cover GitHub, Reddit, Hacker News, Wikipedia, npm,
+PyPI, arXiv, Bluesky, Mastodon-compatible statuses, Stack Exchange, dev.to,
+DOI/CrossRef, OpenLibrary, Wayback CDX, and YouTube oEmbed before browser
+escalation.
+
 ### Snapshot Output Example
 
 ```

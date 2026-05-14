@@ -154,6 +154,32 @@ describe('adaptive fetch browser escalation', () => {
         expect(result.verdict).toBe('blocked');
     });
 
+    it('does not treat browser-rendered 404 bodies as successful content', async () => {
+        const result = await runAdaptiveFetch({
+            url: 'https://example.com/missing',
+            browserMode: 'required',
+            browserSession: 'isolated',
+            trace: true,
+        }, {
+            createIsolatedPage: async () => ({
+                page: fakePage({
+                    url: 'https://example.com/missing',
+                    title: 'Missing',
+                    text: 'Not found '.repeat(1000),
+                    navResponse: {
+                        status: () => 404,
+                        ok: () => false,
+                        headers: () => ({ 'content-type': 'text/html' }),
+                    },
+                }),
+                cleanup: async () => undefined,
+            }),
+        });
+        expect(result.ok).toBe(false);
+        expect(result.verdict).toBe('blocked');
+        expect(result.attempts.some(a => a.source === 'browser' && a.status === 404)).toBe(true);
+    });
+
     it('continues to direct fetch when a public endpoint candidate throws', async () => {
         const result = await runAdaptiveFetch({
             url: 'https://github.com/org/repo',
@@ -199,9 +225,11 @@ describe('adaptive fetch browser escalation', () => {
     });
 });
 
-function fakePage({ text = '', title = '', url = 'https://example.com/rendered', networkCandidates = [] }) {
+function fakePage({ text = '', title = '', url = 'https://example.com/rendered', networkCandidates = [], navResponse = undefined }) {
     return {
-        async goto() {},
+        async goto() {
+            return navResponse;
+        },
         async waitForTimeout() {},
         url: () => url,
         title: async () => title,

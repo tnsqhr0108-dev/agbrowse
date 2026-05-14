@@ -3,6 +3,7 @@
 import { closeFetchBrowserPage, getFetchBrowserPage } from './browser-runtime.mjs';
 import { classifyAccessBoundary, detectChallengeMarkers } from './challenge-detector.mjs';
 import { validateFetchUrl } from './safety.mjs';
+import { classifyBoundarySignals } from './validators.mjs';
 
 /**
  * @param {string} url
@@ -42,8 +43,16 @@ export async function collectBrowserCandidate(url, options = {}) {
     };
     try {
         if (typeof page.on === 'function') page.on('response', onResponse);
+        let navStatus = 200;
+        let navOk = true;
+        let navContentType = 'text/plain';
         if (typeof page.goto === 'function') {
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs || 15000 });
+            const navResponse = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: options.timeoutMs || 15000 });
+            if (navResponse) {
+                navStatus = Number(navResponse.status?.() || 0) || 0;
+                navOk = navResponse.ok?.() !== false && navStatus > 0 && navStatus < 400;
+                navContentType = navResponse.headers?.()?.['content-type'] || 'text/plain';
+            }
         }
         if (typeof page.waitForTimeout === 'function') await page.waitForTimeout(300).catch(() => undefined);
         const finalUrl = typeof page.url === 'function' ? page.url() : url;
@@ -67,19 +76,25 @@ export async function collectBrowserCandidate(url, options = {}) {
         }
         const title = typeof page.title === 'function' ? await page.title() : '';
         const text = await readVisibleText(page, options.selector);
-        const markers = detectChallengeMarkers({ url: finalUrl, title, text, status: 200 });
+        const markers = detectChallengeMarkers({ url: finalUrl, title, text, status: navStatus });
         const boundary = classifyAccessBoundary(markers);
+        const statusBoundary = classifyBoundarySignals({ status: navStatus, text: `${title}\n${text}`, url: finalUrl }).verdict;
         return {
             source: 'browser',
             label: 'browser-render',
             finalUrl,
             title,
             text,
-            contentType: 'text/plain',
-            status: 200,
-            ok: boundary === null,
+            contentType: navContentType,
+            status: navStatus,
+            ok: navOk && boundary === null && statusBoundary === null,
             metadata: null,
-            evidence: ['browser-render', markers.length ? `boundary:${boundary}` : null].filter(Boolean),
+            evidence: [
+                'browser-render',
+                navStatus ? `http-${navStatus}` : null,
+                boundary ? `boundary:${boundary}` : null,
+                statusBoundary ? `status-boundary:${statusBoundary}` : null,
+            ].filter(Boolean),
             warnings: markers.map(marker => `marker:${marker.kind}`),
             networkCandidates,
         };

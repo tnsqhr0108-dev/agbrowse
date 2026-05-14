@@ -12,6 +12,14 @@ export function resolvePublicEndpointCandidates(rawUrl) {
         ...wikipediaCandidates(url),
         ...registryCandidates(url),
         ...arxivCandidates(url),
+        ...blueskyCandidates(url),
+        ...mastodonCandidates(url),
+        ...stackExchangeCandidates(url),
+        ...devToCandidates(url),
+        ...crossRefCandidates(url),
+        ...openLibraryCandidates(url),
+        ...waybackCandidates(url),
+        ...youtubeCandidates(url),
     ];
 }
 
@@ -103,3 +111,169 @@ function arxivCandidates(url) {
     return [{ label: 'arxiv-api', url: `https://export.arxiv.org/api/query?id_list=${encodeURIComponent(parts[1])}`, source: 'public_endpoint' }];
 }
 
+/**
+ * @param {URL} url
+ */
+function blueskyCandidates(url) {
+    if (url.hostname !== 'bsky.app') return [];
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts[0] !== 'profile' || !parts[1]) return [];
+    const actor = decodeURIComponent(parts[1]);
+    if (parts[2] === 'post' && parts[3]) {
+        const uri = `at://${actor}/app.bsky.feed.post/${decodeURIComponent(parts[3])}`;
+        return [{
+            label: 'bluesky-post-thread',
+            url: `https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=${encodeURIComponent(uri)}`,
+            source: 'public_endpoint',
+        }];
+    }
+    return [{
+        label: 'bluesky-profile',
+        url: `https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=${encodeURIComponent(actor)}`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {URL} url
+ */
+function mastodonCandidates(url) {
+    const parts = url.pathname.split('/').filter(Boolean);
+    const statusMatch = parts.length >= 2 && parts[0].startsWith('@') && /^\d+$/.test(parts[1]);
+    if (statusMatch) {
+        return [{
+            label: 'mastodon-status-api',
+            url: `https://${url.hostname}/api/v1/statuses/${parts[1]}`,
+            source: 'public_endpoint',
+        }];
+    }
+    if (parts.length === 1 && parts[0].startsWith('@') && parts[0].length > 1) {
+        return [{
+            label: 'mastodon-account-lookup',
+            url: `https://${url.hostname}/api/v1/accounts/lookup?acct=${encodeURIComponent(parts[0].slice(1))}`,
+            source: 'public_endpoint',
+        }];
+    }
+    return [];
+}
+
+/**
+ * @param {URL} url
+ */
+function stackExchangeCandidates(url) {
+    const site = stackExchangeSite(url.hostname);
+    if (!site) return [];
+    const match = url.pathname.match(/\/questions\/(\d+)(?:\/|$)/);
+    if (!match) return [];
+    return [{
+        label: 'stackexchange-question-api',
+        url: `https://api.stackexchange.com/2.3/questions/${match[1]}?site=${encodeURIComponent(site)}&filter=withbody`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {string} hostname
+ */
+function stackExchangeSite(hostname) {
+    if (hostname === 'stackoverflow.com' || hostname === 'www.stackoverflow.com') return 'stackoverflow';
+    if (hostname === 'superuser.com' || hostname === 'www.superuser.com') return 'superuser';
+    if (hostname === 'serverfault.com' || hostname === 'www.serverfault.com') return 'serverfault';
+    if (hostname === 'askubuntu.com' || hostname === 'www.askubuntu.com') return 'askubuntu';
+    const match = hostname.match(/^([a-z0-9-]+)\.stackexchange\.com$/i);
+    return match ? match[1] : '';
+}
+
+/**
+ * @param {URL} url
+ */
+function devToCandidates(url) {
+    if (!['dev.to', 'www.dev.to'].includes(url.hostname)) return [];
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length < 2 || parts[0] === 't') return [];
+    return [{
+        label: 'devto-article-api',
+        url: `https://dev.to/api/articles/${encodeURIComponent(parts[0])}/${encodeURIComponent(parts[1])}`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {URL} url
+ */
+function crossRefCandidates(url) {
+    const doi = doiFromUrl(url);
+    if (!doi) return [];
+    return [{
+        label: 'crossref-work-api',
+        url: `https://api.crossref.org/works/${encodeURIComponent(doi)}`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {URL} url
+ */
+function doiFromUrl(url) {
+    if (!['doi.org', 'www.doi.org', 'dx.doi.org'].includes(url.hostname)) return '';
+    const doi = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+    return /^10\.\d{4,9}\//i.test(doi) ? doi : '';
+}
+
+/**
+ * @param {URL} url
+ */
+function openLibraryCandidates(url) {
+    if (url.hostname !== 'openlibrary.org') return [];
+    const parts = url.pathname.split('/').filter(Boolean);
+    if ((parts[0] === 'works' || parts[0] === 'books') && parts[1]) {
+        return [{
+            label: `openlibrary-${parts[0]}-json`,
+            url: `https://openlibrary.org/${parts[0]}/${encodeURIComponent(parts[1])}.json`,
+            source: 'public_endpoint',
+        }];
+    }
+    return [];
+}
+
+/**
+ * @param {URL} url
+ */
+function waybackCandidates(url) {
+    if (url.hostname !== 'web.archive.org') return [];
+    const match = url.pathname.match(/^\/web\/[^/]+\/(.+)$/);
+    if (!match) return [];
+    const archivedUrl = decodeURIComponent(match[1]);
+    if (!/^https?:\/\//i.test(archivedUrl)) return [];
+    return [{
+        label: 'wayback-cdx-api',
+        url: `https://web.archive.org/cdx?url=${encodeURIComponent(archivedUrl)}&output=json&fl=timestamp,original,statuscode,mimetype,digest&filter=statuscode:200&limit=5`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {URL} url
+ */
+function youtubeCandidates(url) {
+    const videoUrl = youtubeVideoUrl(url);
+    if (!videoUrl) return [];
+    return [{
+        label: 'youtube-oembed',
+        url: `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`,
+        source: 'public_endpoint',
+    }];
+}
+
+/**
+ * @param {URL} url
+ */
+function youtubeVideoUrl(url) {
+    if (url.hostname === 'youtu.be') {
+        const id = url.pathname.split('/').filter(Boolean)[0];
+        return id ? `https://www.youtube.com/watch?v=${encodeURIComponent(id)}` : '';
+    }
+    if (!['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) return '';
+    const id = url.searchParams.get('v');
+    return id ? `https://www.youtube.com/watch?v=${encodeURIComponent(id)}` : '';
+}

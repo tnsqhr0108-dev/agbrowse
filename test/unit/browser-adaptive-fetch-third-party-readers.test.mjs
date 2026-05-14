@@ -18,6 +18,17 @@ describe('adaptive fetch third-party readers', () => {
         expect(() => buildJinaReaderUrl('https://user:pass@example.com/a')).toThrow(/credential-bearing/);
         expect(() => buildJinaReaderUrl('https://example.com/a?token=secret')).toThrow(/sensitive query/);
         expect(() => buildJinaReaderUrl('https://example.com/a?api_key=secret')).toThrow(/sensitive query/);
+        for (const query of [
+            'client_secret=s',
+            'auth_token=t',
+            'session_id=s',
+            'jwt=t',
+            'X-Amz-Signature=s',
+            'x-amz-security-token=t',
+            'AWSAccessKeyId=k',
+        ]) {
+            expect(() => buildJinaReaderUrl(`https://example.com/a?${query}`)).toThrow(/sensitive query/);
+        }
     });
 
     it('fetches a third-party candidate only when explicitly allowed', async () => {
