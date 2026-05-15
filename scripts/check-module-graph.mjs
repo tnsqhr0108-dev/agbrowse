@@ -18,7 +18,7 @@
  * depth 0; the generated artifact records the unsorted depth per node.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize, relative, resolve, posix } from 'node:path';
@@ -179,8 +179,7 @@ async function main() {
 
     const leaves = Object.keys(edges).filter((f) => edges[f].length === 0).sort();
 
-    const out = {
-        generated_at: new Date().toISOString(),
+    const graphBody = {
         total_mjs: absFiles.length,
         fan_in: Object.fromEntries(
             Object.entries(fanIn).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
@@ -193,14 +192,38 @@ async function main() {
 
     const outDir = resolve(root, 'docs', 'migration');
     mkdirSync(outDir, { recursive: true });
+    const outPath = resolve(outDir, 'module-graph.json');
+    const generatedAt = stableGeneratedAt(outPath, graphBody);
+    const out = {
+        generated_at: generatedAt,
+        ...graphBody,
+    };
     writeFileSync(
-        resolve(outDir, 'module-graph.json'),
+        outPath,
         `${JSON.stringify(out, null, 2)}\n`,
         'utf8',
     );
     process.stdout.write(
         `module-graph: ${absFiles.length} .mjs files, ${leaves.length} leaves, max tier ${Math.max(...Object.values(tiers))}\n`,
     );
+}
+
+/**
+ * @param {string} outPath
+ * @param {Record<string, unknown>} graphBody
+ * @returns {string}
+ */
+function stableGeneratedAt(outPath, graphBody) {
+    try {
+        const current = JSON.parse(readFileSync(outPath, 'utf8'));
+        const { generated_at: generatedAt, ...currentBody } = current;
+        if (JSON.stringify(currentBody) === JSON.stringify(graphBody) && typeof generatedAt === 'string') {
+            return generatedAt;
+        }
+    } catch {
+        // Missing or malformed cache is regenerated below.
+    }
+    return new Date().toISOString();
 }
 
 main().catch((err) => {

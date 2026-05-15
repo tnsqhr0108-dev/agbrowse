@@ -251,7 +251,8 @@ function openLibraryCandidates(url) {
  */
 function waybackCandidates(url) {
     if (url.hostname !== 'web.archive.org') return [];
-    const match = url.pathname.match(/^\/web\/[^/]+\/(.+)$/);
+    const hrefWithoutFragment = url.href.slice(0, url.href.length - (url.hash || '').length);
+    const match = hrefWithoutFragment.match(/^https?:\/\/web\.archive\.org\/web\/[^/]+\/(.+)$/i);
     if (!match) return [];
     const archivedUrl = decodeURIComponent(match[1]);
     if (!/^https?:\/\//i.test(archivedUrl)) return [];

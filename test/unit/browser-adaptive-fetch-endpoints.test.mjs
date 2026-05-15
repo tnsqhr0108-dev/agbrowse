@@ -33,6 +33,12 @@ describe('adaptive fetch endpoint resolvers', () => {
         }
     });
 
+    it('preserves query strings when deriving Wayback CDX targets', () => {
+        const [candidate] = resolvePublicEndpointCandidates('https://web.archive.org/web/20200101000000/https://example.com/a?b=c&d=e');
+        expect(candidate).toMatchObject({ label: 'wayback-cdx-api', source: 'public_endpoint' });
+        expect(candidate.url).toContain('url=https%3A%2F%2Fexample.com%2Fa%3Fb%3Dc%26d%3De');
+    });
+
     it('treats reddit json as a candidate without mutating already-json URLs', () => {
         expect(resolvePublicEndpointCandidates('https://www.reddit.com/r/test/comments/abc/title/')[0].url).toContain('.json');
         expect(resolvePublicEndpointCandidates('https://www.reddit.com/r/test/comments/abc/title/.json')).toEqual([]);
