@@ -10,19 +10,19 @@ import { htmlToReadableText, isHtmlContentType, normalizeWhitespace } from './tr
 export function fromFetchResult(fetched, context = {}) {
     const source = context.source || 'fetch';
     const isHtml = isHtmlContentType(fetched.contentType || '');
-    const metadata = isHtml ? extractMetadataFromHtml(fetched.text || '', fetched.finalUrl || '') : null;
-    const text = isHtml ? metadata.text : normalizeWhitespace(fetched.text || '');
+    const metadataResult = isHtml ? extractMetadataFromHtml(fetched.text || '', fetched.finalUrl || '') : null;
+    const text = metadataResult ? metadataResult.text : normalizeWhitespace(fetched.text || '');
     return {
         source,
         label: context.label || source,
         finalUrl: fetched.finalUrl || '',
-        title: metadata?.title || '',
+        title: metadataResult?.title || '',
         text,
         contentType: fetched.contentType || '',
         status: Number(fetched.status || 0),
         ok: Boolean(fetched.ok),
-        metadata: metadata?.metadata || null,
-        evidence: [...(fetched.evidence || []), ...(metadata?.evidence || [])],
+        metadata: metadataResult?.metadata || null,
+        evidence: [...(fetched.evidence || []), ...(metadataResult?.evidence || [])],
         warnings: fetched.warnings || [],
         rawTextLength: String(fetched.text || '').length,
     };
@@ -110,4 +110,3 @@ export function fromHtmlText(html, finalUrl) {
         ok: true,
     });
 }
-

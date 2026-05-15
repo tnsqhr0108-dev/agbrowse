@@ -39,6 +39,15 @@ describe('adaptive fetch endpoint resolvers', () => {
         expect(candidate.url).toContain('url=https%3A%2F%2Fexample.com%2Fa%3Fb%3Dc%26d%3De');
     });
 
+    it('preserves escaped target query values when deriving Wayback CDX targets', () => {
+        const [candidate] = resolvePublicEndpointCandidates(
+            'https://web.archive.org/web/20200101000000/https://example.com/search?q=a%26b&x=1',
+        );
+        expect(candidate.url).toContain(
+            'url=https%3A%2F%2Fexample.com%2Fsearch%3Fq%3Da%2526b%26x%3D1',
+        );
+    });
+
     it('treats reddit json as a candidate without mutating already-json URLs', () => {
         expect(resolvePublicEndpointCandidates('https://www.reddit.com/r/test/comments/abc/title/')[0].url).toContain('.json');
         expect(resolvePublicEndpointCandidates('https://www.reddit.com/r/test/comments/abc/title/.json')).toEqual([]);
@@ -57,6 +66,14 @@ describe('adaptive fetch endpoint resolvers', () => {
             url: 'https://registry.npmjs.org/lodash',
         });
         expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/@npmcli/arborist')[0]).toMatchObject({
+            label: 'npm-registry',
+            url: 'https://registry.npmjs.org/%40npmcli%2Farborist',
+        });
+        expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/%40npmcli/arborist')[0]).toMatchObject({
+            label: 'npm-registry',
+            url: 'https://registry.npmjs.org/%40npmcli%2Farborist',
+        });
+        expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/%40npmcli%2Farborist')[0]).toMatchObject({
             label: 'npm-registry',
             url: 'https://registry.npmjs.org/%40npmcli%2Farborist',
         });

@@ -103,13 +103,15 @@ function wikipediaCandidates(url) {
 function registryCandidates(url) {
     const parts = url.pathname.split('/').filter(Boolean);
     if (url.hostname === 'www.npmjs.com' && parts[0] === 'package' && parts[1]) {
-        const packageName = parts[1].startsWith('@') && parts[2]
-            ? `${parts[1]}/${parts[2]}`
-            : parts[1];
+        const decodedParts = decodeURIComponent(parts.slice(1).join('/')).split('/').filter(Boolean);
+        const packageName = decodedParts[0]?.startsWith('@') && decodedParts[1]
+            ? `${decodedParts[0]}/${decodedParts[1]}`
+            : decodedParts[0];
+        if (!packageName) return [];
         return [{ label: 'npm-registry', url: `https://registry.npmjs.org/${encodeURIComponent(packageName)}`, source: 'public_endpoint' }];
     }
     if (url.hostname === 'pypi.org' && parts[0] === 'project' && parts[1]) {
-        return [{ label: 'pypi-json', url: `https://pypi.org/pypi/${encodeURIComponent(parts[1])}/json`, source: 'public_endpoint' }];
+        return [{ label: 'pypi-json', url: `https://pypi.org/pypi/${encodeURIComponent(decodeURIComponent(parts[1]))}/json`, source: 'public_endpoint' }];
     }
     return [];
 }
@@ -257,7 +259,8 @@ function waybackCandidates(url) {
     const hrefWithoutFragment = url.href.slice(0, url.href.length - (url.hash || '').length);
     const match = hrefWithoutFragment.match(/^https?:\/\/web\.archive\.org\/web\/[^/]+\/(.+)$/i);
     if (!match) return [];
-    const archivedUrl = decodeURIComponent(match[1]);
+    let archivedUrl = match[1];
+    if (!/^https?:\/\//i.test(archivedUrl)) archivedUrl = decodeURIComponent(archivedUrl);
     if (!/^https?:\/\//i.test(archivedUrl)) return [];
     return [{
         label: 'wayback-cdx-api',

@@ -157,7 +157,7 @@ export async function listProjectSources(cdpSession, { projectUrl }) {
         const warnings = sources.length ? [] : ['project-sources-empty-or-unrecognized-dom'];
         return { ok: true, sources, warnings };
     } catch (err) {
-        return { ok: false, sources: [], warnings: [err?.message || 'list-failed'] };
+        return { ok: false, sources: [], warnings: [(/** @type {any} */ (err))?.message || 'list-failed'] };
     }
 }
 
@@ -254,7 +254,7 @@ export async function addProjectSource(cdpSession, { projectUrl, filePaths, dryR
         return {
             ok: false,
             uploads: [],
-            warnings: [err?.message || 'upload-failed'],
+            warnings: [(/** @type {any} */ (err))?.message || 'upload-failed'],
             errors,
         };
     }

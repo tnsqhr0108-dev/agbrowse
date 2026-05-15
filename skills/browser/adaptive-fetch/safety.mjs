@@ -235,9 +235,10 @@ export function validateThirdPartyReaderTarget(rawUrl) {
 
 /**
  * @param {unknown} value
+ * @returns {string}
  */
 export function redactTraceValue(value) {
-    if (typeof value !== 'string') return value;
+    if (typeof value !== 'string') return value === undefined || value === null ? '' : String(value);
     let text = value;
     try {
         const parsed = new URL(text);

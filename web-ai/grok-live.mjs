@@ -322,7 +322,7 @@ export async function grokPollWebAi(deps, input = {}) {
                     url: baseline.url || '', ...(session ? { sessionId: session.sessionId } : {}),
                     answerText: '', baseline, usedFallbacks: [],
                     warnings: ['tab-crashed-during-poll'],
-                    error: String(pollErr?.message || pollErr),
+                    error: String((/** @type {any} */ (pollErr))?.message || pollErr),
                     recoverable: true,
                 };
             }

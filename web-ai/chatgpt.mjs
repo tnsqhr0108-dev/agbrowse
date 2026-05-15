@@ -472,7 +472,7 @@ export async function pollWebAi(deps, input = {}) {
                     url: baseline.url || '', ...(session ? { sessionId: session.sessionId } : {}),
                     answerText: '', baseline, usedFallbacks: [],
                     warnings: ['tab-crashed-during-poll'],
-                    error: String(pollErr?.message || pollErr),
+                    error: String((/** @type {any} */ (pollErr))?.message || pollErr),
                     recoverable: true,
                 };
             }
@@ -540,7 +540,9 @@ async function isStreaming(page) {
  */
 async function isResponseFinished(page) {
     try {
-        return await page.evaluate((finishedSelector) => {
+        return await page.evaluate(
+            /** @param {string} finishedSelector */
+            (finishedSelector) => {
             const ASSISTANT_TURN_SELECTORS = [
                 '[data-message-author-role="assistant"]',
                 '[data-turn="assistant"]',
@@ -576,12 +578,14 @@ export async function queryWebAi(deps, input = {}) {
         archiveFlag: input.archiveFlag,
         skipFinalize: input.skipFinalize,
     });
+    const resultAny = /** @type {any} */ (result);
+    const sentAny = /** @type {any} */ (sent);
     return {
-        ...result,
-        sessionId: result.sessionId || sent.sessionId,
-        ...(result.traceSummary || sent.traceSummary ? { traceSummary: result.traceSummary || sent.traceSummary } : {}),
-        usedFallbacks: [...(sent.usedFallbacks || []), ...(result.usedFallbacks || [])],
-        warnings: [...(sent.warnings || []), ...(result.warnings || [])],
+        ...resultAny,
+        sessionId: resultAny.sessionId || sentAny.sessionId,
+        ...(resultAny.traceSummary || sentAny.traceSummary ? { traceSummary: resultAny.traceSummary || sentAny.traceSummary } : {}),
+        usedFallbacks: [...(sentAny.usedFallbacks || []), ...(resultAny.usedFallbacks || [])],
+        warnings: [...(sentAny.warnings || []), ...(resultAny.warnings || [])],
     };
 }
 
@@ -613,7 +617,7 @@ export async function deepResearchWebAi(deps, input = {}) {
     });
     const timeoutMs = Math.max(1, Number(input.timeout || 1200)) * 1000;
     const result = await sendDeepResearch(page, deps, {
-        prompt: envelope.composerText || input.prompt,
+        prompt: (/** @type {any} */ (envelope)).composerText || input.prompt,
         session,
         timeoutMs,
     });
@@ -874,7 +878,7 @@ async function readAssistantMessages(page) {
 }
 
 /**
- * @param {any} text
+ * @param {string|null|undefined} url
  */
 function extractConversationId(url) {
     if (!url) return null;
@@ -882,6 +886,7 @@ function extractConversationId(url) {
     return match ? match[1] : null;
 }
 
+/** @param {any} text */
 function isFinalAnswer(text) {
     return !PLACEHOLDER_PATTERNS.some(pattern => pattern.test(text));
 }

@@ -118,7 +118,7 @@ export async function harvestTab(port, targetId, { stallWindowMs, title, url } =
         }
     }
 
-    return { ...summary, lastAssistantMarkdown: summary.lastAssistantText };
+    return { ...summary, lastAssistantMarkdown: summary.lastAssistantText || undefined };
 }
 
 /**
@@ -129,7 +129,7 @@ export async function harvestTab(port, targetId, { stallWindowMs, title, url } =
  */
 export async function collectTabs(port, { activeTargetIds = new Set(), stallWindowMs = 0 } = {}) {
     const CDP = (await import('chrome-remote-interface')).default;
-    const targets = await CDP.List({ port });
+    const targets = /** @type {Array<{ id: string, type: string, title: string, url: string }>} */ (await CDP.List({ port }));
     const chatgptTargets = targets.filter(t =>
         t.type === 'page' && CHATGPT_HOSTS.has(new URL(t.url).hostname)
     );

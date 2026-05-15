@@ -226,7 +226,9 @@ export async function downloadGeneratedImages(cdpSession, images, { outputPath, 
     const { cookies } = await cdpSession.send('Network.getCookies', {
         urls: ['https://chatgpt.com/'],
     });
-    const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+    const cookieHeader = (/** @type {{ name: string, value: string }[]} */ (cookies || []))
+        .map(c => `${c.name}=${c.value}`)
+        .join('; ');
 
     const results = [];
     const outputPaths = outputPath ? deriveGeneratedImageOutputPaths(outputPath, images.length) : [];

@@ -21,16 +21,16 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | 경로 | 파일 수 | 라인 수 | 역할 |
 | --- | ---: | ---: | --- |
 | `bin/` | 2 | 6 | published bin wrapper |
-| `skills/browser/` | 23 | 7162 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics |
+| `skills/browser/` | 23 | 7177 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics |
 | `skills/vision-click/` | 3 | 831 | screenshot to coordinate click helper |
 | `skills/web-ai/` | 1 | 468 | bundled agent workflow skill |
-| `web-ai/` | 89 | 19634 | provider automation, sessions, MCP, eval, policy, trace |
+| `web-ai/` | 89 | 19646 | provider automation, sessions, MCP, eval, policy, trace |
 | `web-ai/context-pack/` | 8 | 858 | file selection, token budget, context rendering |
 | `web-ai/eval/` | 5 | 552 | offline provider DOM fixture harness |
 | `web-ai/policy/` | 4 | 228 | mutation and content-boundary guardrails |
 | `web-ai/trace/` | 5 | 444 | trace ID, redaction, report, writer helpers |
 | `scripts/` | 9 | 1408 | eval runner, release scripts, named release gates, strict-baseline / module-graph / bin smoke checks |
-| `test/unit/` | 84 | 8115 | deterministic module tests |
+| `test/unit/` | 84 | 8132 | deterministic module tests |
 | `test/integration/` | 16 | 2005 | CLI, MCP, policy, provider fixture tests |
 | `test/e2e/` | 1 | 50 | browser smoke coverage |
 | `test/spec/` | 2 | 35 | high-level contract specs |
@@ -43,13 +43,13 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 
 | 파일 | 라인 수 | 설명 |
 | --- | ---: | --- |
-| `skills/browser/browser.mjs` | 3087 | root CLI parser, Chrome lifecycle, browser primitive commands |
+| `skills/browser/browser.mjs` | 3091 | root CLI parser, Chrome lifecycle, browser primitive commands |
 | `skills/browser/tab-manager.mjs` | 446 | CDP target list, create, close, switch |
 | `skills/browser/tab-lifecycle.mjs` | 382 | idle cleanup, pinned target, duration parsing |
 | `skills/browser/skill-install.mjs` | 372 | bundled skill list/get/install |
-| `web-ai/cli.mjs` | 1445 | `web-ai` subcommand parser and command orchestration |
-| `web-ai/chatgpt.mjs` | 912 | ChatGPT provider send/poll/query/status |
-| `web-ai/gemini-live.mjs` | 769 | Gemini provider send/poll/query/status |
+| `web-ai/cli.mjs` | 1446 | `web-ai` subcommand parser and command orchestration |
+| `web-ai/chatgpt.mjs` | 917 | ChatGPT provider send/poll/query/status |
+| `web-ai/gemini-live.mjs` | 770 | Gemini provider send/poll/query/status |
 | `web-ai/grok-live.mjs` | 576 | Grok provider send/poll/query/status |
 | `web-ai/mcp-server.mjs` | 354 | stdio JSON-RPC MCP bridge |
 | `web-ai/tool-schema.mjs` | 180 | MCP and AI SDK schema source |

@@ -17,6 +17,7 @@ export async function collectBrowserCandidate(url, options = {}) {
     const page = pageRef.page;
     /** @type {any[]} */
     const networkCandidates = [];
+    /** @param {any} response */
     const onResponse = async (response) => {
         try {
             const finalUrl = validateFetchUrl(response.url?.() || url, {

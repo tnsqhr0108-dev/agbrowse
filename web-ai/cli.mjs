@@ -512,7 +512,7 @@ async function runWebAiCliInner(argv = [], deps) {
             cdpPort: port,
             tabSource: input.newTab ? 'new-tab' : input.reuseTab ? 'active' : 'pooled',
             sessionReuse: !!input.session,
-            recoveryUrl: input.url || undefined,
+            recoveryUrl: typeof input.url === 'string' ? input.url : undefined,
             chromeVisible: true,
         }, { controlSummary: true, json: false });
     }
@@ -992,6 +992,7 @@ async function runCommand(command, deps, input) {
             const hasFollowUps = input.followUps?.length > 0;
             const result = await queryWebAi(deps, { ...input, skipFinalize: hasFollowUps });
             if (result.ok && hasFollowUps && result.sessionId) {
+                const resultAny = /** @type {any} */ (result);
                 const { sendMultiTurn } = await import('./chatgpt-multi-turn.mjs');
                 const session = getSession(result.sessionId);
                 if (session) {
@@ -1007,7 +1008,7 @@ async function runCommand(command, deps, input) {
                             vendor: 'chatgpt',
                             session: /** @type {any} */ (refreshed),
                             page,
-                            answerText: multiResult.finalAnswer || result.answerText,
+                            answerText: multiResult.finalAnswer || resultAny.answerText,
                             artifactText: multiResult.transcriptMarkdown,
                             warnings: [...(result.warnings || []), ...multiResult.warnings],
                             archiveFlag: input.archiveFlag,
@@ -1016,7 +1017,7 @@ async function runCommand(command, deps, input) {
                     }
                     return {
                         ...result,
-                        answerText: multiResult.finalAnswer || result.answerText,
+                        answerText: multiResult.finalAnswer || resultAny.answerText,
                         turns: multiResult.turns,
                         followUpCount: multiResult.turns.length,
                         finalStatus: multiResult.finalStatus,
@@ -1371,7 +1372,7 @@ async function runProjectSourcesCommand(args, deps) {
         },
         strict: false,
     });
-    const projectUrl = values['chatgpt-url'];
+    const projectUrl = typeof values['chatgpt-url'] === 'string' ? values['chatgpt-url'] : '';
     if (!projectUrl) {
         throw new WebAiError({
             errorCode: 'internal.unhandled',
@@ -1380,7 +1381,7 @@ async function runProjectSourcesCommand(args, deps) {
         });
     }
     const { listProjectSources, addProjectSource } = await import('./chatgpt-project-sources.mjs');
-    const filePaths = values.file || [];
+    const filePaths = Array.isArray(values.file) ? values.file.filter((value) => typeof value === 'string') : [];
     const dryRun = values['dry-run'] !== undefined;
     if (sub === 'add' && !filePaths.length) {
         throw new WebAiError({

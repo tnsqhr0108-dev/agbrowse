@@ -46,8 +46,11 @@
 const SCHEMA_VERSION = /** @type {const} */ ('observation-bundle-v1');
 const DEFAULT_MAX_TEXT_CHARS = 2000;
 
-/** @param {string} s */
-function clampText(s, max) {
+/**
+ * @param {string} s
+ * @param {number} [max]
+ */
+function clampText(s, max = DEFAULT_MAX_TEXT_CHARS) {
     const limit = Number.isFinite(max) && max > 0 ? max : DEFAULT_MAX_TEXT_CHARS;
     const str = String(s || '');
     if (str.length <= limit) return str;

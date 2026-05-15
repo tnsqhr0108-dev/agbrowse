@@ -599,6 +599,7 @@ async function killPersistedChrome(pid) {
     }
 }
 
+/** @param {string} dir */
 function validateProfileDir(dir) {
     const probe = join(dir, '.agbrowse-probe');
     try {
@@ -1423,6 +1424,7 @@ async function hover(port, ref) {
 /**
  * @param {any} port
  * @param {any} url
+ * @param {{ waitUntil?: string, timeout?: number }} [opts]
  */
 async function navigate(port, url, opts = {}) {
     const page = await getReadyPage(port);
@@ -2232,7 +2234,7 @@ try {
                 refs[n.ref] = {
                     role: n.role,
                     name: n.name,
-                    occurrenceIndex: n.occurrenceIndex,
+                    occurrenceIndex: (/** @type {any} */ (n)).occurrenceIndex ?? n.occurrence,
                     disabled: Boolean(/** @type {any} */ (n).disabled),
                     readonly: Boolean(/** @type {any} */ (n).readonly),
                     required: Boolean(/** @type {any} */ (n).required),
@@ -2240,7 +2242,7 @@ try {
             }
             const { buildObserveActions, formatObserveActions } = await import('../../web-ai/observe-actions.mjs');
             const result = buildObserveActions(
-                { snapshotId: null, url: null, refs },
+                { url: null, refs },
                 instruction,
                 { topN, includeDisabled: Boolean(values['include-disabled']) },
             );
@@ -2372,7 +2374,9 @@ try {
 
             if (inspect) {
                 const { collectTabs } = await import('../../web-ai/tab-inspect.mjs');
-                const activeTargetIds = new Set(activeCommands.map(c => c.targetId).filter(Boolean));
+                const activeTargetIds = new Set(/** @type {string[]} */ (
+                    activeCommands.map(c => c.targetId).filter((id) => typeof id === 'string' && id.length > 0)
+                ));
                 const inspected = await collectTabs(getPort(), { activeTargetIds });
                 if (json) {
                     console.log(JSON.stringify(inspected.map((t, i) => ({ index: i + 1, ...t })), null, 2));

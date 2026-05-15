@@ -83,6 +83,7 @@ function extractOpenGraph(html) {
  * @param {string} base
  */
 export function extractFeedUrls(html = '', base = '') {
+    /** @type {string[]} */
     const urls = [];
     const re = /<link\b[^>]*>/gi;
     let match;
@@ -104,6 +105,7 @@ export function extractFeedUrls(html = '', base = '') {
  * @param {string} base
  */
 export function extractOembedUrls(html = '', base = '') {
+    /** @type {string[]} */
     const urls = [];
     const re = /<link\b[^>]*>/gi;
     let match;
@@ -164,6 +166,9 @@ function resolveMaybeUrl(raw, base) {
     }
 }
 
+/**
+ * @param {...string} values
+ */
 function firstNonEmpty(...values) {
     return values.find(v => typeof v === 'string' && v.trim()) || '';
 }

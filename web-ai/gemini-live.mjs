@@ -290,6 +290,7 @@ function fileInfoFromPath(filePath) {
 /**
  * @param {any} page
  * @param {any} file
+ * @param {{ maxUploadBytes?: number|string|null }} [options]
  */
 async function attachGeminiLocalFileLive(page, file, options = {}) {
     /** @type {any[]} */
@@ -470,7 +471,7 @@ export async function geminiPollWebAi(deps, input = {}) {
                     url: baseline.url || '', ...(session ? { sessionId: session.sessionId } : {}),
                     answerText: '', baseline, usedFallbacks: [],
                     warnings: ['tab-crashed-during-poll'],
-                    error: String(pollErr?.message || pollErr),
+                    error: String((/** @type {any} */ (pollErr))?.message || pollErr),
                     recoverable: true,
                 };
             }

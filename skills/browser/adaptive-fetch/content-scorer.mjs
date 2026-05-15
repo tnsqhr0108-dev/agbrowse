@@ -2,6 +2,7 @@
 
 import { classifyBoundarySignals, findBoundaryMarkers } from './validators.mjs';
 
+/** @type {Record<string, number>} */
 const SOURCE_TRUST = {
     public_endpoint: 20,
     network_api: 16,

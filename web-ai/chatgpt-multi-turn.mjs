@@ -181,7 +181,7 @@ export async function sendMultiTurn(page, deps, { followUps, session, timeoutPer
                 prompt,
                 answer: null,
                 status: 'failed',
-                warnings: [err?.message || 'unknown-error'],
+                warnings: [(/** @type {any} */ (err))?.message || 'unknown-error'],
                 sentAt,
                 completedAt: new Date().toISOString(),
             });

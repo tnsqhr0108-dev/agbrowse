@@ -354,6 +354,7 @@ function resultFromReaderCandidate(scored) {
  * @param {any} result
  * @param {any} options
  * @param {{ attempts: object[] }} trace
+ * @param {{ chromeUsed?: boolean }} [runtime]
  */
 function finishResult(result, options, trace, runtime = {}) {
     return {
