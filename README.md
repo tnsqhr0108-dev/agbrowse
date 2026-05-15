@@ -130,10 +130,11 @@ node skills/browser/browser.mjs fetch https://example.com --json --trace
 node skills/browser/browser.mjs web-ai render --vendor chatgpt --prompt "hello"
 ```
 
-## Adaptive URL Fetch
+## Adaptive URL Fetch (v2)
 
-`agbrowse fetch <url>` reads one candidate URL and returns evidence. It is useful
-after a search tool or user has produced a URL.
+`agbrowse fetch <url>` reads one candidate URL through a 6-phase adaptive
+escalation ladder and returns evidence. It is useful after a search tool or
+user has produced a URL.
 
 ```bash
 agbrowse fetch "https://example.com/article"
@@ -142,12 +143,25 @@ agbrowse fetch "https://example.com/article" --browser never
 agbrowse fetch "https://example.com/article" --no-browser
 agbrowse fetch "https://example.com/article" --browser required
 agbrowse fetch "https://example.com/article" --allow-third-party-reader
+agbrowse fetch "https://example.com/article" --browser-session user
+agbrowse fetch "https://example.com/article" --browser-session interactive
+agbrowse fetch "https://example.com/article" --identity chrome
 ```
 
-It tries public endpoints, discovered RSS/Atom feeds, HTTP fetch, metadata
-extraction, optional public readers, browser render, and network JSON
-candidates. It does not solve CAPTCHA, cross logins/paywalls, use stealth, or
-use existing cookies unless the user explicitly requests that session boundary.
+Escalation ladder (code execution order): public endpoints + direct fetch with
+identity headers → third-party readers (opt-in) → isolated Chrome render +
+network API discovery → user session (opt-in) → human-in-the-loop (interactive).
+Content scoring runs after each phase to decide whether to escalate.
+
+Key flags: `--browser auto|never|required`, `--browser-session
+none|isolated|existing|user|interactive`, `--identity auto|minimal|chrome`,
+`--no-public-endpoints`, `--max-bytes N`, `--timeout-ms N`, `--selector CSS`,
+`--allow-third-party-reader`, `--allow-archive`. Run `agbrowse fetch --help`
+for full flag reference.
+
+Automated CAPTCHA solving, credential stuffing, and stealth are forbidden.
+Human assistance (browser-grade headers, user session, human resolves) is
+allowed with explicit opt-in flags (`--browser-session user|interactive`).
 Built-in public endpoint candidates include GitHub, Reddit, Hacker News,
 Wikipedia, npm, PyPI, arXiv, Bluesky, Mastodon-compatible statuses, Stack
 Exchange, dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed,

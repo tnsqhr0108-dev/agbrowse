@@ -41,7 +41,8 @@ aliases: [agbrowse commands, agbrowse CLI 표면, web-ai commands]
 | `--trace` | validation/public endpoint/fetch/reader/browser/network attempt 포함 |
 | `--browser auto|never|required` | browser escalation policy |
 | `--no-browser` | `--browser never` alias |
-| `--browser-session none|isolated|existing` | browser session/cookie boundary |
+| `--browser-session none|isolated|existing|user|interactive` | browser session/cookie boundary |
+| `--identity auto|minimal|chrome` | request identity headers |
 | `--max-bytes N` | per-attempt response size limit |
 | `--timeout-ms N` | per-attempt timeout |
 | `--selector CSS` | browser text extraction selector |
@@ -51,10 +52,12 @@ aliases: [agbrowse commands, agbrowse CLI 표면, web-ai commands]
 
 기본값은 non-browser fetch를 먼저 시도하고, 강한 결과가 없을 때만 browser
 escalation을 고려한다. `existing` session과 third-party reader는 모두 명시
-opt-in이다. CAPTCHA/login/paywall marker가 있어도 public endpoint, metadata,
+opt-in이다. `user` session은 사용자의 인증된 브라우저 세션을 명시적으로
+사용하고, `interactive`는 human-in-the-loop challenge resolution을 추가한다.
+`--identity chrome`과 `auto`는 동일하게 브라우저급 HTTP 헤더(User-Agent,
+Sec-Fetch-*, Accept-Language 등)를 보내고, `minimal`은 Accept 헤더만 보낸다. CAPTCHA/login/paywall marker가 있어도 public endpoint, metadata,
 non-browser, isolated browser, network candidate를 계속 시도할 수 있지만,
-challenge solving, login/paywall crossing, stealth, private credential 사용은
-금지한다.
+automated challenge solving, stealth, private credential 사용은 금지한다.
 
 현재 known public endpoint resolver는 GitHub, Reddit, Hacker News, Wikipedia,
 npm, PyPI, arXiv, Bluesky, Mastodon-compatible statuses, Stack Exchange,

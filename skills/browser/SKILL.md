@@ -93,7 +93,7 @@ agbrowse console --clear --reload --duration 3000 # Buffered console logs
 agbrowse network --reload --duration 1000         # Fresh page-load + async requests
 ```
 
-### Adaptive URL Fetch
+### Adaptive URL Fetch (v2)
 
 Use `agbrowse fetch` after a candidate URL already exists. Do not use it as the
 first step for broad generic search.
@@ -105,6 +105,9 @@ agbrowse fetch "https://example.com/article" --browser never
 agbrowse fetch "https://example.com/article" --no-browser
 agbrowse fetch "https://example.com/article" --browser required
 agbrowse fetch "https://example.com/article" --allow-third-party-reader
+agbrowse fetch "https://example.com/article" --browser-session user
+agbrowse fetch "https://example.com/article" --browser-session interactive
+agbrowse fetch "https://example.com/article" --identity chrome
 ```
 
 Routing rule:
@@ -114,19 +117,46 @@ generic search request -> use a search tool first
 known URL / search-result URL / source URL -> use agbrowse fetch
 ```
 
-`fetch` tries public endpoints, discovered RSS/Atom feeds, normal HTTP fetch,
-metadata extraction, optional third-party public readers, and browser
-render/network candidates. CAPTCHA, login, and paywall markers are not
-automatic stop words; the command should keep trying allowed public and
-user-authorized representations. It must not solve challenges, cross
-logins/paywalls, use stealth, or use existing cookies unless the user explicitly
-requests that boundary.
+#### Escalation Ladder (code execution order in index.mjs)
 
-Public endpoint candidates cover GitHub, Reddit, Hacker News, Wikipedia, npm,
-PyPI, arXiv, Bluesky, Mastodon-compatible statuses, Stack Exchange, dev.to,
-DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed, X/Twitter oEmbed,
-HN Algolia, V2EX, Lobsters, and generic oEmbed discovery before browser
-escalation.
+1. **Public endpoints + direct fetch** — known API resolvers (GitHub, Reddit, HN, Wikipedia, npm, PyPI, arXiv, Bluesky, Mastodon, Stack Exchange, dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube/X oEmbed, HN Algolia, V2EX, Lobsters, generic oEmbed), direct HTTP with identity headers, discovered RSS/Atom feeds, metadata extraction
+2. **Third-party readers** — opt-in public readers like Jina (`--allow-third-party-reader`)
+3. **Isolated Chrome render** — fresh Chrome profile + network API JSON discovery
+4. **User session** — user's authenticated browser session (`--browser-session user`, explicit opt-in)
+5. **Human-in-the-loop** — human resolves challenges (`--browser-session interactive`, 5-minute timeout)
+
+Content scoring runs after each phase to decide whether to escalate.
+
+#### Key Flags
+
+| Flag | Values | Default | Description |
+|------|--------|---------|-------------|
+| `--browser` | `auto\|never\|required` | `auto` | Browser escalation mode |
+| `--browser-session` | `none\|isolated\|existing\|user\|interactive` | `isolated` | Session/cookie boundary |
+| `--identity` | `auto\|minimal\|chrome` | `auto` | Request identity headers (`auto` and `chrome` send browser-grade headers; `minimal` sends only Accept) |
+| `--no-browser` | — | — | Alias for `--browser never` |
+| `--allow-third-party-reader` | — | — | Enable Jina Reader |
+| `--no-public-endpoints` | — | — | Skip known public endpoint resolvers |
+| `--max-bytes` | number | `1048576` | Maximum response bytes per read (1 MB) |
+| `--timeout-ms` | number | `15000` | Per-attempt timeout |
+| `--selector` | CSS selector | — | Browser text extraction selector |
+| `--allow-archive` | — | — | Accepted but deferred; emits a warning |
+| `--trace` | — | — | Include all attempt traces |
+| `--json` | — | — | JSON output |
+
+#### Safety Model
+
+- Automated CAPTCHA solving, credential stuffing, stealth libraries: **forbidden**
+- Human assistance (browser-grade headers, user session, human resolves): **allowed with explicit opt-in**
+- DNS rebinding guard enforced in fetch path and redirect chain — blocks hostnames resolving to private/loopback IPs (both A and AAAA records)
+- User session final URL validated — redirects to private networks are rejected
+- `safetyFlags` in result track which elevated capabilities were used (`user_session_used`, `human_action_taken`)
+
+#### WAF Detection
+
+Detects Cloudflare (managed challenge + Turnstile), Akamai Bot Manager, AWS WAF,
+Imperva/Incapsula, DataDome, and PerimeterX from response headers before browser
+escalation. WAF profile informs challenge classification and wait strategies.
 
 ### Snapshot Output Example
 

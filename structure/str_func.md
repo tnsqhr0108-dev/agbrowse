@@ -21,7 +21,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | 경로 | 파일 수 | 라인 수 | 역할 |
 | --- | ---: | ---: | --- |
 | `bin/` | 2 | 6 | published bin wrapper |
-| `skills/browser/` | 23 | 7177 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics |
+| `skills/browser/` | 26 | 7917 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics, adaptive fetch v2 |
 | `skills/vision-click/` | 3 | 831 | screenshot to coordinate click helper |
 | `skills/web-ai/` | 1 | 468 | bundled agent workflow skill |
 | `web-ai/` | 89 | 19646 | provider automation, sessions, MCP, eval, policy, trace |
@@ -30,12 +30,12 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | `web-ai/policy/` | 4 | 228 | mutation and content-boundary guardrails |
 | `web-ai/trace/` | 5 | 444 | trace ID, redaction, report, writer helpers |
 | `scripts/` | 9 | 1408 | eval runner, release scripts, named release gates, strict-baseline / module-graph / bin smoke checks |
-| `test/unit/` | 84 | 8136 | deterministic module tests |
-| `test/integration/` | 16 | 2005 | CLI, MCP, policy, provider fixture tests |
+| `test/unit/` | 88 | 8498 | deterministic module tests |
+| `test/integration/` | 16 | 2087 | CLI, MCP, policy, provider fixture tests |
 | `test/e2e/` | 1 | 50 | browser smoke coverage |
 | `test/spec/` | 2 | 35 | high-level contract specs |
-| `docs/` | 8 | 1854 | adoption, trace, production-readiness, comparison, benchmark, EXTERNAL_CDP, migration docs |
-| `devlog/` | 240 | 27617 | phased plan, research, implementation notes (incl. strict-migration phases) |
+| `docs/` | 8 | 1897 | adoption, trace, production-readiness, comparison, benchmark, EXTERNAL_CDP, migration docs |
+| `devlog/` | 258 | 30691 | phased plan, research, implementation notes (incl. strict-migration phases) |
 
 `structure/` 자체는 이 문서가 검증 대상으로 삼는 source tree 밖의 문서 허브라서 위 집계에서 제외한다. `verify-counts.sh`는 이 표의 경로별 파일 수와 라인 수를 live source 기준으로 비교한다.
 
@@ -43,10 +43,27 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 
 | 파일 | 라인 수 | 설명 |
 | --- | ---: | --- |
-| `skills/browser/browser.mjs` | 3091 | root CLI parser, Chrome lifecycle, browser primitive commands |
+| `skills/browser/browser.mjs` | 3096 | root CLI parser, Chrome lifecycle, browser primitive commands |
 | `skills/browser/tab-manager.mjs` | 446 | CDP target list, create, close, switch |
 | `skills/browser/tab-lifecycle.mjs` | 382 | idle cleanup, pinned target, duration parsing |
 | `skills/browser/skill-install.mjs` | 372 | bundled skill list/get/install |
+| `skills/browser/adaptive-fetch/index.mjs` | 599 | adaptive fetch v2 CLI + 6-phase escalation scheduler |
+| `skills/browser/adaptive-fetch/safety.mjs` | 315 | URL validation, SSRF guard, DNS rebinding guard |
+| `skills/browser/adaptive-fetch/content-scorer.mjs` | 142 | multi-signal content scoring with source trust |
+| `skills/browser/adaptive-fetch/waf-profiles.mjs` | 134 | WAF fingerprinting (Cloudflare, Akamai, AWS WAF, Imperva/Incapsula, DataDome, PerimeterX) |
+| `skills/browser/adaptive-fetch/reader-adapters.mjs` | 146 | reader candidate normalization (fetch, browser, user-session, network, human-resolved) |
+| `skills/browser/adaptive-fetch/fetcher.mjs` | 136 | browser-grade HTTP fetch with identity headers + DNS rebinding guard |
+| `skills/browser/adaptive-fetch/challenge-detector.mjs` | 91 | WAF-aware challenge/auth/paywall classification |
+| `skills/browser/adaptive-fetch/human-loop.mjs` | 109 | human-in-the-loop challenge resolution with timeout |
+| `skills/browser/adaptive-fetch/browser-session.mjs` | 97 | user session navigation with URL validation (user/interactive modes) |
+| `skills/browser/adaptive-fetch/trace.mjs` | 63 | per-attempt trace with identity field |
+| `skills/browser/adaptive-fetch/endpoint-resolvers.mjs` | 345 | public endpoint resolution (GitHub, Reddit, HN, Wikipedia, npm, etc.) |
+| `skills/browser/adaptive-fetch/metadata.mjs` | 182 | HTML metadata + JSON-LD extraction |
+| `skills/browser/adaptive-fetch/browser-escalation.mjs` | 176 | isolated Chrome render + network API JSON discovery |
+| `skills/browser/adaptive-fetch/validators.mjs` | 104 | boundary signal classification |
+| `skills/browser/adaptive-fetch/transforms.mjs` | 86 | URL transforms, HTML-to-text, content-type checks |
+| `skills/browser/adaptive-fetch/third-party-readers.mjs` | 46 | Jina Reader integration |
+| `skills/browser/adaptive-fetch/browser-runtime.mjs` | 38 | browser page acquisition and cleanup |
 | `web-ai/cli.mjs` | 1446 | `web-ai` subcommand parser and command orchestration |
 | `web-ai/chatgpt.mjs` | 917 | ChatGPT provider send/poll/query/status |
 | `web-ai/gemini-live.mjs` | 770 | Gemini provider send/poll/query/status |

@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-05-15T01:08:46.501Z",
-  "total_mjs": 234,
+  "generated_at": "2026-05-15T14:09:52.774Z",
+  "total_mjs": 241,
   "fan_in": {
     "web-ai/session.mjs": 21,
     "web-ai/errors.mjs": 19,
@@ -8,6 +8,7 @@
     "web-ai/session-store.mjs": 9,
     "web-ai/constants.mjs": 8,
     "web-ai/vendor-editor-contract.mjs": 8,
+    "skills/browser/adaptive-fetch/safety.mjs": 7,
     "test/helpers/exec-browser.mjs": 7,
     "test/helpers/temp-env.mjs": 7,
     "web-ai/cli.mjs": 7,
@@ -15,7 +16,6 @@
     "web-ai/session-artifacts.mjs": 7,
     "web-ai/tab-lease-store.mjs": 7,
     "web-ai/tab-recovery.mjs": 7,
-    "skills/browser/adaptive-fetch/safety.mjs": 6,
     "skills/browser/tab-manager.mjs": 6,
     "web-ai/browser-tool-schema.mjs": 6,
     "web-ai/chatgpt.mjs": 6,
@@ -30,6 +30,8 @@
     "web-ai/question.mjs": 5,
     "web-ai/self-heal.mjs": 5,
     "web-ai/tab-finalizer.mjs": 5,
+    "skills/browser/adaptive-fetch/browser-runtime.mjs": 4,
+    "skills/browser/adaptive-fetch/fetcher.mjs": 4,
     "skills/browser/adaptive-fetch/index.mjs": 4,
     "skills/browser/adaptive-fetch/transforms.mjs": 4,
     "skills/browser/adaptive-fetch/validators.mjs": 4,
@@ -42,8 +44,8 @@
     "web-ai/eval-runner.mjs": 4,
     "web-ai/mcp-server.mjs": 4,
     "web-ai/tab-pool.mjs": 4,
-    "skills/browser/adaptive-fetch/browser-runtime.mjs": 3,
-    "skills/browser/adaptive-fetch/fetcher.mjs": 3,
+    "skills/browser/adaptive-fetch/browser-session.mjs": 3,
+    "skills/browser/adaptive-fetch/challenge-detector.mjs": 3,
     "skills/browser/profile-lock.mjs": 3,
     "skills/browser/tab-lifecycle.mjs": 3,
     "test/helpers/fixture-server.mjs": 3,
@@ -65,10 +67,12 @@
     "benchmarks/agbrowse/trajectory.mjs": 2,
     "skills/browser/adaptive-fetch/content-scorer.mjs": 2,
     "skills/browser/adaptive-fetch/endpoint-resolvers.mjs": 2,
+    "skills/browser/adaptive-fetch/human-loop.mjs": 2,
     "skills/browser/adaptive-fetch/metadata.mjs": 2,
     "skills/browser/adaptive-fetch/reader-adapters.mjs": 2,
     "skills/browser/adaptive-fetch/third-party-readers.mjs": 2,
     "skills/browser/adaptive-fetch/trace.mjs": 2,
+    "skills/browser/adaptive-fetch/waf-profiles.mjs": 2,
     "skills/browser/browser-core.mjs": 2,
     "skills/browser/keyed-mutex.mjs": 2,
     "skills/browser/skill-install.mjs": 2,
@@ -104,7 +108,6 @@
     "web-ai/trace/writer.mjs": 2,
     "web-ai/types.mjs": 2,
     "skills/browser/adaptive-fetch/browser-escalation.mjs": 1,
-    "skills/browser/adaptive-fetch/challenge-detector.mjs": 1,
     "skills/browser/browser.mjs": 1,
     "skills/vision-click/vision-click.mjs": 1,
     "test/helpers/exec-vision-click.mjs": 1,
@@ -217,13 +220,17 @@
     "test/unit/active-command-store.test.mjs": 2,
     "test/unit/benchmark-trajectory.test.mjs": 1,
     "test/unit/browser-active-tab.test.mjs": 2,
+    "test/unit/browser-adaptive-fetch-challenge.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-content-scorer.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-endpoints.test.mjs": 1,
+    "test/unit/browser-adaptive-fetch-human-loop.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-reader-adapters.test.mjs": 1,
+    "test/unit/browser-adaptive-fetch-session.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-third-party-readers.test.mjs": 2,
     "test/unit/browser-adaptive-fetch-trace.test.mjs": 1,
-    "test/unit/browser-adaptive-fetch-transforms.test.mjs": 3,
+    "test/unit/browser-adaptive-fetch-transforms.test.mjs": 4,
     "test/unit/browser-adaptive-fetch-validators.test.mjs": 2,
+    "test/unit/browser-adaptive-fetch-waf-profiles.test.mjs": 1,
     "test/unit/browser-core.test.mjs": 1,
     "test/unit/browser-primitives.test.mjs": 1,
     "test/unit/browser-tool-schema.test.mjs": 1,
@@ -334,11 +341,13 @@
     "skills/browser/tab-monitor.mjs": 1,
     "skills/browser/adaptive-fetch/browser-escalation.mjs": 4,
     "skills/browser/adaptive-fetch/browser-runtime.mjs": 0,
-    "skills/browser/adaptive-fetch/challenge-detector.mjs": 1,
+    "skills/browser/adaptive-fetch/browser-session.mjs": 2,
+    "skills/browser/adaptive-fetch/challenge-detector.mjs": 2,
     "skills/browser/adaptive-fetch/content-scorer.mjs": 1,
     "skills/browser/adaptive-fetch/endpoint-resolvers.mjs": 0,
     "skills/browser/adaptive-fetch/fetcher.mjs": 2,
-    "skills/browser/adaptive-fetch/index.mjs": 9,
+    "skills/browser/adaptive-fetch/human-loop.mjs": 1,
+    "skills/browser/adaptive-fetch/index.mjs": 12,
     "skills/browser/adaptive-fetch/metadata.mjs": 1,
     "skills/browser/adaptive-fetch/reader-adapters.mjs": 2,
     "skills/browser/adaptive-fetch/safety.mjs": 0,
@@ -346,6 +355,7 @@
     "skills/browser/adaptive-fetch/trace.mjs": 1,
     "skills/browser/adaptive-fetch/transforms.mjs": 0,
     "skills/browser/adaptive-fetch/validators.mjs": 0,
+    "skills/browser/adaptive-fetch/waf-profiles.mjs": 0,
     "scripts/check-module-graph.mjs": 0,
     "scripts/check-strict-baseline.mjs": 0,
     "scripts/fix-counts.mjs": 0,
@@ -369,6 +379,7 @@
     "skills/browser/adaptive-fetch/safety.mjs",
     "skills/browser/adaptive-fetch/transforms.mjs",
     "skills/browser/adaptive-fetch/validators.mjs",
+    "skills/browser/adaptive-fetch/waf-profiles.mjs",
     "skills/browser/browser-core.mjs",
     "skills/browser/keyed-mutex.mjs",
     "skills/browser/profile-lock.mjs",
@@ -446,10 +457,12 @@
     "scripts/smoke-bins.mjs": 0,
     "skills/browser/adaptive-fetch/browser-escalation.mjs": 2,
     "skills/browser/adaptive-fetch/browser-runtime.mjs": 0,
+    "skills/browser/adaptive-fetch/browser-session.mjs": 1,
     "skills/browser/adaptive-fetch/challenge-detector.mjs": 1,
     "skills/browser/adaptive-fetch/content-scorer.mjs": 1,
     "skills/browser/adaptive-fetch/endpoint-resolvers.mjs": 0,
     "skills/browser/adaptive-fetch/fetcher.mjs": 1,
+    "skills/browser/adaptive-fetch/human-loop.mjs": 2,
     "skills/browser/adaptive-fetch/index.mjs": 3,
     "skills/browser/adaptive-fetch/metadata.mjs": 1,
     "skills/browser/adaptive-fetch/reader-adapters.mjs": 2,
@@ -458,6 +471,7 @@
     "skills/browser/adaptive-fetch/trace.mjs": 1,
     "skills/browser/adaptive-fetch/transforms.mjs": 0,
     "skills/browser/adaptive-fetch/validators.mjs": 0,
+    "skills/browser/adaptive-fetch/waf-profiles.mjs": 0,
     "skills/browser/browser-core.mjs": 0,
     "skills/browser/browser.mjs": 10,
     "skills/browser/keyed-mutex.mjs": 0,
@@ -497,13 +511,17 @@
     "test/unit/active-command-store.test.mjs": 2,
     "test/unit/benchmark-trajectory.test.mjs": 1,
     "test/unit/browser-active-tab.test.mjs": 3,
+    "test/unit/browser-adaptive-fetch-challenge.test.mjs": 2,
     "test/unit/browser-adaptive-fetch-content-scorer.test.mjs": 2,
     "test/unit/browser-adaptive-fetch-endpoints.test.mjs": 1,
+    "test/unit/browser-adaptive-fetch-human-loop.test.mjs": 3,
     "test/unit/browser-adaptive-fetch-reader-adapters.test.mjs": 3,
+    "test/unit/browser-adaptive-fetch-session.test.mjs": 2,
     "test/unit/browser-adaptive-fetch-third-party-readers.test.mjs": 4,
     "test/unit/browser-adaptive-fetch-trace.test.mjs": 2,
     "test/unit/browser-adaptive-fetch-transforms.test.mjs": 4,
     "test/unit/browser-adaptive-fetch-validators.test.mjs": 1,
+    "test/unit/browser-adaptive-fetch-waf-profiles.test.mjs": 1,
     "test/unit/browser-core.test.mjs": 1,
     "test/unit/browser-primitives.test.mjs": 2,
     "test/unit/browser-tool-schema.test.mjs": 1,
@@ -1030,14 +1048,23 @@
       "web-ai/active-command-store.mjs",
       "web-ai/policy/enforce.mjs"
     ],
+    "test/unit/browser-adaptive-fetch-challenge.test.mjs": [
+      "skills/browser/adaptive-fetch/challenge-detector.mjs"
+    ],
     "test/unit/browser-adaptive-fetch-content-scorer.test.mjs": [
       "skills/browser/adaptive-fetch/content-scorer.mjs"
     ],
     "test/unit/browser-adaptive-fetch-endpoints.test.mjs": [
       "skills/browser/adaptive-fetch/endpoint-resolvers.mjs"
     ],
+    "test/unit/browser-adaptive-fetch-human-loop.test.mjs": [
+      "skills/browser/adaptive-fetch/human-loop.mjs"
+    ],
     "test/unit/browser-adaptive-fetch-reader-adapters.test.mjs": [
       "skills/browser/adaptive-fetch/reader-adapters.mjs"
+    ],
+    "test/unit/browser-adaptive-fetch-session.test.mjs": [
+      "skills/browser/adaptive-fetch/browser-session.mjs"
     ],
     "test/unit/browser-adaptive-fetch-third-party-readers.test.mjs": [
       "skills/browser/adaptive-fetch/index.mjs",
@@ -1047,6 +1074,7 @@
       "skills/browser/adaptive-fetch/trace.mjs"
     ],
     "test/unit/browser-adaptive-fetch-transforms.test.mjs": [
+      "skills/browser/adaptive-fetch/fetcher.mjs",
       "skills/browser/adaptive-fetch/index.mjs",
       "skills/browser/adaptive-fetch/metadata.mjs",
       "skills/browser/adaptive-fetch/transforms.mjs"
@@ -1054,6 +1082,9 @@
     "test/unit/browser-adaptive-fetch-validators.test.mjs": [
       "skills/browser/adaptive-fetch/safety.mjs",
       "skills/browser/adaptive-fetch/validators.mjs"
+    ],
+    "test/unit/browser-adaptive-fetch-waf-profiles.test.mjs": [
+      "skills/browser/adaptive-fetch/waf-profiles.mjs"
     ],
     "test/unit/browser-core.test.mjs": [
       "skills/browser/browser-core.mjs"
@@ -1402,8 +1433,13 @@
       "skills/browser/adaptive-fetch/validators.mjs"
     ],
     "skills/browser/adaptive-fetch/browser-runtime.mjs": [],
+    "skills/browser/adaptive-fetch/browser-session.mjs": [
+      "skills/browser/adaptive-fetch/browser-runtime.mjs",
+      "skills/browser/adaptive-fetch/safety.mjs"
+    ],
     "skills/browser/adaptive-fetch/challenge-detector.mjs": [
-      "skills/browser/adaptive-fetch/validators.mjs"
+      "skills/browser/adaptive-fetch/validators.mjs",
+      "skills/browser/adaptive-fetch/waf-profiles.mjs"
     ],
     "skills/browser/adaptive-fetch/content-scorer.mjs": [
       "skills/browser/adaptive-fetch/validators.mjs"
@@ -1413,12 +1449,18 @@
       "skills/browser/adaptive-fetch/safety.mjs",
       "skills/browser/adaptive-fetch/transforms.mjs"
     ],
+    "skills/browser/adaptive-fetch/human-loop.mjs": [
+      "skills/browser/adaptive-fetch/browser-session.mjs"
+    ],
     "skills/browser/adaptive-fetch/index.mjs": [
       "skills/browser/adaptive-fetch/browser-escalation.mjs",
       "skills/browser/adaptive-fetch/browser-runtime.mjs",
+      "skills/browser/adaptive-fetch/browser-session.mjs",
+      "skills/browser/adaptive-fetch/challenge-detector.mjs",
       "skills/browser/adaptive-fetch/content-scorer.mjs",
       "skills/browser/adaptive-fetch/endpoint-resolvers.mjs",
       "skills/browser/adaptive-fetch/fetcher.mjs",
+      "skills/browser/adaptive-fetch/human-loop.mjs",
       "skills/browser/adaptive-fetch/reader-adapters.mjs",
       "skills/browser/adaptive-fetch/safety.mjs",
       "skills/browser/adaptive-fetch/third-party-readers.mjs",
@@ -1441,6 +1483,7 @@
     ],
     "skills/browser/adaptive-fetch/transforms.mjs": [],
     "skills/browser/adaptive-fetch/validators.mjs": [],
+    "skills/browser/adaptive-fetch/waf-profiles.mjs": [],
     "scripts/check-module-graph.mjs": [],
     "scripts/check-strict-baseline.mjs": [],
     "scripts/fix-counts.mjs": [],
