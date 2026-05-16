@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runAdaptiveFetch } from '../../skills/browser/adaptive-fetch/index.mjs';
+import { runAdaptiveFetch, runAdaptiveFetchCli } from '../../skills/browser/adaptive-fetch/index.mjs';
 import { getFetchBrowserPage, BrowserRequiredError } from '../../skills/browser/adaptive-fetch/browser-runtime.mjs';
 import { fetchTextCandidate } from '../../skills/browser/adaptive-fetch/fetcher.mjs';
 
@@ -249,6 +249,48 @@ describe('adaptive fetch browser escalation', () => {
         expect(result.warnings).toContain('body-exceeds-max-bytes');
         expect(canceled).toBe(true);
     });
+
+    it('emits valid compact JSON for large public endpoint content', async () => {
+        const chunks = [];
+        await runAdaptiveFetchCli([
+            'https://www.reddit.com/',
+            '--json',
+            '--trace',
+            '--browser',
+            'never',
+        ], {
+            fetch: async () => new Response(JSON.stringify({
+                kind: 'Listing',
+                data: {
+                    children: Array.from({ length: 300 }, (_, index) => ({
+                        data: {
+                            title: `Large reddit item ${index}`,
+                            selftext: 'Readable public endpoint body '.repeat(60),
+                        },
+                    })),
+                },
+            }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+            }),
+            stdout: {
+                write(chunk, callback) {
+                    chunks.push(String(chunk));
+                    if (typeof callback === 'function') callback();
+                    return true;
+                },
+            },
+        });
+
+        const parsed = JSON.parse(chunks.join(''));
+        expect(parsed.ok).toBe(true);
+        expect(parsed.source).toBe('public_endpoint');
+        expect(parsed.contentTruncated).toBe(true);
+        expect(parsed.contentBytes).toBeGreaterThan(parsed.contentLimitBytes);
+        expect(Buffer.byteLength(parsed.content, 'utf8')).toBeLessThanOrEqual(parsed.contentLimitBytes);
+        expect(parsed.attempts.length).toBeGreaterThan(0);
+    });
+
     it('detects challenge in direct fetch and records it in trace', async () => {
         const result = await runAdaptiveFetch({
             url: 'https://example.com/protected',

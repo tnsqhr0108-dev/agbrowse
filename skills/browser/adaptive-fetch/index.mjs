@@ -14,6 +14,7 @@ import { fromBrowserResult, fromNetworkCandidate } from './reader-adapters.mjs';
 import { classifyChallengeType } from './challenge-detector.mjs';
 import { shouldTryUserSession, navigateInUserSession } from './browser-session.mjs';
 import { humanResolve } from './human-loop.mjs';
+import { compactAdaptiveFetchResult, writeStdoutLine } from './output.mjs';
 
 /**
  * @typedef {'strong_ok'|'weak_ok'|'blocked'|'auth_required'|'challenge'|'paywall'|'browser_required'|'unsupported'|'error'} AdaptiveFetchVerdict
@@ -398,9 +399,9 @@ export async function runAdaptiveFetchCli(args, deps = {}) {
     }, deps);
     if (values.json) {
         const { _traceSummary, ...jsonResult } = result;
-        console.log(JSON.stringify(jsonResult, null, 2));
+        await writeStdoutLine(JSON.stringify(compactAdaptiveFetchResult(jsonResult), null, 2), /** @type {any} */ (deps.stdout));
     } else {
-        console.log(formatAdaptiveFetchHuman(result));
+        await writeStdoutLine(formatAdaptiveFetchHuman(result), /** @type {any} */ (deps.stdout));
     }
 }
 

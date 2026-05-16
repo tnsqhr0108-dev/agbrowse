@@ -61,21 +61,47 @@ describe('adaptive fetch endpoint resolvers', () => {
     });
 
     it('resolves registry and academic endpoint shapes', () => {
-        expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/lodash')[0]).toMatchObject({
-            label: 'npm-registry',
-            url: 'https://registry.npmjs.org/lodash',
-        });
+        expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/lodash').slice(0, 2)).toMatchObject([
+            {
+                label: 'npm-registry-latest',
+                url: 'https://registry.npmjs.org/lodash/latest',
+            },
+            {
+                label: 'npm-registry',
+                url: 'https://registry.npmjs.org/lodash',
+            },
+        ]);
+        expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/lodash/v/4.17.21').slice(0, 3)).toMatchObject([
+            {
+                label: 'npm-registry-version',
+                url: 'https://registry.npmjs.org/lodash/4.17.21',
+            },
+            {
+                label: 'npm-registry-latest',
+                url: 'https://registry.npmjs.org/lodash/latest',
+            },
+            {
+                label: 'npm-registry',
+                url: 'https://registry.npmjs.org/lodash',
+            },
+        ]);
         expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/@npmcli/arborist')[0]).toMatchObject({
-            label: 'npm-registry',
-            url: 'https://registry.npmjs.org/%40npmcli%2Farborist',
+            label: 'npm-registry-latest',
+            url: 'https://registry.npmjs.org/%40npmcli%2Farborist/latest',
         });
-        expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/%40npmcli/arborist')[0]).toMatchObject({
-            label: 'npm-registry',
-            url: 'https://registry.npmjs.org/%40npmcli%2Farborist',
-        });
+        expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/%40npmcli/arborist/v/9.0.0').slice(0, 2)).toMatchObject([
+            {
+                label: 'npm-registry-version',
+                url: 'https://registry.npmjs.org/%40npmcli%2Farborist/9.0.0',
+            },
+            {
+                label: 'npm-registry-latest',
+                url: 'https://registry.npmjs.org/%40npmcli%2Farborist/latest',
+            },
+        ]);
         expect(resolvePublicEndpointCandidates('https://www.npmjs.com/package/%40npmcli%2Farborist')[0]).toMatchObject({
-            label: 'npm-registry',
-            url: 'https://registry.npmjs.org/%40npmcli%2Farborist',
+            label: 'npm-registry-latest',
+            url: 'https://registry.npmjs.org/%40npmcli%2Farborist/latest',
         });
         expect(resolvePublicEndpointCandidates('https://pypi.org/project/requests/')[0]).toMatchObject({
             label: 'pypi-json',

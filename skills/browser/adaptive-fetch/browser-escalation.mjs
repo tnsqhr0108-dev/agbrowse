@@ -164,7 +164,7 @@ async function waitForChallengeResolution(page, timeoutMs) {
  * @param {string} url
  */
 function isTrackingEndpoint(url) {
-    return /analytics|tracking|telemetry|beacon|pixel|log\b/i.test(url);
+    return /analytics|tracking|telemetry|beacon|pixel|statsig|feature[-_]?flag|experiment|optimizely|launchdarkly|config|metrics|events?|collect|sentry|datadog|segment|braze|adservice|doubleclick|log\b/i.test(url);
 }
 
 /**
