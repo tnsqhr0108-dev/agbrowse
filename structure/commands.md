@@ -50,6 +50,12 @@ aliases: [agbrowse commands, agbrowse CLI 표면, web-ai commands]
 | `--no-public-endpoints` | known public endpoint resolver skip |
 | `--allow-archive` | accepted but deferred; warning only |
 
+`--json` 출력은 stdout-safe compaction boundary를 지난다. 큰 public endpoint
+본문이 선택되면 `content`만 `contentLimitBytes`까지 줄이고,
+`contentBytes`/`contentTruncated`로 원본 크기와 truncation 여부를 기록한다.
+이는 output envelope 보호용이며, `--max-bytes`의 per-attempt read limit과
+구분한다.
+
 기본값은 non-browser fetch를 먼저 시도하고, 강한 결과가 없을 때만 browser
 escalation을 고려한다. `existing` session과 third-party reader는 모두 명시
 opt-in이다. `user` session은 사용자의 인증된 브라우저 세션을 명시적으로

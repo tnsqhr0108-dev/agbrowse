@@ -159,6 +159,12 @@ none|isolated|existing|user|interactive`, `--identity auto|minimal|chrome`,
 `--allow-third-party-reader`, `--allow-archive`. Run `agbrowse fetch --help`
 for full flag reference.
 
+In `--json` mode the selected `content` field is bounded before serialization
+so stdout remains parseable even when a public endpoint returns a large JSON
+document. Results include `contentBytes`, `contentLimitBytes`, and
+`contentTruncated`; truncation means only the CLI output was compacted, not that
+the source was rejected. `--max-bytes` remains the per-attempt read limit.
+
 Automated CAPTCHA solving, credential stuffing, and stealth are forbidden.
 Human assistance (browser-grade headers, user session, human resolves) is
 allowed with explicit opt-in flags (`--browser-session user|interactive`).

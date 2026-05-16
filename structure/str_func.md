@@ -21,7 +21,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | 경로 | 파일 수 | 라인 수 | 역할 |
 | --- | ---: | ---: | --- |
 | `bin/` | 2 | 6 | published bin wrapper |
-| `skills/browser/` | 26 | 7917 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics, adaptive fetch v2 |
+| `skills/browser/` | 27 | 8042 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics, adaptive fetch v2 |
 | `skills/vision-click/` | 3 | 831 | screenshot to coordinate click helper |
 | `skills/web-ai/` | 1 | 468 | bundled agent workflow skill |
 | `web-ai/` | 89 | 19646 | provider automation, sessions, MCP, eval, policy, trace |
@@ -30,11 +30,11 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | `web-ai/policy/` | 4 | 228 | mutation and content-boundary guardrails |
 | `web-ai/trace/` | 5 | 444 | trace ID, redaction, report, writer helpers |
 | `scripts/` | 9 | 1408 | eval runner, release scripts, named release gates, strict-baseline / module-graph / bin smoke checks |
-| `test/unit/` | 88 | 8498 | deterministic module tests |
-| `test/integration/` | 16 | 2087 | CLI, MCP, policy, provider fixture tests |
+| `test/unit/` | 89 | 8576 | deterministic module tests |
+| `test/integration/` | 16 | 2129 | CLI, MCP, policy, provider fixture tests |
 | `test/e2e/` | 1 | 50 | browser smoke coverage |
 | `test/spec/` | 2 | 35 | high-level contract specs |
-| `docs/` | 8 | 1897 | adoption, trace, production-readiness, comparison, benchmark, EXTERNAL_CDP, migration docs |
+| `docs/` | 8 | 1908 | adoption, trace, production-readiness, comparison, benchmark, EXTERNAL_CDP, migration docs |
 | `devlog/` | 264 | 31271 | phased plan, research, implementation notes (incl. strict-migration phases) |
 
 `structure/` 자체는 이 문서가 검증 대상으로 삼는 source tree 밖의 문서 허브라서 위 집계에서 제외한다. `verify-counts.sh`는 이 표의 경로별 파일 수와 라인 수를 live source 기준으로 비교한다.
@@ -47,7 +47,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | `skills/browser/tab-manager.mjs` | 446 | CDP target list, create, close, switch |
 | `skills/browser/tab-lifecycle.mjs` | 382 | idle cleanup, pinned target, duration parsing |
 | `skills/browser/skill-install.mjs` | 372 | bundled skill list/get/install |
-| `skills/browser/adaptive-fetch/index.mjs` | 599 | adaptive fetch v2 CLI + 6-phase escalation scheduler |
+| `skills/browser/adaptive-fetch/index.mjs` | 600 | adaptive fetch v2 CLI + 6-phase escalation scheduler |
 | `skills/browser/adaptive-fetch/safety.mjs` | 315 | URL validation, SSRF guard, DNS rebinding guard |
 | `skills/browser/adaptive-fetch/content-scorer.mjs` | 142 | multi-signal content scoring with source trust |
 | `skills/browser/adaptive-fetch/waf-profiles.mjs` | 134 | WAF fingerprinting (Cloudflare, Akamai, AWS WAF, Imperva/Incapsula, DataDome, PerimeterX) |
@@ -57,7 +57,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | `skills/browser/adaptive-fetch/human-loop.mjs` | 109 | human-in-the-loop challenge resolution with timeout |
 | `skills/browser/adaptive-fetch/browser-session.mjs` | 97 | user session navigation with URL validation (user/interactive modes) |
 | `skills/browser/adaptive-fetch/trace.mjs` | 63 | per-attempt trace with identity field |
-| `skills/browser/adaptive-fetch/endpoint-resolvers.mjs` | 345 | public endpoint resolution (GitHub, Reddit, HN, Wikipedia, npm, etc.) |
+| `skills/browser/adaptive-fetch/endpoint-resolvers.mjs` | 367 | public endpoint resolution (GitHub, Reddit, HN, Wikipedia, npm, etc.) |
 | `skills/browser/adaptive-fetch/metadata.mjs` | 182 | HTML metadata + JSON-LD extraction |
 | `skills/browser/adaptive-fetch/browser-escalation.mjs` | 176 | isolated Chrome render + network API JSON discovery |
 | `skills/browser/adaptive-fetch/validators.mjs` | 104 | boundary signal classification |

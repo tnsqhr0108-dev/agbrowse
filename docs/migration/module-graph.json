@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-05-15T14:09:52.774Z",
-  "total_mjs": 241,
+  "generated_at": "2026-05-15T18:21:11.183Z",
+  "total_mjs": 243,
   "fan_in": {
     "web-ai/session.mjs": 21,
     "web-ai/errors.mjs": 19,
@@ -69,6 +69,7 @@
     "skills/browser/adaptive-fetch/endpoint-resolvers.mjs": 2,
     "skills/browser/adaptive-fetch/human-loop.mjs": 2,
     "skills/browser/adaptive-fetch/metadata.mjs": 2,
+    "skills/browser/adaptive-fetch/output.mjs": 2,
     "skills/browser/adaptive-fetch/reader-adapters.mjs": 2,
     "skills/browser/adaptive-fetch/third-party-readers.mjs": 2,
     "skills/browser/adaptive-fetch/trace.mjs": 2,
@@ -224,6 +225,7 @@
     "test/unit/browser-adaptive-fetch-content-scorer.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-endpoints.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-human-loop.test.mjs": 1,
+    "test/unit/browser-adaptive-fetch-output.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-reader-adapters.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-session.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-third-party-readers.test.mjs": 2,
@@ -347,8 +349,9 @@
     "skills/browser/adaptive-fetch/endpoint-resolvers.mjs": 0,
     "skills/browser/adaptive-fetch/fetcher.mjs": 2,
     "skills/browser/adaptive-fetch/human-loop.mjs": 1,
-    "skills/browser/adaptive-fetch/index.mjs": 12,
+    "skills/browser/adaptive-fetch/index.mjs": 13,
     "skills/browser/adaptive-fetch/metadata.mjs": 1,
+    "skills/browser/adaptive-fetch/output.mjs": 0,
     "skills/browser/adaptive-fetch/reader-adapters.mjs": 2,
     "skills/browser/adaptive-fetch/safety.mjs": 0,
     "skills/browser/adaptive-fetch/third-party-readers.mjs": 2,
@@ -376,6 +379,7 @@
     "scripts/smoke-bins.mjs",
     "skills/browser/adaptive-fetch/browser-runtime.mjs",
     "skills/browser/adaptive-fetch/endpoint-resolvers.mjs",
+    "skills/browser/adaptive-fetch/output.mjs",
     "skills/browser/adaptive-fetch/safety.mjs",
     "skills/browser/adaptive-fetch/transforms.mjs",
     "skills/browser/adaptive-fetch/validators.mjs",
@@ -465,6 +469,7 @@
     "skills/browser/adaptive-fetch/human-loop.mjs": 2,
     "skills/browser/adaptive-fetch/index.mjs": 3,
     "skills/browser/adaptive-fetch/metadata.mjs": 1,
+    "skills/browser/adaptive-fetch/output.mjs": 0,
     "skills/browser/adaptive-fetch/reader-adapters.mjs": 2,
     "skills/browser/adaptive-fetch/safety.mjs": 0,
     "skills/browser/adaptive-fetch/third-party-readers.mjs": 2,
@@ -515,6 +520,7 @@
     "test/unit/browser-adaptive-fetch-content-scorer.test.mjs": 2,
     "test/unit/browser-adaptive-fetch-endpoints.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-human-loop.test.mjs": 3,
+    "test/unit/browser-adaptive-fetch-output.test.mjs": 1,
     "test/unit/browser-adaptive-fetch-reader-adapters.test.mjs": 3,
     "test/unit/browser-adaptive-fetch-session.test.mjs": 2,
     "test/unit/browser-adaptive-fetch-third-party-readers.test.mjs": 4,
@@ -1060,6 +1066,9 @@
     "test/unit/browser-adaptive-fetch-human-loop.test.mjs": [
       "skills/browser/adaptive-fetch/human-loop.mjs"
     ],
+    "test/unit/browser-adaptive-fetch-output.test.mjs": [
+      "skills/browser/adaptive-fetch/output.mjs"
+    ],
     "test/unit/browser-adaptive-fetch-reader-adapters.test.mjs": [
       "skills/browser/adaptive-fetch/reader-adapters.mjs"
     ],
@@ -1461,6 +1470,7 @@
       "skills/browser/adaptive-fetch/endpoint-resolvers.mjs",
       "skills/browser/adaptive-fetch/fetcher.mjs",
       "skills/browser/adaptive-fetch/human-loop.mjs",
+      "skills/browser/adaptive-fetch/output.mjs",
       "skills/browser/adaptive-fetch/reader-adapters.mjs",
       "skills/browser/adaptive-fetch/safety.mjs",
       "skills/browser/adaptive-fetch/third-party-readers.mjs",
@@ -1469,6 +1479,7 @@
     "skills/browser/adaptive-fetch/metadata.mjs": [
       "skills/browser/adaptive-fetch/transforms.mjs"
     ],
+    "skills/browser/adaptive-fetch/output.mjs": [],
     "skills/browser/adaptive-fetch/reader-adapters.mjs": [
       "skills/browser/adaptive-fetch/metadata.mjs",
       "skills/browser/adaptive-fetch/transforms.mjs"

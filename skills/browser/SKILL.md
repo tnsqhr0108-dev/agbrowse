@@ -144,6 +144,37 @@ Content scoring runs after each phase to decide whether to escalate.
 | `--trace` | — | — | Include all attempt traces |
 | `--json` | — | — | JSON output |
 
+#### JSON Contract
+
+`--json` output is always intended to parse as one JSON object. Large selected
+content is compacted before serialization and annotated with:
+
+- `contentBytes`: original selected content size in UTF-8 bytes
+- `contentLimitBytes`: content bytes retained in CLI JSON output
+- `contentTruncated`: true when `content` was shortened for output safety
+
+Do not treat `contentTruncated` as a failed fetch. Use `verdict`, `source`,
+`finalUrl`, `warnings`, and `attempts` to decide whether another escalation is
+needed.
+
+#### Agent Workflow
+
+When an agent needs to read a URL:
+
+1. Use a search tool to discover candidate URLs first.
+2. Run `agbrowse fetch <url> --json --trace --browser never` for HTTP-only reading.
+3. If `verdict` is `weak_ok` or `blocked`, inspect `attempts` before escalating.
+4. Public endpoints, RSS/Atom, oEmbed, and metadata are tried before any browser step — do not skip them.
+5. Use `--allow-third-party-reader` only when the user or task allows a public third-party reader.
+6. Use `--browser auto --browser-session isolated` for JS-rendered pages when a browser is needed.
+7. Use `--browser-session user` or `interactive` only for the user's own authenticated browser state and human-supervised challenge handling.
+8. Report boundaries plainly: `blocked`, `auth_required`, `paywall`, `challenge`, or `browser_required`. These are observations, not immediate stops — continue the legitimate ladder before the final boundary verdict.
+
+Do not treat CAPTCHA, login, or paywall markers as "stop immediately" signals.
+Do not claim that browser session mode "bypasses" paywalls — it uses the user's
+own already-authorized browser state. Do not claim challenge resolution is
+automated — it is human-supervised with a timeout.
+
 #### Safety Model
 
 - Automated CAPTCHA solving, credential stuffing, stealth libraries: **forbidden**
