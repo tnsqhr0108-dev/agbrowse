@@ -1,6 +1,6 @@
 ---
 name: vision-click
-description: "Vision-based coordinate click: screenshot → Codex CLI (NDJSON) → DPR correction → mouse click. Codex CLI only."
+description: "Vision-based coordinate click: screenshot → Codex CLI (NDJSON) → DPR correction → mouse click. Codex CLI only. Triggers: vision click, 비전 클릭, coordinate click, 좌표 클릭, screenshot click, non-DOM click, agbrowse-vision-click. NOT for: regular DOM clicks (use browser skill), desktop app clicks (use desktop-control)."
 ---
 
 # Vision Click (Codex CLI)

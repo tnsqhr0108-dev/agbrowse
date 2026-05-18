@@ -84,7 +84,7 @@ export async function captureCopiedResponseText(page, selectors, options = {}) {
                 let button = null;
                 for (const selector of selectorSet.copyButtonSelectors) {
                     const scoped = /** @type {HTMLElement[]} */ (Array.from(turn.querySelectorAll(selector)));
-                    button = scoped.find((/** @type {HTMLElement} */ candidate) => candidate.offsetParent !== null || candidate.getClientRects().length > 0) || scoped.at(-1) || null;
+                    button = scoped.find((/** @type {HTMLElement} */ candidate) => candidate.offsetParent !== null || candidate.getClientRects().length > 0) || null;
                     if (button) break;
                 }
                 if (!button) return { ok: false, status: 'missing-button' };

@@ -1,6 +1,13 @@
 ---
 name: browser
-description: "Chrome browser control and adaptive URL reading: open pages, fetch one candidate URL, take ref snapshots, click, type, screenshot. No external server required."
+description: >-
+  Chrome browser control and adaptive URL reading: open pages, fetch one candidate URL,
+  take ref snapshots, click, type, screenshot. No external server required.
+  NOT for: sending prompts to AI providers like ChatGPT, Gemini, Grok (use web-ai skill instead).
+  NOT for: system-level screen capture (use screen-capture skill).
+  Triggers: browser, 브라우저, Chrome, 크롬, open page, navigate, snapshot,
+  screenshot, 스크린샷, click element, type text, 웹페이지, page interaction,
+  DOM, ref ID, 페이지 열기, 탭, tab, CDP, 브라우저 열기, adaptive fetch, URL 읽기
 ---
 
 # Browser Control

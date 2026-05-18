@@ -783,6 +783,10 @@ function bindProviderPage(deps, page, targetId, vendorUrl) {
         prepareProviderPage: async () => {
             if (page.url() !== vendorUrl) {
                 await page.goto(vendorUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+                // SPA providers render the composer asynchronously after DOMContentLoaded
+                await page.locator('#prompt-textarea, .ProseMirror, [contenteditable="true"]').first()
+                    .waitFor({ state: 'visible', timeout: 15_000 })
+                    .catch(() => undefined);
             }
         },
     };
