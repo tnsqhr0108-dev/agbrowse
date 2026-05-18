@@ -102,6 +102,9 @@ export async function captureCopiedResponseText(page, selectors, options = {}) {
                     if (text.trim()) intercepted = text;
                 };
 
+                const origScrollIntoView = Element.prototype.scrollIntoView;
+                const origFocus = HTMLElement.prototype.focus;
+
                 try {
                     if (originalWriteText) {
                         Object.defineProperty(clipboard, 'writeText', {
@@ -125,16 +128,17 @@ export async function captureCopiedResponseText(page, selectors, options = {}) {
                         });
                     }
 
-                    const prevActive = /** @type {HTMLElement|null} */ (document.activeElement);
+                    Element.prototype.scrollIntoView = function() {};
+                    HTMLElement.prototype.focus = function(/** @type {FocusOptions|undefined} */ opts) {
+                        return origFocus.call(this, Object.assign({}, opts, { preventScroll: true }));
+                    };
+
                     const init = { bubbles: true, cancelable: true, view: window };
                     button.dispatchEvent(new PointerEvent('pointerdown', init));
                     button.dispatchEvent(new MouseEvent('mousedown', init));
                     button.dispatchEvent(new PointerEvent('pointerup', init));
                     button.dispatchEvent(new MouseEvent('mouseup', init));
                     button.dispatchEvent(new MouseEvent('click', init));
-                    if (prevActive && prevActive !== document.activeElement) {
-                        try { prevActive.focus({ preventScroll: true }); } catch {}
-                    }
 
                     const deadline = Date.now() + timeoutMs;
                     while (Date.now() < deadline) {
@@ -152,6 +156,8 @@ export async function captureCopiedResponseText(page, selectors, options = {}) {
                         ? { ok: true, text: intercepted }
                         : { ok: false, status: 'timeout' };
                 } finally {
+                    Element.prototype.scrollIntoView = origScrollIntoView;
+                    HTMLElement.prototype.focus = origFocus;
                     if (originalWriteText) {
                         Object.defineProperty(clipboard, 'writeText', { configurable: true, value: originalWriteText });
                     }
