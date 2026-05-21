@@ -69,6 +69,8 @@ describe('web-ai Gemini Deep Think contract constraints', () => {
     it('standalone runtime supports observed Gemini file upload with evidence checks', () => {
         const liveSrc = readFileSync(new URL('../../web-ai/gemini-live.mjs', import.meta.url), 'utf8');
         expect(liveSrc).toContain("page.waitForEvent('filechooser'");
+        expect(liveSrc).toContain('Upload & tools');
+        expect(liveSrc).toContain('Upload files');
         expect(liveSrc).toContain('uploader-file-preview');
         expect(liveSrc).toContain('Gemini sent turn has no attachment evidence');
         expect(liveSrc).toContain('context package attached:');

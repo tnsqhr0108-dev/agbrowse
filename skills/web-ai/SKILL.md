@@ -241,9 +241,13 @@ agbrowse web-ai query \
   --vendor gemini \
   --url https://gemini.google.com/app \
   --model fast \
-  --file /tmp/context.txt \
-  --prompt "Read the attached file and reply with its sentinel."
+  --file /path/to/user-requested-file.pdf \
+  --prompt "Summarize the attached file."
 ```
+
+Use `--file` only when the user explicitly wants that single file uploaded. For
+source/project context, use context packaging instead of creating a temporary
+`.txt`/`.md` file.
 
 Upload must verify visible attachment evidence and sent-turn evidence where the
 provider exposes it. Input-only success is not enough.
@@ -345,6 +349,11 @@ and clear are intentionally unsupported.
 Use ChatGPT or Gemini for context packaging. Do not pick `--vendor grok`
 here; Grok should use inline prompts plus optional single `--file` uploads
 only.
+
+Upload transport creates one `.zip` archive named
+`web-ai-context-package-<id>.zip`. The archive contains `CONTEXT_PACKAGE.md`
+plus the selected source files. Do not create a temporary `.txt`/`.md` file
+yourself for source context; use `--context-from-files` or `--context-file`.
 
 ```bash
 agbrowse web-ai query \

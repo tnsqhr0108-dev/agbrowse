@@ -160,7 +160,10 @@ async function findGeminiModelOption(page, choice) {
             const pattern = geminiModeLabelPattern(label);
             for (const candidate of candidates) {
                 if (!await candidate.isVisible().catch(() => false)) continue;
-                const text = (await candidate.innerText({ timeout: 500 }).catch(() => '')).trim().replace(/\s+/g, ' ');
+                const labelEl = candidate.locator('.label').first();
+                const text = await labelEl.isVisible().catch(() => false)
+                    ? (await labelEl.innerText({ timeout: 500 }).catch(() => '')).trim().replace(/\s+/g, ' ')
+                    : (await candidate.innerText({ timeout: 500 }).catch(() => '')).trim().replace(/\s+/g, ' ');
                 if (pattern.test(text)) return candidate;
             }
             const byText = page.getByText(pattern).first();
@@ -228,7 +231,7 @@ async function readGeminiModel(page) {
  */
 function geminiModeLabelPattern(label) {
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[- ]/g, '[- ]');
-    return new RegExp(`^(?:Gemini\\s*)?(?:\\d+(?:\\.\\d+)?\\s+)?${escaped}\\b`, 'i');
+    return new RegExp(`^(?:Gemini\\s*)?(?:\\d+(?:\\.\\d+)?\\s+)?${escaped}(?![\\w-])`, 'i');
 }
 
 /**
@@ -239,8 +242,8 @@ function normalizeGeminiModelLabel(label) {
     const normalized = String(label || '').trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
     const withoutVendor = normalized.replace(/^gemini\s+/, '');
     const withoutVersion = withoutVendor.replace(/^\d+(?:\.\d+)?\s+/, '');
-    if (/^flash lite\b/.test(withoutVersion)) return 'flash-lite';
-    if (/^flash\b/.test(withoutVersion)) return 'flash';
-    if (/^pro\b/.test(withoutVersion)) return 'pro';
+    if (/^flash[ -]lite(?![\w-])/.test(withoutVersion)) return 'flash-lite';
+    if (/^flash(?![\w-])/.test(withoutVersion)) return 'flash';
+    if (/^pro(?![\w-])/.test(withoutVersion)) return 'pro';
     return null;
 }
