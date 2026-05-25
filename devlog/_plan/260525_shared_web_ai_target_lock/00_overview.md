@@ -145,6 +145,22 @@ but it carries both top-level convenience fields and a structured
   - `npm run test:smoke`
 - Post-commit GPT Pro verification with context package scoped to this change.
 
+## GPT Pro remediation
+
+Post-commit GPT Pro verification initially returned `NEEDS_FIX` for two edge
+cases:
+
+- target-resolution `cdp.target-mismatch` errors lacked
+  `expectedTargetId`, `actualTargetId`, `port`, nested `targetMismatch`, and a
+  concrete `recovery` command;
+- `stop --session <id>` could route through the default ChatGPT branch when the
+  stored session belonged to Gemini or Grok and `--vendor` was omitted.
+
+The remediation adds structured recovery evidence to `sessionResolutionError`
+and resolves `poll`/`stop --session` vendor from the stored session before
+choosing provider-specific functions. Unit coverage now drives the real
+`runWebAiCli` path for both cases.
+
 ## Provider parity note
 
 ChatGPT has an in-loop target drift guard in its poll loop. Gemini and Grok

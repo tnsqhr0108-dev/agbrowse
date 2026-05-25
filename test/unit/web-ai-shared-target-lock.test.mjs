@@ -13,6 +13,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    vi.restoreAllMocks();
+    vi.doUnmock('../../skills/browser/tab-manager.mjs');
     if (ORIGINAL_HOME === undefined) delete process.env.BROWSER_AGENT_HOME;
     else process.env.BROWSER_AGENT_HOME = ORIGINAL_HOME;
     rmSync(tmpHome, { recursive: true, force: true });
@@ -82,13 +84,7 @@ describe('web-ai shared target lock guard', () => {
 
     it('stop --session does not release the existing active-command owner row', async () => {
         const page = createMockChatGptPage('https://chatgpt.com/c/stop');
-        vi.doMock('../../skills/browser/tab-manager.mjs', () => ({
-            createTab: vi.fn(),
-            getPageByTargetId: vi.fn(async () => page),
-            isTabAlive: vi.fn(async () => true),
-            listManagedTabs: vi.fn(async () => []),
-            waitForPageByTargetId: vi.fn(async () => page),
-        }));
+        mockTabManagerPage(page);
         const { createSession } = await import('../../web-ai/session.mjs');
         const { runWebAiCli } = await import('../../web-ai/cli.mjs');
         const { listActiveCommands, registerActiveCommand } = await import('../../web-ai/active-command-store.mjs');
@@ -119,6 +115,68 @@ describe('web-ai shared target lock guard', () => {
         expect(result).toMatchObject({ ok: true, interrupt: true, sessionId: session.sessionId, targetId: 'target-stop' });
         expect(page.keyboard.press).toHaveBeenCalledWith('Escape');
         expect(rows).toMatchObject([{ commandId: 'owner-command', status: 'running', targetId: 'target-stop' }]);
+    });
+
+    it('stop --session resolves the provider from the stored session when --vendor is omitted', async () => {
+        const page = createMockChatGptPage('https://gemini.google.com/app/gemini-stop');
+        mockTabManagerPage(page);
+        const { createSession } = await import('../../web-ai/session.mjs');
+        const { runWebAiCli } = await import('../../web-ai/cli.mjs');
+        const session = createSession({ vendor: 'gemini', prompt: 'g', attachmentPolicy: 'inline-only' }, {
+            targetId: 'target-gemini',
+            conversationUrl: 'https://gemini.google.com/app/gemini-stop',
+        });
+
+        const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        let result;
+        try {
+            result = await runWebAiCli(['stop', '--session', session.sessionId, '--json'], {
+                getPort: () => 9222,
+                getBrowserStatus: async () => ({ running: true }),
+                readBrowserState: () => ({ headless: false }),
+            });
+        } finally {
+            logSpy.mockRestore();
+        }
+
+        expect(result).toMatchObject({ ok: true, vendor: 'gemini', interrupt: true, targetId: 'target-gemini' });
+        expect(page.keyboard.press).toHaveBeenCalledWith('Escape');
+    });
+
+    it('session target-resolution mismatch exposes expected/actual/recovery evidence', async () => {
+        const page = createMockChatGptPage('https://chatgpt.com/c/live');
+        mockTabManagerPage(page);
+        const { createSession } = await import('../../web-ai/session.mjs');
+        const { runWebAiCli } = await import('../../web-ai/cli.mjs');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'a', attachmentPolicy: 'inline-only' }, {
+            targetId: 'target-drift',
+            conversationUrl: 'https://chatgpt.com/c/expected',
+        });
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        try {
+            await expect(runWebAiCli(['stop', '--session', session.sessionId, '--json'], {
+                getPort: () => 9222,
+                getBrowserStatus: async () => ({ running: true }),
+                readBrowserState: () => ({ headless: false }),
+            })).rejects.toMatchObject({
+                errorCode: 'cdp.target-mismatch',
+                stage: 'target-resolution',
+                evidence: {
+                    expectedTargetId: 'target-drift',
+                    actualTargetId: 'target-drift',
+                    port: 9222,
+                    recovery: `agbrowse web-ai stop --vendor chatgpt --session ${session.sessionId} --navigate --json`,
+                    targetMismatch: {
+                        expectedTargetId: 'target-drift',
+                        actualTargetId: 'target-drift',
+                        port: 9222,
+                    },
+                },
+            });
+        } finally {
+            errorSpy.mockRestore();
+        }
     });
 
     it('ChatGPT target-mismatch result exposes structured recovery evidence', async () => {
@@ -167,4 +225,14 @@ function createMockChatGptPage(url) {
             newCDPSession: vi.fn(async () => ({})),
         })),
     };
+}
+
+function mockTabManagerPage(page) {
+    vi.doMock('../../skills/browser/tab-manager.mjs', () => ({
+        createTab: vi.fn(),
+        getPageByTargetId: vi.fn(async () => page),
+        isTabAlive: vi.fn(async () => true),
+        listManagedTabs: vi.fn(async () => []),
+        waitForPageByTargetId: vi.fn(async () => page),
+    }));
 }

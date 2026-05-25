@@ -870,7 +870,7 @@ async function runBoundCommand(command, deps, input, pollFn, stopFn) {
     }
     if (command === 'poll' && input.session) {
         return withSessionCommandLock(input.session, async () => {
-            return withCommandSessionPage(deps, input, async ({ page, targetId, session }) => {
+            return withCommandSessionPage(command, deps, input, async ({ page, targetId, session }) => {
                 const sessionDeps = {
                     ...deps,
                     getPage: async () => page,
@@ -916,15 +916,16 @@ function resolveImplicitCommandSession(command, deps, input) {
 
 /**
  * @template T
+ * @param {any} command
  * @param {any} deps
  * @param {any} input
  * @param {(ctx: { page: any, targetId: string, session: any }) => Promise<T>} fn
  * @returns {Promise<T>}
  */
-async function withCommandSessionPage(deps, input, fn) {
+async function withCommandSessionPage(command, deps, input, fn) {
     if (input.autoBoundSession === true) {
         const resolved = await resolveSessionPage(deps, input.session, { allowNavigate: input.navigate === true });
-        if (resolved.mismatch) throw sessionResolutionError(input, resolved);
+        if (resolved.mismatch) throw sessionResolutionError(command, deps, input, resolved);
         return fn({ page: resolved.page, targetId: resolved.targetId, session: resolved.session });
     }
     return withSessionPage(deps, input.session, fn);
@@ -937,7 +938,7 @@ async function withCommandSessionPage(deps, input, fn) {
  */
 async function runSessionStopInterrupt(deps, input, stopFn) {
     const resolved = await resolveSessionPage(deps, input.session, { allowNavigate: input.navigate === true });
-    if (resolved.mismatch) throw sessionResolutionError(input, resolved);
+    if (resolved.mismatch) throw sessionResolutionError('stop', deps, input, resolved);
     const sessionDeps = {
         ...deps,
         getPage: async () => resolved.page,
@@ -958,22 +959,41 @@ async function runSessionStopInterrupt(deps, input, stopFn) {
 }
 
 /**
+ * @param {any} command
+ * @param {any} deps
  * @param {any} input
  * @param {any} resolved
  */
-function sessionResolutionError(input, resolved) {
+function sessionResolutionError(command, deps, input, resolved) {
+    const vendor = input.vendor || resolved.session?.vendor || 'chatgpt';
+    const sessionId = input.session || resolved.session?.sessionId || null;
+    const expectedTargetId = resolved.session?.targetId || resolved.targetId || null;
+    const actualTargetId = resolved.url ? (resolved.targetId || null) : null;
+    const port = Number(deps.getPort?.() || process.env.CDP_PORT || 9222);
+    const recovery = sessionId
+        ? `agbrowse web-ai ${command || 'poll'} --vendor ${vendor} --session ${sessionId} --navigate --json`
+        : `agbrowse web-ai ${command || 'poll'} --vendor ${vendor} --navigate --json`;
     return new WebAiError({
         errorCode: 'cdp.target-mismatch',
         stage: 'target-resolution',
-        vendor: input.vendor || resolved.session?.vendor || 'chatgpt',
+        vendor,
         retryHint: 'pass-session-or-navigate',
-        message: resolved.warnings?.[0] || `session ${input.session} is not attached to its saved provider tab`,
+        message: resolved.warnings?.[0] || `session ${sessionId} is not attached to its saved provider tab`,
         mutationAllowed: false,
         evidence: {
-            sessionId: input.session,
-            targetId: resolved.targetId || null,
+            sessionId,
+            expectedTargetId,
+            actualTargetId,
+            targetId: expectedTargetId,
+            port,
             url: resolved.url || null,
             conversationUrl: resolved.conversationUrl || null,
+            targetMismatch: {
+                expectedTargetId,
+                actualTargetId,
+                port,
+            },
+            recovery,
             warnings: resolved.warnings || [],
         },
     });
@@ -1071,6 +1091,7 @@ async function withWebAiActiveCommand(command, deps, input, fn) {
 async function runCommand(command, deps, input) {
     const boundSendOrQuery = await runBoundSendOrQuery(command, deps, input);
     if (boundSendOrQuery) return boundSendOrQuery;
+    input = resolveSessionVendorInput(command, input);
 
     // Phase 9.1: create new tab per session for send/query
     if (['send', 'query'].includes(command)) {
@@ -1149,6 +1170,17 @@ async function runCommand(command, deps, input) {
         case 'stop': return runBoundCommand(command, deps, input, pollWebAi, stopWebAi);
         default: throw new Error(`unknown web-ai command: ${command}`);
     }
+}
+
+/**
+ * @param {any} command
+ * @param {any} input
+ */
+function resolveSessionVendorInput(command, input) {
+    if (!['poll', 'stop'].includes(command) || !input.session) return input;
+    const session = getSession(input.session);
+    if (!session?.vendor || session.vendor === input.vendor) return input;
+    return { ...input, vendor: session.vendor, sessionVendorResolved: true };
 }
 
 /**
