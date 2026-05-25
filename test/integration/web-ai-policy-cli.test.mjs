@@ -1,6 +1,23 @@
 import fs from 'node:fs/promises';
-import { describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runWebAiCli } from '../../web-ai/cli.mjs';
+
+const ORIGINAL_HOME = process.env.BROWSER_AGENT_HOME;
+let tmpHome;
+
+beforeEach(() => {
+    tmpHome = mkdtempSync(join(tmpdir(), 'agbrowse-policy-cli-'));
+    process.env.BROWSER_AGENT_HOME = tmpHome;
+});
+
+afterEach(() => {
+    if (ORIGINAL_HOME === undefined) delete process.env.BROWSER_AGENT_HOME;
+    else process.env.BROWSER_AGENT_HOME = ORIGINAL_HOME;
+    rmSync(tmpHome, { recursive: true, force: true });
+});
 
 describe('web-ai policy CLI', () => {
     it('allows provider copy capture when the CLI fallback flag is explicitly set', async () => {

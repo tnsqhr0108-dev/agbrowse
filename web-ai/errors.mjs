@@ -7,7 +7,9 @@
 // Catalog (devlog/_fin/mvp/01_foundation/03_phase2_errors.md is the source of truth):
 //
 //   cdp.unreachable                 connect              start-or-check-port
-//   cdp.target-mismatch             connect              tab-switch
+//   cdp.target-mismatch             connect|poll|target-resolution
+//                                                        tab-switch|poll-session
+//   session.target-ambiguous        target-resolution    pass-session
 //   provider.composer-not-visible   composer-prereq      re-snapshot
 //   provider.model-mismatch         provider-select-mode model-fallback
 //   provider.attachment-preflight   attachment-preflight inline-only-or-file

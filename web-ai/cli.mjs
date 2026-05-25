@@ -17,9 +17,10 @@ import { buildWebAiSnapshot } from './ax-snapshot.mjs';
 import { runSessionsCommand, printSessionsHuman, parseDurationToMs } from './cli-sessions.mjs';
 import { createTab, listManagedTabs, waitForPageByTargetId } from '../skills/browser/tab-manager.mjs';
 import { cleanupIdleTabs, isPinned } from '../skills/browser/tab-lifecycle.mjs';
-import { withSessionPage } from './tab-recovery.mjs';
+import { resolveSessionPage, withSessionPage } from './tab-recovery.mjs';
 import { withSessionCommandLock } from './session-store.mjs';
 import { listSessions, getSession } from './session.mjs';
+import { resolveImplicitSessionSelection } from './session-target-guard.mjs';
 import { listLeases } from './tab-lease-store.mjs';
 import { cleanupPoolTabs, getPooledTab } from './tab-pool.mjs';
 import { finalizeProviderTab } from './tab-finalizer.mjs';
@@ -59,9 +60,14 @@ Commands:
   render              Render the prompt envelope without opening a browser
   status              Check active provider tab state
   send                Send a prompt; returns a sessionId for later resume
-  poll                Poll a session (or the latest baseline) for completion
+  poll                Poll a session for completion. Without --session:
+                      0 active sessions use the current baseline/tab, 1 active
+                      provider session auto-binds, 2+ fail closed with candidates.
   query               send + poll in one call
-  stop                Send Escape to the active provider tab
+  stop                Interrupt generation. stop --session <id> targets that
+                      session-bound tab even while a poll is running; without
+                      --session: 0 active uses current tab, 1 active auto-binds,
+                      2+ active provider sessions fail closed.
   watch               Watch a persisted session until terminal status
   snapshot            Print a compact accessibility snapshot for the active provider tab
   sessions <sub>      Manage persisted sessions: list | show | resume | reattach | doctor | prune
@@ -141,6 +147,9 @@ Sessions (durable across shells, stored at $BROWSER_AGENT_HOME/web-ai-sessions.j
                       query --session <id> sends a new prompt in the same
                       saved conversation tab; poll/sessions resume only wait
                       for an already-sent response.
+                      For shared CDP ports, pass --session when multiple active
+                      provider sessions exist; ambiguity errors include
+                      candidates: [{ sessionId, targetId, vendor, conversationUrl }].
   --deadline <iso>    Override the session deadline (default now + --timeout
                       or the vendor polling default).
   --navigate          When sessions reattach finds a tab mismatch, allow
@@ -226,6 +235,7 @@ Failure envelope (when --json or AGBROWSE_JSON_ERRORS=1):
          provider.attachment-preflight | provider.attachment-evidence-missing |
          provider.commit-not-verified | provider.poll-timeout |
          provider.runtime-disabled | capability.unsupported |
+         session.target-ambiguous |
          watcher.session-missing | watcher.already-running |
          snapshot.unavailable | snapshot.ref-stale |
          context.over-budget | context.symlink-rejected |
@@ -854,9 +864,13 @@ function providerOriginFromUrl(url = '') {
  * @param {any} stopFn
  */
 async function runBoundCommand(command, deps, input, pollFn, stopFn) {
-    if (['poll', 'stop'].includes(command) && input.session) {
+    input = resolveImplicitCommandSession(command, deps, input);
+    if (command === 'stop' && input.session) {
+        return runSessionStopInterrupt(deps, input, stopFn);
+    }
+    if (command === 'poll' && input.session) {
         return withSessionCommandLock(input.session, async () => {
-            return withSessionPage(deps, input.session, async ({ page, targetId, session }) => {
+            return withCommandSessionPage(deps, input, async ({ page, targetId, session }) => {
                 const sessionDeps = {
                     ...deps,
                     getPage: async () => page,
@@ -864,14 +878,11 @@ async function runBoundCommand(command, deps, input, pollFn, stopFn) {
                     getCdpSession: async () => (/** @type {any} */ (page)).context().newCDPSession(page),
                 };
                 return withWebAiActiveCommand(command, sessionDeps, { ...input, vendor: session.vendor, session: session.sessionId }, async () => {
-                    if (command === 'poll') {
-                        const result = await pollFn(sessionDeps, { ...input, vendor: session.vendor, session: session.sessionId });
-                        if (isRecoverableTabCrash(result)) {
-                            throw new Error(result.error || 'target closed during session-bound web-ai command');
-                        }
-                        return result;
+                    const result = await pollFn(sessionDeps, { ...input, vendor: session.vendor, session: session.sessionId });
+                    if (isRecoverableTabCrash(result)) {
+                        throw new Error(result.error || 'target closed during session-bound web-ai command');
                     }
-                    if (command === 'stop') return stopFn(sessionDeps, { ...input, vendor: session.vendor, session: session.sessionId });
+                    return appendAutoBindWarning(result, input, session);
                 });
             });
         });
@@ -879,6 +890,109 @@ async function runBoundCommand(command, deps, input, pollFn, stopFn) {
     if (command === 'poll') return withWebAiActiveCommand(command, deps, input, () => pollFn(deps, input));
     if (command === 'stop') return withWebAiActiveCommand(command, deps, input, () => stopFn(deps, input));
     throw new Error(`runBoundCommand: unsupported command ${command}`);
+}
+
+/**
+ * @param {any} command
+ * @param {any} deps
+ * @param {any} input
+ */
+function resolveImplicitCommandSession(command, deps, input) {
+    if (input.session || !['poll', 'stop'].includes(command)) return input;
+    const port = Number(deps.getPort?.() || process.env.CDP_PORT || 9222);
+    const selection = resolveImplicitSessionSelection({
+        command,
+        vendor: input.vendor || 'chatgpt',
+        port,
+    });
+    if (selection.action !== 'auto-bind' || !selection.sessionId) return input;
+    return {
+        ...input,
+        session: selection.sessionId,
+        autoBoundSession: true,
+        autoBoundCandidates: selection.candidates,
+    };
+}
+
+/**
+ * @template T
+ * @param {any} deps
+ * @param {any} input
+ * @param {(ctx: { page: any, targetId: string, session: any }) => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+async function withCommandSessionPage(deps, input, fn) {
+    if (input.autoBoundSession === true) {
+        const resolved = await resolveSessionPage(deps, input.session, { allowNavigate: input.navigate === true });
+        if (resolved.mismatch) throw sessionResolutionError(input, resolved);
+        return fn({ page: resolved.page, targetId: resolved.targetId, session: resolved.session });
+    }
+    return withSessionPage(deps, input.session, fn);
+}
+
+/**
+ * @param {any} deps
+ * @param {any} input
+ * @param {any} stopFn
+ */
+async function runSessionStopInterrupt(deps, input, stopFn) {
+    const resolved = await resolveSessionPage(deps, input.session, { allowNavigate: input.navigate === true });
+    if (resolved.mismatch) throw sessionResolutionError(input, resolved);
+    const sessionDeps = {
+        ...deps,
+        getPage: async () => resolved.page,
+        getTargetId: async () => resolved.targetId,
+        getCdpSession: async () => (/** @type {any} */ (resolved.page)).context().newCDPSession(resolved.page),
+    };
+    const result = await stopFn(sessionDeps, {
+        ...input,
+        vendor: resolved.session.vendor,
+        session: resolved.session.sessionId,
+    });
+    return appendAutoBindWarning({
+        ...result,
+        sessionId: resolved.session.sessionId,
+        targetId: resolved.targetId,
+        interrupt: true,
+    }, input, resolved.session);
+}
+
+/**
+ * @param {any} input
+ * @param {any} resolved
+ */
+function sessionResolutionError(input, resolved) {
+    return new WebAiError({
+        errorCode: 'cdp.target-mismatch',
+        stage: 'target-resolution',
+        vendor: input.vendor || resolved.session?.vendor || 'chatgpt',
+        retryHint: 'pass-session-or-navigate',
+        message: resolved.warnings?.[0] || `session ${input.session} is not attached to its saved provider tab`,
+        mutationAllowed: false,
+        evidence: {
+            sessionId: input.session,
+            targetId: resolved.targetId || null,
+            url: resolved.url || null,
+            conversationUrl: resolved.conversationUrl || null,
+            warnings: resolved.warnings || [],
+        },
+    });
+}
+
+/**
+ * @param {any} result
+ * @param {any} input
+ * @param {any} session
+ */
+function appendAutoBindWarning(result, input, session) {
+    if (input.autoBoundSession !== true) return result;
+    return {
+        ...result,
+        warnings: [
+            ...(result.warnings || []),
+            `auto-bound ${input.vendor || session.vendor || 'web-ai'} session ${input.session} because it was the only active provider session`,
+        ],
+    };
 }
 
 /**

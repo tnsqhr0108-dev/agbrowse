@@ -131,6 +131,15 @@ Each session record stores `targetId`, `tabId`, and `tabState`. When `poll` or
 bound tab automatically. If the tab was closed, it auto-recovers by creating a
 new tab and navigating to the saved `conversationUrl`.
 
+### Shared CDP Session Ambiguity
+
+All provider commands may share one Chrome CDP port, such as `9222`. For
+session-less `poll` or `stop`: `0` active sessions preserve legacy current-tab
+behavior, `1` active provider session auto-binds with a warning, and `2+` fail
+closed with `session.target-ambiguous` plus candidate `sessionId`/`targetId`
+evidence. Rerun with `--session <id>`; for tab drift or missing target recovery,
+add `--navigate`.
+
 ### Tab Pooling (Phase 9.2)
 
 Completed session tabs are kept in a vendor-specific pool for reuse. The next
@@ -442,25 +451,12 @@ are testing legacy policy aliases.
 
 Set `AGBROWSE_JSON_ERRORS=1` for agent integrations. When set (or when the
 command was invoked with `--json`), any failure is printed on stderr as a
-parseable JSON envelope:
+parseable envelope: `{ "ok": false, "status": "error", "error": { ... } }`.
 
-```json
-{
-  "ok": false,
-  "status": "error",
-  "error": {
-    "name": "WebAiError",
-    "errorCode": "cdp.target-mismatch",
-    "stage": "connect",
-    "message": "active tab is not ChatGPT: https://example.com/",
-    "retryHint": "tab-switch",
-    "vendor": "chatgpt",
-    "mutationAllowed": false,
-    "selectorsTried": [],
-    "evidence": { "url": "https://example.com/" }
-  }
-}
-```
+Poll-stage target drift is a command result with `ok: false`,
+`status: "target-mismatch"`, `expectedTargetId`, `actualTargetId`, `port`,
+`targetMismatch`, and a `recovery` command such as
+`agbrowse web-ai poll --vendor chatgpt --session <id> --navigate --json`.
 
 Otherwise human mode prints `[web-ai error] <code>: <message>` on the first
 line and `[hint] retryHint: <hint>` on the second line. Exit code is `1`
@@ -475,6 +471,8 @@ Initial code catalog (full list and PR2 call-site coverage live in
   `provider.commit-not-verified`, `provider.poll-timeout`,
   `provider.runtime-disabled`
 - `capability.unsupported`
+- `session.target-ambiguous`: rerun `poll`/`stop` with `--session <id>`; for
+  target drift, retry `poll --session <id> --navigate`
 - `context.over-budget`, `context.symlink-rejected`
 - `grok.context-pack-not-allowed`
 - `internal.unhandled`

@@ -435,17 +435,22 @@ agbrowse web-ai poll --vendor chatgpt --session "$SID" --timeout 1800
 ```
 
 `poll` resolves the session in priority order: `--session <id>` > active
-target id > vendor latest > legacy baseline. Each completion / timeout
-updates the session record with `status`, `conversationUrl`, and `answer`.
-Completed sessions also expose local artifact descriptors in
-`agbrowse web-ai sessions show <id>` when transcript, report, or image
-artifacts were saved.
+target id > vendor latest > legacy baseline. On a shared CDP port, session-less
+`poll`/`stop` auto-bind only when exactly one active provider session exists;
+two or more active sessions fail closed with `session.target-ambiguous` and
+candidate `sessionId`/`targetId` evidence. Each completion / timeout updates
+the session record with `status`, `conversationUrl`, and `answer`. Completed
+sessions also expose local artifact descriptors in
+`agbrowse web-ai sessions show <id>` when transcript, report, or image artifacts
+were saved.
 
 **Session-to-tab binding** (Phase 9.1): every session owns its own tab.
 The record stores `targetId`, `tabId`, and `tabState` (`createdAt`,
-`lastActiveAt`, `recoveryCount`, `closeCount`). If the bound tab is closed
-mid-operation, the runtime auto-recovers once by creating a new tab and
-navigating to the saved `conversationUrl`.
+`lastActiveAt`, `recoveryCount`, `closeCount`). `stop --session <id>` resolves
+that bound tab and sends Escape as an interrupt without taking over the running
+poll's target lease. If the bound tab is closed mid-operation, the runtime
+auto-recovers once by creating a new tab and navigating to the saved
+`conversationUrl` where the command permits navigation.
 
 Temporary Chat sessions are never archived, including when archive mode is
 forced, because they are not durable ChatGPT conversations.
@@ -485,6 +490,15 @@ failures. Every error becomes:
 }
 ```
 
+Poll-stage target drift is returned as a command result, not just an error
+envelope. The result includes `ok: false`, `status: "target-mismatch"`,
+`expectedTargetId`, `actualTargetId`, `port`, a `targetMismatch` object, and a
+`recovery` command such as:
+
+```bash
+agbrowse web-ai poll --vendor chatgpt --session "$SID" --navigate --json
+```
+
 Initial `errorCode` catalog:
 
 - `cdp.unreachable`, `cdp.target-mismatch`
@@ -493,6 +507,7 @@ Initial `errorCode` catalog:
   `provider.commit-not-verified`, `provider.poll-timeout`,
   `provider.runtime-disabled`
 - `capability.unsupported`
+- `session.target-ambiguous`
 - `context.over-budget`, `context.symlink-rejected`
 - `grok.context-pack-not-allowed`
 - `internal.unhandled`

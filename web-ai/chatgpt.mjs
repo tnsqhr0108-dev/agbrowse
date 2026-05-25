@@ -42,6 +42,7 @@ import { waitForConversationReady, isProviderUrl } from './navigation-ready.mjs'
 import { collectImages, isImageOnlyGeneratedImageChromeText } from './chatgpt-images.mjs';
 import { resolveArtifactsDir } from './session-artifacts.mjs';
 import { sendDeepResearch } from './chatgpt-deep-research.mjs';
+import { buildTargetMismatchResult } from './session-target-guard.mjs';
 
 const CHATGPT_HOSTS = new Set(['chatgpt.com', 'chat.openai.com']);
 const ASSISTANT_SELECTORS = [
@@ -342,13 +343,14 @@ export async function pollWebAi(deps, input = {}) {
         if (session?.targetId) {
             const currentTargetId = await deps.getTargetId?.().catch(() => null);
             if (currentTargetId && currentTargetId !== session.targetId) {
-                return {
-                    ok: false, vendor, status: 'target-mismatch',
-                    url: page.url(), ...(session ? { sessionId: session.sessionId } : {}),
-                    answerText: '', baseline, usedFallbacks: [],
-                    warnings: [`poll target changed: ${session.targetId} → ${currentTargetId}`],
-                    error: 'target changed during poll',
-                };
+                return buildTargetMismatchResult({
+                    vendor,
+                    session,
+                    actualTargetId: currentTargetId,
+                    port: deps.getPort?.() || 9222,
+                    url: page.url(),
+                    baseline,
+                });
             }
         } else {
             const currentUrl = page.url();
