@@ -765,7 +765,8 @@ agbrowse web-ai query \
 `--allow-copy-markdown-fallback` asks the runtime to use the provider Copy
 button after the DOM response completes. The implementation intercepts the
 page's `navigator.clipboard.writeText/write` call and does not read the OS
-clipboard.
+clipboard. The flag is the explicit policy opt-in for this capture path; do
+not pair it with `--unsafe-allow` in normal CLI use.
 
 ```bash
 agbrowse web-ai query \
@@ -777,7 +778,8 @@ agbrowse web-ai query \
 ```
 
 The fallback is opt-in because provider copy buttons are UI details and can
-change.
+change. A custom policy can still disable it with `allowClipboardWrite: false`,
+or allow MCP/server-side copy capture with `allowClipboardWrite: true`.
 
 ## Source Audit
 

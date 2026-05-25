@@ -35,10 +35,23 @@ describe('web-ai policy', () => {
         } catch (error) {
             expect(error.toJSON()).toMatchObject({
                 mutationAllowed: false,
-                ruleId: 'allowClipboardRead',
-                evidence: { ruleId: 'allowClipboardRead' },
+                ruleId: 'allowClipboardWrite',
+                evidence: { ruleId: 'allowClipboardWrite' },
             });
         }
+    });
+
+    it('allows explicitly requested provider copy capture under default explicit-only clipboard write policy', () => {
+        expect(
+            enforcePolicy({}, { clipboardWriteIntercept: true, explicitClipboardWriteIntercept: true }).ok,
+        ).toBe(true);
+    });
+
+    it('rejects explicitly requested provider copy capture when clipboard write is disabled by policy', () => {
+        expect(() => enforcePolicy(
+            { allowClipboardWrite: false },
+            { clipboardWriteIntercept: true, explicitClipboardWriteIntercept: true },
+        )).toThrow(/provider copy capture denied/);
     });
 
     it('accepts the legacy --unsafe-allow clipboard-read alias for one minor version', () => {

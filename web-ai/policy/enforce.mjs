@@ -11,6 +11,7 @@ import { loadPolicy, normalizePolicy, policyError } from './schema.mjs';
  *   upload?: boolean,
  *   explicitUpload?: boolean,
  *   clipboardWriteIntercept?: boolean,
+ *   explicitClipboardWriteIntercept?: boolean,
  *   evaluate?: boolean,
  *   fileAccess?: boolean,
  *   unsafeAllow?: string[],
@@ -52,13 +53,8 @@ export function enforcePolicy(policyInput = {}, action = {}) {
     if (action.upload && policy.allowUploads !== true && policy.allowUploads !== 'explicit-only') {
         throw policyError('policy.upload-denied', 'policy-enforce', 'uploads denied by policy', { ruleId: 'allowUploads' });
     }
-    if (
-        action.clipboardWriteIntercept
-        && policy.allowClipboardRead !== true
-        && !action.unsafeAllow?.includes('clipboard-read')
-        && !action.unsafeAllow?.includes('clipboard-write-intercept')
-    ) {
-        throw policyError('policy.clipboard-write-intercept-denied', 'policy-enforce', 'provider copy capture denied by policy', { ruleId: 'allowClipboardRead' });
+    if (action.clipboardWriteIntercept && !allowsClipboardWriteIntercept(policy, action)) {
+        throw policyError('policy.clipboard-write-intercept-denied', 'policy-enforce', 'provider copy capture denied by policy', { ruleId: 'allowClipboardWrite' });
     }
     if (action.evaluate && policy.allowEvaluate !== true && !action.unsafeAllow?.includes('evaluate')) {
         throw policyError('policy.evaluate-denied', 'policy-enforce', 'evaluate denied by policy', { ruleId: 'allowEvaluate' });
@@ -67,6 +63,20 @@ export function enforcePolicy(policyInput = {}, action = {}) {
         throw policyError('policy.file-access-denied', 'policy-enforce', 'file access denied by policy', { ruleId: 'allowFileAccess' });
     }
     return { ok: true, policy };
+}
+
+/**
+ * @param {WebAiPolicy} policy
+ * @param {PolicyAction} action
+ * @returns {boolean}
+ */
+function allowsClipboardWriteIntercept(policy, action) {
+    if (action.unsafeAllow?.includes('clipboard-write-intercept')) return true;
+    if (action.unsafeAllow?.includes('clipboard-read')) return true;
+    if (policy.allowClipboardRead === true) return true;
+    if (policy.allowClipboardWrite === true) return true;
+    return policy.allowClipboardWrite === 'explicit-only'
+        && action.explicitClipboardWriteIntercept === true;
 }
 
 /**

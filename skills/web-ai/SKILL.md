@@ -434,7 +434,9 @@ agbrowse web-ai query \
 ```
 
 The runtime intercepts the page's `navigator.clipboard.writeText/write` during
-the provider Copy button click. It does not read the OS clipboard.
+the provider Copy button click. It does not read the OS clipboard. The flag is
+the explicit policy opt-in for CLI use; do not add `--unsafe-allow` unless you
+are testing legacy policy aliases.
 
 ## Error taxonomy
 

@@ -22,6 +22,11 @@ describe('web-ai trace fixture', () => {
 
     it('adds traceId to structured errors', async () => {
         const traceDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agbrowse-error-trace-'));
+        const policyPath = `tmp-trace-deny-copy-policy-${Date.now()}.json`;
+        await fs.writeFile(policyPath, JSON.stringify({
+            version: 1,
+            allowClipboardWrite: false,
+        }));
         let thrown;
         try {
             await runWebAiCli([
@@ -30,11 +35,14 @@ describe('web-ai trace fixture', () => {
                 '--prompt', 'hello',
                 '--inline-only',
                 '--allow-copy-markdown-fallback',
+                '--policy', policyPath,
                 '--trace-dir', traceDir,
                 '--json',
             ], { getPage: () => { throw new Error('browser should not be reached'); } });
         } catch (error) {
             thrown = error;
+        } finally {
+            await fs.rm(policyPath, { force: true });
         }
         expect(thrown?.traceId).toBeTruthy();
         expect(thrown.toJSON()).toMatchObject({ traceId: thrown.traceId });

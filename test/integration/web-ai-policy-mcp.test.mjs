@@ -46,7 +46,7 @@ describe('web-ai policy MCP', () => {
         expect(deps.getPage).not.toHaveBeenCalled();
     });
 
-    it('allows copy markdown when policy explicitly enables clipboardRead', async () => {
+    it('allows copy markdown when policy explicitly enables clipboardWrite', async () => {
         const deps = { getPage: vi.fn(() => { throw new Error('browser reached after policy pass'); }) };
         const response = await handleMcpMessage({
             jsonrpc: '2.0',
@@ -54,7 +54,7 @@ describe('web-ai policy MCP', () => {
             method: 'tools/call',
             params: {
                 name: 'web_ai_copy_markdown',
-                arguments: { provider: 'chatgpt', policy: { version: 1, allowClipboardRead: true } },
+                arguments: { provider: 'chatgpt', policy: { version: 1, allowClipboardWrite: true } },
             },
         }, deps, {});
         expect(response.result.isError).toBe(true);
@@ -72,7 +72,7 @@ describe('web-ai policy MCP', () => {
                 name: 'web_ai_copy_markdown',
                 arguments: {
                     provider: 'chatgpt',
-                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://chatgpt.com'] },
+                    policy: { version: 1, allowClipboardWrite: true, deniedOrigins: ['https://chatgpt.com'] },
                 },
             },
         }, deps, {});
@@ -97,7 +97,7 @@ describe('web-ai policy MCP', () => {
             method: 'tools/call',
             params: {
                 name: 'web_ai_copy_markdown',
-                arguments: { provider: 'chatgpt', policy: { ...policy, allowClipboardRead: true } },
+                arguments: { provider: 'chatgpt', policy: { ...policy, allowClipboardWrite: true } },
             },
         }, deps, state);
         const submitResponse = await handleMcpMessage({
@@ -134,7 +134,7 @@ describe('web-ai policy MCP', () => {
                 arguments: {
                     provider: 'chatgpt',
                     url: 'https://chatgpt.com/',
-                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://evil.test'] },
+                    policy: { version: 1, allowClipboardWrite: true, deniedOrigins: ['https://evil.test'] },
                 },
             },
         }, deps, state);
@@ -202,7 +202,7 @@ describe('web-ai policy MCP', () => {
                 arguments: {
                     provider: 'chatgpt',
                     url: 'https://chatgpt.com/',
-                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://evil.test'] },
+                    policy: { version: 1, allowClipboardWrite: true, deniedOrigins: ['https://evil.test'] },
                 },
             },
         }, deps, {});
@@ -229,7 +229,7 @@ describe('web-ai policy MCP', () => {
                 name: 'web_ai_copy_markdown',
                 arguments: {
                     provider: 'chatgpt',
-                    policy: { version: 1, allowClipboardRead: true, deniedOrigins: ['https://evil.test'] },
+                    policy: { version: 1, allowClipboardWrite: true, deniedOrigins: ['https://evil.test'] },
                 },
             },
         }, deps, state);
@@ -263,7 +263,7 @@ describe('web-ai policy MCP', () => {
                 name: 'web_ai_copy_markdown',
                 arguments: {
                     provider: 'chatgpt',
-                    policy: { version: 1, allowClipboardRead: true },
+                    policy: { version: 1, allowClipboardWrite: true },
                 },
             },
         }, deps, {});

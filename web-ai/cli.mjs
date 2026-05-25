@@ -124,7 +124,7 @@ Attachments and context:
   --max-input <chars>               Inline prompt budget
   --max-file-size <bytes>           Legacy alias for --max-context-file-size
   --files-report                    Include file report metadata
-  --allow-copy-markdown-fallback    Capture provider Copy button output after DOM response
+  --allow-copy-markdown-fallback    Explicitly permit provider Copy button capture after DOM response
   --allow-grok-context-pack         Override Grok hard-gate (Grok prefers inline + single --file)
   --require-source-audit            Fail closed when completed answers lack inline sources
   --source-audit-ratio <0..1>       Required sourced claim ratio (default 1)
@@ -655,6 +655,7 @@ async function enforceCliPolicy(command, input) {
         explicitUpload: Boolean(input.filePath || input.contextFile || input.contextFromFiles?.length),
         fileAccess: Boolean(input.filePath || input.contextFile || input.contextFromFiles?.length),
         clipboardWriteIntercept: input.allowCopyMarkdownFallback === true,
+        explicitClipboardWriteIntercept: input.allowCopyMarkdownFallback === true,
         evaluate: false,
         unsafeAllow: input.unsafeAllow,
     };
