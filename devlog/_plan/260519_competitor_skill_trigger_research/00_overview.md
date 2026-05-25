@@ -64,3 +64,6 @@ bolt.new and Replit Agent have zero APIs — pure CDP automation targets. v0.dev
 - Skill Triggers: extended taxonomy to 14 failure modes, promoted empty-shell to P0
 - Priorities: reconciled roadmap across docs, deduplicated MCP from P1+P2→P1
 - Blind Spots: added first-party computer-use agents tier (OpenAI/Anthropic/Gemini), quarterly watchlist
+
+### Track G: Runway UI Selector Capture (2026-05-21)
+- [16_runway_ui_selector_capture.md](16_runway_ui_selector_capture.md) — logged-in Chrome selector capture for Runway. Deep focus: Apps and Custom/tools because those are the Unlimited-relevant surfaces. Agent, Recents, Workflow, and Characters are documented as surface-only targets. Confirms Runway belongs in a separate media/runway command contract, not `web-ai`.
