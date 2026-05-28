@@ -2,163 +2,28 @@
 
 import { parseArgs } from 'node:util';
 import { runRunwayPollCli } from './runway-monitor.mjs';
+import {
+    RUNWAY_SURFACES,
+    SURFACE_ALIASES,
+    COMMON_SELECTORS,
+    SURFACE_SELECTORS,
+    BLOCKED_ACTIONS,
+    buildRunwaySafety,
+} from './runway-selectors.mjs';
 
-const RUNWAY_BASE_URL = 'https://app.runwayml.com';
+export {
+    RUNWAY_SURFACES,
+    SURFACE_ALIASES,
+    COMMON_SELECTORS,
+    SURFACE_SELECTORS,
+    BLOCKED_ACTIONS,
+    buildRunwaySafety,
+};
+
 const DEFAULT_WAIT_TIMEOUT_MS = 15000;
 
-/** @typedef {{ id: string, label: string, url: string | null, deepAutomation: boolean, purpose: string }} RunwaySurface */
-/** @typedef {{ name: string, selector: string, locator: string, purpose: string, blocked?: boolean }} RunwaySelector */
-
-/** @type {Readonly<Record<string, RunwaySurface>>} */
-export const RUNWAY_SURFACES = Object.freeze({
-    apps: {
-        id: 'apps',
-        label: 'Apps',
-        url: `${RUNWAY_BASE_URL}/ai-tools/generate?mode=apps`,
-        deepAutomation: true,
-        purpose: 'Unlimited-relevant app/model catalog and starter surface',
-    },
-    'custom-tools': {
-        id: 'custom-tools',
-        label: 'Custom/tools',
-        url: `${RUNWAY_BASE_URL}/ai-tools/generate?mode=tools`,
-        deepAutomation: true,
-        purpose: 'Unlimited-relevant generation form and parameter controls',
-    },
-    agent: {
-        id: 'agent',
-        label: 'Agent',
-        url: null,
-        deepAutomation: false,
-        purpose: 'Surface-only conversational/outline flow',
-    },
-    recents: {
-        id: 'recents',
-        label: 'Recents',
-        url: null,
-        deepAutomation: false,
-        purpose: 'Surface-only asset/job library',
-    },
-    workflow: {
-        id: 'workflow',
-        label: 'Workflow',
-        url: null,
-        deepAutomation: false,
-        purpose: 'Surface-only node/canvas flow',
-    },
-    characters: {
-        id: 'characters',
-        label: 'Characters',
-        url: null,
-        deepAutomation: false,
-        purpose: 'Surface-only catalog/input source',
-    },
-});
-
-/** @type {Readonly<Record<string, string>>} */
-const SURFACE_ALIASES = Object.freeze({
-    app: 'apps',
-    apps: 'apps',
-    custom: 'custom-tools',
-    tools: 'custom-tools',
-    tool: 'custom-tools',
-    'custom-tools': 'custom-tools',
-    'custom/tools': 'custom-tools',
-    agent: 'agent',
-    recents: 'recents',
-    sessions: 'recents',
-    workflow: 'workflow',
-    workflows: 'workflow',
-    characters: 'characters',
-    character: 'characters',
-});
-
-/** @type {readonly RunwaySelector[]} */
-const COMMON_SELECTORS = Object.freeze([
-    {
-        name: 'left-sidebar',
-        selector: '[data-testid="mira-app-sidebar"]',
-        locator: 'page.locator(\'[data-testid="mira-app-sidebar"]\')',
-        purpose: 'Runway main navigation container',
-    },
-    {
-        name: 'unlimited-plan-indicator',
-        selector: '[data-testid="credit-info-button"]',
-        locator: 'page.locator(\'[data-testid="credit-info-button"]\')',
-        purpose: 'Plan/quota preflight. Read only.',
-    },
-]);
-
-/** @type {Readonly<Record<string, readonly RunwaySelector[]>>} */
-const SURFACE_SELECTORS = Object.freeze({
-    apps: Object.freeze([
-        {
-            name: 'apps-search',
-            selector: 'input[placeholder="Describe your creation or search apps"]',
-            locator: 'page.getByPlaceholder(\'Describe your creation or search apps\')',
-            purpose: 'Apps search/input surface',
-        },
-        {
-            name: 'models-tab',
-            selector: 'role=tab[name="Models"]',
-            locator: 'page.getByRole(\'tab\', { name: \'Models\' })',
-            purpose: 'Models catalog tab',
-        },
-        {
-            name: 'model-card',
-            selector: 'role=button[name=/^Seedance 2\\.0 - Video$/]',
-            locator: 'page.getByRole(\'button\', { name: /^Seedance 2\\.0 - Video$/ })',
-            purpose: 'Representative Apps model card selector pattern',
-        },
-    ]),
-    'custom-tools': Object.freeze([
-        {
-            name: 'prompt-editor',
-            selector: 'div[aria-label="Prompt"]',
-            locator: 'page.locator(\'div[aria-label="Prompt"]\')',
-            purpose: 'Prompt editor for Custom/tools generation setup',
-        },
-        {
-            name: 'file-input',
-            selector: 'input[type="file"]',
-            locator: 'page.locator(\'input[type="file"]\')',
-            purpose: 'Asset upload input. Use only when upload is requested.',
-        },
-        {
-            name: 'base-model-select',
-            selector: '[data-testid="select-base-model"]',
-            locator: 'page.locator(\'[data-testid="select-base-model"]\')',
-            purpose: 'Video/image model selection control',
-        },
-        {
-            name: 'related-apps',
-            selector: '#related-apps-trigger',
-            locator: 'page.locator(\'#related-apps-trigger\')',
-            purpose: 'Helpful Apps relation picker',
-        },
-        {
-            name: 'generation-cost',
-            selector: 'role=button[name=/^View generation cost$/]',
-            locator: 'page.getByRole(\'button\', { name: /^View generation cost$/ })',
-            purpose: 'Cost preflight candidate. Read only.',
-        },
-        {
-            name: 'generate',
-            selector: 'role=button[name=/^Generate$/]',
-            locator: 'page.getByRole(\'button\', { name: /^Generate$/ })',
-            purpose: 'Submission selector. Never click during status/preflight.',
-            blocked: true,
-        },
-    ]),
-});
-
-const BLOCKED_ACTIONS = Object.freeze([
-    'Generate',
-    'Run all',
-    'payment',
-    'destructive',
-    'submit-like controls',
-]);
+/** @typedef {import('./runway-selectors.mjs').RunwaySurface} RunwaySurface */
+/** @typedef {import('./runway-selectors.mjs').RunwaySelector} RunwaySelector */
 
 /**
  * @param {unknown} value
@@ -206,7 +71,7 @@ export function buildRunwaySelectorContract(surface = 'all') {
         focus: ['apps', 'custom-tools'],
         commonSelectors: COMMON_SELECTORS,
         surfaces,
-        safety: buildRunwaySafety(),
+        safety: buildRunwaySafety(0),
     };
 }
 
@@ -220,6 +85,7 @@ export function detectRunwaySurface(url = '', text = '') {
     const lowerText = String(text || '').toLowerCase();
     if (lowerUrl.includes('mode=apps')) return 'apps';
     if (lowerUrl.includes('mode=tools')) return 'custom-tools';
+    if (lowerUrl.includes('/recents')) return 'recents';
     if (lowerUrl.includes('workflow')) return 'workflow';
     if (lowerText.includes('describe your creation or search apps')) return 'apps';
     if (lowerText.includes('view generation cost') || lowerText.includes('audio settings')) return 'custom-tools';
@@ -227,14 +93,6 @@ export function detectRunwaySurface(url = '', text = '') {
     if (lowerText.includes('recents')) return 'recents';
     if (lowerText.includes('agent')) return 'agent';
     return 'unknown';
-}
-
-export function buildRunwaySafety() {
-    return {
-        mutationAllowed: false,
-        blockedActions: BLOCKED_ACTIONS,
-        note: 'Runway status/preflight/open commands never click Generate, Run all, payment, destructive, or submit-like controls.',
-    };
 }
 
 /**
@@ -270,6 +128,38 @@ export async function inspectRunwayPage(page, options = {}) {
                 .map((button) => normalize(button.textContent || button.getAttribute('aria-label') || button.getAttribute('title') || ''))
                 .filter(Boolean)
                 .slice(0, 80);
+
+            // Plan type extraction
+            const creditText = text('[data-testid="credit-info-button"]') || '';
+            let planType = 'unknown';
+            if (/unlimited/i.test(creditText) || /unlimited/i.test(visibleText.slice(0, 500))) planType = 'Unlimited';
+            else if (/standard/i.test(creditText)) planType = 'Standard';
+            else if (/free/i.test(creditText)) planType = 'Free';
+
+            // Credits extraction
+            const creditsMatch = visibleText.match(/(\d[\d,]*)\s*credits?\s*(?:remaining|left)/i)
+                || creditText.match(/(\d[\d,]*)/);
+            const credits = creditsMatch ? Number(creditsMatch[1].replace(/,/g, '')) : null;
+
+            // Workspace name
+            const workspaceEl = document.querySelector('[data-testid="workspace-name"], [class*="workspace"] [class*="name"]');
+            const workspaceName = workspaceEl ? normalize(workspaceEl.textContent || '') : null;
+
+            // Model detection
+            const modelSelectEl = document.querySelector('[data-testid="select-base-model"]');
+            const selectedModel = modelSelectEl ? normalize(modelSelectEl.textContent || '') : null;
+
+            // Generation mode (Explore vs Credits)
+            const exploreActive = Boolean(
+                document.querySelector('[data-testid="explore-credits-toggle"] [aria-pressed="true"]:first-child')
+                || document.querySelector('button[aria-pressed="true"]:has(> span:only-child)')
+            );
+            const hasExploreText = /\bexplore\b/i.test(visibleText.slice(0, 2000));
+            const hasCreditsText = /\bcredits?\s*mode\b/i.test(visibleText.slice(0, 2000));
+            let generationMode = 'unknown';
+            if (exploreActive || (hasExploreText && !hasCreditsText)) generationMode = 'Explore';
+            else if (hasCreditsText) generationMode = 'Credits';
+
             return {
                 textSample: visibleText.slice(0, 1000),
                 selectors: {
@@ -302,6 +192,19 @@ export async function inspectRunwayPage(page, options = {}) {
                     hasRunAllButton: buttonTexts.some(label => /^run all$/i.test(label)),
                     buttonTexts,
                 },
+                plan: {
+                    type: planType,
+                    credits,
+                },
+                workspace: {
+                    name: workspaceName,
+                },
+                model: {
+                    selected: selectedModel,
+                },
+                generation: {
+                    mode: generationMode,
+                },
             };
         });
     } catch (error) {
@@ -331,8 +234,12 @@ export async function inspectRunwayPage(page, options = {}) {
             likelyGuest: /\/teams\/guest\//i.test(url) || Boolean(dom.auth?.hasLoginText && dom.auth?.hasSignUpText),
         },
         actions: dom.actions,
+        plan: dom.plan || { type: 'unknown', credits: null },
+        workspace: dom.workspace || { name: null },
+        model: dom.model || { selected: null },
+        generation: dom.generation || { mode: 'unknown' },
         textSample: dom.textSample,
-        safety: buildRunwaySafety(),
+        safety: buildRunwaySafety(0),
         warnings: /** @type {string[]} */ ([]),
         errors,
     };
@@ -346,6 +253,66 @@ function defaultDomSummary() {
         quota: { creditInfoText: null, hasUnlimitedText: false, hasGenerationCostText: false },
         auth: { hasLoginText: false, hasSignUpText: false },
         actions: { hasGenerateButton: false, hasRunAllButton: false, buttonTexts: [] },
+        plan: { type: 'unknown', credits: null },
+        workspace: { name: null },
+        model: { selected: null },
+        generation: { mode: 'unknown' },
+    };
+}
+
+/**
+ * @param {any} page
+ * @param {{ limit?: number, type?: string }} [options]
+ */
+export async function inspectRunwayRecents(page, options = {}) {
+    const limit = Number(options.limit) || 20;
+    const filterType = String(options.type || 'all').toLowerCase();
+    const errors = [];
+
+    let dom = { assets: /** @type {any[]} */ ([]), totalVisible: 0 };
+    try {
+        dom = await page.evaluate((/** @type {{ limit: number }} */ opts) => {
+            /** @param {unknown} value */
+            const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+
+            const cards = Array.from(document.querySelectorAll(
+                '[data-testid="asset-card"], [class*="asset-card"], [class*="AssetCard"], [class*="gallery"] [class*="item"], [class*="recent"] [class*="card"]'
+            ));
+            const assets = cards.slice(0, opts.limit).map((card, index) => {
+                const img = card.querySelector('img');
+                const video = card.querySelector('video, source');
+                const link = card.querySelector('a[download], a[href*="download"]');
+                const label = normalize(card.textContent || '');
+                const thumbnail = img?.getAttribute('src') || video?.getAttribute('poster') || null;
+                const isVideo = Boolean(video) || /video|\.mp4/i.test(label);
+                const isImage = !isVideo && (Boolean(img) || /image|\.png|\.jpe?g/i.test(label));
+                return {
+                    index,
+                    type: isVideo ? 'video' : isImage ? 'image' : 'unknown',
+                    label: label.slice(0, 200),
+                    thumbnail,
+                    downloadUrl: link?.getAttribute('href') || null,
+                };
+            });
+            return { assets, totalVisible: cards.length };
+        }, { limit });
+    } catch (error) {
+        errors.push(`recents-evaluate: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    let assets = dom.assets || [];
+    if (filterType !== 'all') {
+        assets = assets.filter((/** @type {any} */ a) => a.type === filterType);
+    }
+
+    return {
+        ok: errors.length === 0,
+        vendor: 'runway',
+        command: 'recents',
+        totalVisible: dom.totalVisible,
+        count: assets.length,
+        assets,
+        errors,
     };
 }
 
@@ -361,24 +328,49 @@ function emit(deps, text) {
 export function formatRunwayUsage() {
     return `agbrowse runway <command> [flags]
 
-Commands:
-  selectors [--surface apps|custom-tools|all] [--json]
+Commands (read-only, Level 0):
+  selectors [--surface apps|custom-tools|recents|all] [--json]
       Print the captured selector contract from the Runway devlog.
   status [--surface auto|apps|custom-tools] [--json]
-      Inspect the current Runway tab. Read-only.
-  open --surface apps|custom-tools [--json] [--timeout ms]
+      Inspect the current Runway tab: plan, model, mode, quota. Read-only.
+  open --surface apps|custom-tools|recents [--json] [--timeout ms]
       Navigate the current agbrowse tab to a supported Runway surface, then inspect.
   preflight --surface apps|custom-tools [--json] [--timeout ms]
       Alias for open + status. It does not submit a generation.
   poll [--timeout 600000] [--interval 5000] [--queue-limit 2] [--after-count N] [--expected-item TEXT] [--json]
       Poll the current Runway tab for queue/completion signals. Read-only.
-      Active signals include In queue / Generating / Processing and right-rail
-      percentage labels such as "18 50%". A full queue is terminal only when
-      Runway shows the explicit "You're on a roll" / Credits Mode gate.
+  recents [--limit 20] [--type image|video|all] [--json]
+      Parse asset cards from the Recents surface.
 
-Safety:
-  Runway is a media task-runner surface, not web-ai. These commands never click
-  Generate, Run all, payment, destructive, or submit-like controls.`;
+Commands (mutation, Level 1 — requires --allow-mutation):
+  setup --prompt TEXT [--model NAME] [--mode video|image] [--duration N]
+      [--ratio 16:9] [--resolution 1080p] [--seed-image PATH]
+      [--end-image PATH] [--reference-images PATH...] [--explore] [--json]
+      Set up generation parameters in the UI without clicking Generate.
+  upload --file PATH [--json]
+      Upload a file to Runway via browser file input.
+
+Commands (submit, Level 2 — requires --allow-submit):
+  generate --prompt TEXT [--model NAME] [--mode video|image] [--duration N]
+      [--ratio 16:9] [--resolution 1080p] [--seed-image PATH]
+      [--output PATH] [--timeout 600000] [--interval 5000] [--explore] [--json]
+      Full generation: setup + Generate click + poll + optional download.
+  multishot --shots "scene1" "scene2" "scene3" [--duration N] [--ratio 16:9]
+      [--first-scene-image PATH] [--explore] [--output PATH] [--json]
+      OR: --story "narrative prompt" [--duration N] [--explore] [--output PATH]
+      Multi-scene video generation (3-5 connected scenes).
+  product-ad --prompt TEXT [--product-url URL] [--duration N]
+      [--output PATH] [--json]
+      Product marketing video generation.
+  download [--index 0] [--output PATH] [--json]
+      Download the most recent generated asset.
+  screenshot [--output PATH]
+      Screenshot the current Runway tab.
+
+Safety Levels:
+  Level 0: Read-only (default). No mutation or submission.
+  Level 1: --allow-mutation. Prompt input, model selection, file upload.
+  Level 2: --allow-submit. Generate button click allowed.`;
 }
 
 /**
@@ -391,6 +383,11 @@ export function formatRunwayStatus(result) {
         `deepAutomationTarget: ${result.deepAutomationTarget ? 'yes' : 'no'}`,
         `url: ${result.url || 'n/a'}`,
         `title: ${result.title || 'n/a'}`,
+        `plan: ${result.plan?.type || 'unknown'}`,
+        `credits: ${result.plan?.credits ?? 'n/a'}`,
+        `workspace: ${result.workspace?.name || 'n/a'}`,
+        `model: ${result.model?.selected || 'n/a'}`,
+        `generationMode: ${result.generation?.mode || 'unknown'}`,
         `unlimitedHint: ${result.quota?.hasUnlimitedText ? 'yes' : 'no'}`,
         `generationCostHint: ${result.quota?.hasGenerationCostText ? 'yes' : 'no'}`,
         `guestHint: ${result.auth?.likelyGuest ? 'yes' : 'no'}`,
@@ -464,6 +461,32 @@ export async function runRunwayCli(args = [], deps = {}) {
         return;
     }
     if (command === 'poll') return runRunwayPollCli(args.slice(1), deps);
+    if (command === 'recents') {
+        const { values } = parseArgs({
+            args: args.slice(1),
+            options: {
+                limit: { type: 'string', default: '20' },
+                type: { type: 'string', default: 'all' },
+                json: { type: 'boolean', default: false },
+            },
+            strict: false,
+        });
+        const page = await deps.getPage();
+        const currentUrl = typeof page.url === 'function' ? page.url() : '';
+        if (!/recents/i.test(currentUrl)) {
+            const target = RUNWAY_SURFACES.recents;
+            if (target?.url) {
+                await page.goto(target.url, { waitUntil: 'domcontentloaded', timeout: DEFAULT_WAIT_TIMEOUT_MS });
+                try { await page.waitForLoadState('networkidle', { timeout: 5000 }); } catch { /* ok */ }
+            }
+        }
+        const result = await inspectRunwayRecents(page, {
+            limit: Number(values.limit) || 20,
+            type: String(values.type || 'all'),
+        });
+        emit(deps, values.json ? JSON.stringify(result, null, 2) : formatRunwayRecents(result));
+        return;
+    }
     if (command === 'open' || command === 'preflight') {
         const { values } = parseArgs({
             args: args.slice(1),
@@ -476,7 +499,7 @@ export async function runRunwayCli(args = [], deps = {}) {
         });
         const surface = normalizeRunwaySurface(String(values.surface || 'custom-tools'));
         const target = RUNWAY_SURFACES[surface];
-        if (!target?.url) throw new Error(`Runway ${surface} is surface-only; open/preflight supports apps|custom-tools`);
+        if (!target?.url) throw new Error(`Runway ${surface} is surface-only; open/preflight supports apps|custom-tools|recents`);
         const page = await deps.getPage();
         /** @type {string[]} */
         const warnings = [];
@@ -495,5 +518,43 @@ export async function runRunwayCli(args = [], deps = {}) {
         emit(deps, values.json ? JSON.stringify(result, null, 2) : formatRunwayStatus(result));
         return;
     }
+
+    // Phase 2+ commands — delegate to specialized modules
+    if (command === 'setup' || command === 'generate') {
+        const { runRunwayGenerateCli } = await import('./runway-generate.mjs');
+        return runRunwayGenerateCli(command, args.slice(1), deps);
+    }
+    if (command === 'upload') {
+        const { runRunwayUploadCli } = await import('./runway-generate.mjs');
+        return runRunwayUploadCli(args.slice(1), deps);
+    }
+    if (command === 'download' || command === 'screenshot') {
+        const { runRunwayDownloadCli } = await import('./runway-download.mjs');
+        return runRunwayDownloadCli(command, args.slice(1), deps);
+    }
+    if (command === 'multishot') {
+        const { runRunwayMultishotCli } = await import('./runway-multishot.mjs');
+        return runRunwayMultishotCli(args.slice(1), deps);
+    }
+    if (command === 'product-ad') {
+        const { runRunwayProductAdCli } = await import('./runway-product-ad.mjs');
+        return runRunwayProductAdCli(args.slice(1), deps);
+    }
     throw new Error(`${formatRunwayUsage()}\n\nUnknown runway command: ${command}`);
+}
+
+/**
+ * @param {any} result
+ */
+function formatRunwayRecents(result) {
+    const lines = [
+        'Runway recents',
+        `totalVisible: ${result.totalVisible}`,
+        `returned: ${result.count}`,
+    ];
+    for (const asset of result.assets) {
+        lines.push(`  [${asset.index}] ${asset.type}: ${asset.label.slice(0, 100)}`);
+    }
+    if (result.errors?.length) lines.push(`errors: ${result.errors.join('; ')}`);
+    return lines.join('\n');
 }

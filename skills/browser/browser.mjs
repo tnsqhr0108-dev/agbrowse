@@ -14,7 +14,7 @@
  *   snapshot [--interactive] [--max-nodes N]  Accessibility tree with ref IDs
  *   observe-bundle [--screenshot] [--boxes] [--json] [--max-text-chars N]  ObservationBundleV1 (G06)
  *   observe-actions <instruction> [--json] [--top-n N] [--include-disabled]  Rank candidate next actions (G02)
- *   runway <selectors|status|open|preflight|poll>  Runway Apps/Custom read-only preflight/poll
+ *   runway <command>                    Runway full-surface CLI (13 commands, 3 safety levels)
  *   screenshot [--full-page] [--ref eN] [--json]  Capture screenshot
  *   mouse-click <x> <y> [--double]  Click at pixel coordinates
  *   move-mouse <x> <y>               Move mouse without clicking
@@ -2833,8 +2833,8 @@ try {
     agbrowse fetch https://example.com --json Read one URL for agent evidence
     agbrowse snapshot --interactive          Get refs (e1, e2, …)
     agbrowse click e1                        Click ref e1
-    agbrowse runway selectors --surface apps Print Runway selector contract
-    agbrowse runway poll --timeout 600000    Poll Runway queue/completion signals
+    agbrowse runway status                   Inspect Runway tab (plan, model, mode)
+    agbrowse runway generate --prompt "..." --allow-submit  Full generation pipeline
     agbrowse stop                            Close Chrome
 
   Stuck? Run:
@@ -3051,20 +3051,23 @@ try {
                 --prompt "long Pro prompt" --json | jq -r .sessionId)
         agbrowse web-ai poll --vendor chatgpt --session "$SID" --timeout 1800
 
-  Runway:
-    runway selectors       Print captured Runway selector contract [--surface apps|custom-tools|all] [--json]
-    runway status          Inspect current Runway tab [--surface auto|apps|custom-tools] [--json]
-    runway open            Navigate to Apps/Custom and inspect [--surface apps|custom-tools] [--json]
-    runway preflight       Alias for open + status; never submits a generation
-    runway poll            Poll queue/completion signals [--timeout 600000] [--interval 5000] [--queue-limit 2] [--after-count N] [--expected-item TEXT] [--json]
-
-      Safety:
-        Runway is a media task-runner surface, not web-ai. These commands focus
-        Apps and Custom/tools and never click Generate, Run all, payment,
-        destructive, or submit-like controls.
-        Poll treats In queue/Generating/Processing and right-rail percent labels
-        like "18 50%" as active. queue_full is terminal only for the explicit
-        "You're on a roll" / Credits Mode gate; two active jobs keep polling.
+  Runway (run "agbrowse runway help" for full usage):
+    Level 0 — read-only (default):
+      runway selectors       Print selector contract [--surface apps|custom-tools|recents|all] [--json]
+      runway status          Inspect current tab: plan, model, mode, quota [--json]
+      runway open            Navigate to a surface and inspect [--surface apps|custom-tools|recents]
+      runway preflight       Alias for open + status
+      runway poll            Poll queue/completion signals [--timeout 600000] [--interval 5000] [--json]
+      runway recents         Parse asset cards from Recents [--limit 20] [--type image|video|all]
+    Level 1 — mutation (requires --allow-mutation):
+      runway setup           Set prompt/model/params without clicking Generate [--prompt TEXT]
+      runway upload          Upload file via browser file input [--file PATH]
+    Level 2 — submit (requires --allow-submit):
+      runway generate        Full pipeline: setup → Generate → poll → download [--prompt TEXT]
+      runway multishot        Multi-scene video [--shots "s1" "s2" | --story TEXT]
+      runway product-ad      Product marketing video [--prompt TEXT --product-url URL]
+      runway download        Download latest generated asset [--index 0 --output PATH]
+      runway screenshot      Screenshot current Runway tab [--output PATH]
 
   Vision click:
     agbrowse-vision-click "<target description>" [--double] [--prepare-stable]

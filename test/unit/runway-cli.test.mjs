@@ -3,12 +3,14 @@ import {
     buildRunwaySelectorContract,
     detectRunwaySurface,
     inspectRunwayPage,
+    inspectRunwayRecents,
     runRunwayCli,
 } from '../../skills/browser/runway.mjs';
 import {
     inspectRunwayCompletionState,
     waitForRunwayCompletion,
 } from '../../skills/browser/runway-monitor.mjs';
+import { buildRunwaySafety } from '../../skills/browser/runway-selectors.mjs';
 
 function makeDomSummary(overrides = {}) {
     return {
@@ -248,6 +250,102 @@ describe('runway CLI helpers', () => {
         expect(result.state).toBe('active');
         expect(result.terminal).toBe(false);
         expect(result.completionSignal).toBe('active-generation-signals');
+    });
+
+    it('inspects runway page with enhanced plan/model/generation fields', async () => {
+        const page = {
+            url: () => 'https://app.runwayml.com/ai-tools/generate?mode=tools',
+            title: async () => 'Runway',
+            evaluate: async () => ({
+                ...makeDomSummary(),
+                plan: { type: 'Unlimited', credits: null },
+                workspace: { name: 'My Workspace' },
+                model: { selected: 'Seedance 2.0' },
+                generation: { mode: 'Explore' },
+            }),
+        };
+        const result = await inspectRunwayPage(page, { surface: 'auto' });
+        expect(result.plan.type).toBe('Unlimited');
+        expect(result.workspace.name).toBe('My Workspace');
+        expect(result.model.selected).toBe('Seedance 2.0');
+        expect(result.generation.mode).toBe('Explore');
+    });
+
+    it('inspects runway recents and returns asset list', async () => {
+        const page = {
+            url: () => 'https://app.runwayml.com/ai-tools/recents',
+            title: async () => 'Runway',
+            evaluate: async () => ({
+                assets: [
+                    { index: 0, type: 'video', label: 'Cat walking.mp4', thumbnail: 'https://example.com/thumb.jpg', downloadUrl: null },
+                    { index: 1, type: 'image', label: 'Dog portrait.png', thumbnail: 'https://example.com/thumb2.jpg', downloadUrl: 'https://example.com/download' },
+                ],
+                totalVisible: 5,
+            }),
+        };
+        const result = await inspectRunwayRecents(page, { limit: 20, type: 'all' });
+        expect(result.ok).toBe(true);
+        expect(result.count).toBe(2);
+        expect(result.assets[0].type).toBe('video');
+        expect(result.assets[1].type).toBe('image');
+    });
+
+    it('filters recents by type', async () => {
+        const page = {
+            url: () => 'https://app.runwayml.com/ai-tools/recents',
+            title: async () => 'Runway',
+            evaluate: async () => ({
+                assets: [
+                    { index: 0, type: 'video', label: 'Vid1.mp4', thumbnail: null, downloadUrl: null },
+                    { index: 1, type: 'image', label: 'Img1.png', thumbnail: null, downloadUrl: null },
+                ],
+                totalVisible: 2,
+            }),
+        };
+        const result = await inspectRunwayRecents(page, { limit: 20, type: 'video' });
+        expect(result.count).toBe(1);
+        expect(result.assets[0].type).toBe('video');
+    });
+
+    it('detects recents surface from URL', () => {
+        expect(detectRunwaySurface('https://app.runwayml.com/ai-tools/recents')).toBe('recents');
+    });
+
+    it('builds safety levels correctly', () => {
+        const level0 = buildRunwaySafety(0);
+        expect(level0.mutationAllowed).toBe(false);
+        expect(level0.submitAllowed).toBe(false);
+
+        const level1 = buildRunwaySafety(1);
+        expect(level1.mutationAllowed).toBe(true);
+        expect(level1.submitAllowed).toBe(false);
+
+        const level2 = buildRunwaySafety(2);
+        expect(level2.mutationAllowed).toBe(true);
+        expect(level2.submitAllowed).toBe(true);
+    });
+
+    it('runway recents command navigates and parses', async () => {
+        const navigated = [];
+        const page = {
+            url: () => 'https://app.runwayml.com/ai-tools/generate?mode=tools',
+            title: async () => 'Runway',
+            goto: async (url) => navigated.push(url),
+            waitForLoadState: async () => undefined,
+            evaluate: async () => ({
+                assets: [],
+                totalVisible: 0,
+            }),
+        };
+        const lines = [];
+        await runRunwayCli(['recents', '--json'], {
+            getPage: async () => page,
+            write: text => lines.push(text),
+        });
+        expect(navigated.length).toBeGreaterThan(0);
+        expect(navigated[0]).toContain('recents');
+        const parsed = JSON.parse(lines.join('\n'));
+        expect(parsed.command).toBe('recents');
     });
 
     it('prints runway poll JSON with the 10 minute default timeout', async () => {
