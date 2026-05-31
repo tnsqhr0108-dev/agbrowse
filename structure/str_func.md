@@ -16,7 +16,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 
 ## 현재 구조 스냅샷
 
-마지막 측정: 2026-05-29.
+마지막 측정: 2026-05-31.
 
 | 경로 | 파일 수 | 라인 수 | 역할 |
 | --- | ---: | ---: | --- |
@@ -24,7 +24,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | `skills/browser/` | 36 | 11744 | Chrome lifecycle, CDP connection, refs, tabs, diagnostics, adaptive fetch v2, Runway task-runner preflight/poll |
 | `skills/vision-click/` | 3 | 831 | screenshot to coordinate click helper |
 | `skills/web-ai/` | 1 | 493 | bundled agent workflow skill |
-| `web-ai/` | 90 | 20025 | provider automation, sessions, MCP, eval, policy, trace |
+| `web-ai/` | 90 | 20133 | provider automation, sessions, MCP, eval, policy, trace |
 | `web-ai/context-pack/` | 8 | 858 | file selection, token budget, context rendering |
 | `web-ai/eval/` | 5 | 552 | offline provider DOM fixture harness |
 | `web-ai/policy/` | 4 | 238 | mutation and content-boundary guardrails |
@@ -75,7 +75,7 @@ aliases: [agbrowse source map, agbrowse str_func, agbrowse 파일 구조]
 | `web-ai/tool-schema.mjs` | 180 | MCP and AI SDK schema source |
 | `web-ai/answer-artifact.mjs` | 153 | provider poll result artifact normalization |
 | `web-ai/source-audit.mjs` | 183 | claim/source coverage audit helper |
-| `web-ai/ax-snapshot.mjs` | 376 | compact accessibility snapshot and refs |
+| `web-ai/ax-snapshot.mjs` | 484 | compact accessibility snapshot and refs |
 | `web-ai/self-heal.mjs` | 489 | deterministic target resolution and validation |
 | `web-ai/action-intent.mjs` | 99 | serializable semantic action intent contracts |
 | `web-ai/target-resolver.mjs` | 45 | explainable target resolver wrapper |
