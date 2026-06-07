@@ -18,6 +18,12 @@ must be treated as historical  do not edit them after release.evidence
 | `_legacy/` | Pre-rewrite changelogs / plans / research dumps. |
 | `context/` | Verbatim Pro / Grok peer reviews and gap audits. |
 
+## `_plan/` active research
+
+| Topic | Folder | Status |
+| --- | --- | --- |
+| K-BrowseComp search gap analysis | `_plan/260608_kbrowsecomp_search_gap/` | Research/spec complete; implementation deferred. |
+
 ## `_fin/mvp/` topics
 
 | Topic | Folder | Phases |
