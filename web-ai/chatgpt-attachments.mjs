@@ -237,7 +237,7 @@ export function scoreFileInputCandidate(inputMetadata = {}, options = {}) {
  * @returns {number}
  */
 export function sendButtonTimeoutMs(fileNames = []) {
-    return Array.isArray(fileNames) && fileNames.length > 0 ? 15_000 : 5_000;
+    return Array.isArray(fileNames) && fileNames.length > 0 ? 45_000 : 20_000;
 }
 
 /**

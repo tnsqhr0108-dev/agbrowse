@@ -39,6 +39,7 @@ import { WebAiError } from './errors.mjs';
  * @property {() => Promise<CDPSession>} [getCdpSession]
  * @property {number} [timeoutMs]
  * @property {number} [baselineTurns]
+ * @property {number} [sendButtonTimeoutMs]
  */
 
 /**
@@ -63,9 +64,9 @@ export const INPUT_SELECTORS = [
 export const SEND_BUTTON_SELECTORS = [
     'button[data-testid="send-button"]',
     'button[data-testid*="composer-send"]',
+    'form button[type="submit"]',
     'button[type="submit"][data-testid*="send"]',
-    'button[aria-label*="Send prompt" i]',
-    'button[aria-label*="Send message" i]',
+    'button[aria-label*="Send" i]',
 ];
 
 export const STOP_BUTTON_SELECTOR = '[data-testid="stop-button"]';
@@ -168,7 +169,7 @@ export async function submitPromptFromComposer(page, options = {}) {
             };
         }
     }
-    const clicked = await clickEnabledSendButton(page);
+    const clicked = await clickEnabledSendButton(page, options.sendButtonTimeoutMs);
     if (clicked) return { method: 'button' };
     await page.keyboard.press('Enter');
     return { method: 'enter' };
@@ -351,8 +352,8 @@ async function readComposerState(page, fallbackLocator) {
  * @param {Page} page
  * @returns {Promise<boolean>}
  */
-async function clickEnabledSendButton(page) {
-    const deadline = Date.now() + 8_000;
+async function clickEnabledSendButton(page, timeoutMs = 8_000) {
+    const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         const result = await page.evaluate((/** @type {{ inputSelectors: readonly string[], sendSelectors: readonly string[] }} */ { inputSelectors, sendSelectors }) => {
             const dispatchClickSequence = (/** @type {EventTarget | null | undefined} */ target) => {

@@ -60,8 +60,8 @@ describe('ChatGPT attachment upload surface', () => {
     });
 
     it('uses longer send readiness timeout when attachments are present', () => {
-        expect(sendButtonTimeoutMs([])).toBe(5_000);
-        expect(sendButtonTimeoutMs(['context.pdf'])).toBe(15_000);
+        expect(sendButtonTimeoutMs([])).toBe(20_000);
+        expect(sendButtonTimeoutMs(['context.pdf'])).toBe(45_000);
     });
 
     it('builds scoped attachment readiness expression with nested label and count fallback terms', () => {

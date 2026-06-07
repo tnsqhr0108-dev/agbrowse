@@ -261,11 +261,13 @@ export async function sendWebAi(deps, input = {}) {
             usedFallbacks = upload.usedFallbacks || [];
         }
         const sendResolution = await resolveOptionalChatGptSendTarget(page, traceCtx);
+        const submitTimeoutMs = sendButtonTimeoutMs(uploadPath ? [uploadPath] : []);
         await adapter.submitPrompt({
             sendTarget: /** @type {any} */ (sendResolution?.target || null),
+            sendButtonTimeoutMs: submitTimeoutMs,
         });
         await adapter.verifyPromptCommitted(rendered.composerText, commitBaseline, {
-            timeoutMs: sendButtonTimeoutMs(uploadPath ? [uploadPath] : []),
+            timeoutMs: submitTimeoutMs,
         });
         if (uploadPath) {
             const sentAttachment = await verifySentTurnAttachmentLive(page, fileInfoFromPath(uploadPath));
