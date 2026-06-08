@@ -6,6 +6,7 @@ Primary sources:
 - Local prior analysis: `/Users/jun/developer/k-browsecomp-analysis/`
 - Dataset: `prometheus-eval/k-browsecomp` on Hugging Face
 - Code/readme: `prometheus-eval/K-BrowseComp`
+- Search API docs: Perplexity Search, Exa Search, Tavily Search, Brave Search
 
 ## Scope Boundary
 
@@ -32,6 +33,10 @@ source-domain statistics to avoid republishing query-answer pairs.
 | 06 | `06_multi_hop_orchestration.md` | Multi-hop state | Decomposition, evidence ledger, budget policy |
 | 07 | `07_failure_mode_countermeasures.md` | Failure modes | F0-F8 mapped to agbrowse countermeasures |
 | 08 | `08_agbrowse_search_skill_spec.md` | Implementation spec | Prioritized patches and benchmark gates |
+| 09 | `09_search_backend_io_contracts.md` | Existing search backend I/O | How Perplexity/Exa/Tavily/Brave queries and responses collapse into snippets |
+| 10 | `10_keyword_adjustment_fetch_loop.md` | Minimal keyword + fetch strategy | Small query rewrites that turn search results into fetchable evidence |
+| 11 | `11_browse_skill_coverage.md` | Browse fallback coverage | What fetch cannot cover and when browser skills should take over |
+| 12 | `12_agbrowse_delta_current_capability.md` | agbrowse delta | What agbrowse can add beyond the current URL-reader/search-only split |
 
 ## Key Dataset Facts
 
@@ -71,5 +76,7 @@ engine is used." The strongest missing capability is an agent loop that can:
 5. Refuse or defer finalization until all required constraints are verified.
 
 agbrowse already has the CDP/browser layer and adaptive URL reading needed for
-item 3. It lacks a first-class Korean search planner, Korean portal routing,
-structured extraction contract, and candidate/constraint tracker.
+item 3. The extra research in docs 09-12 sharpens this into a practical route:
+keep existing search APIs for URL discovery, make small Korean/source-aware
+keyword rewrites, fetch the returned URLs, and use browser skills only when
+fetch cannot see the needed page state.
