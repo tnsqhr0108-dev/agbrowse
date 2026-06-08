@@ -39,6 +39,8 @@ source-domain statistics to avoid republishing query-answer pairs.
 | 12 | `12_agbrowse_delta_current_capability.md` | agbrowse delta | What agbrowse can add beyond the current URL-reader/search-only split |
 | 13 | `13_provider_cli_query_probe.md` | Provider CLI query probe | Actual Codex/Claude/AGY/Cursor Korean query/result observations |
 | 14 | `14_cli_jaw_query_patch_smoke_corpus.md` | cli-jaw query patch smoke corpus | Query-rewrite-first smoke prompts and pass/fail criteria |
+| 15 | `15_offline_fixture_contract.md` | Offline fixture contract | Network-free fixture shape for query/fetch/browse trajectory validation |
+| 16 | `16_patch_sequence_search_research.md` | Search research patch sequence | P0-P4 implementation sequence from planning core to live harness |
 
 ## Key Dataset Facts
 

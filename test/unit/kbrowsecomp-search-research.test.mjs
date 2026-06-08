@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest';
+import { createConstraintLedger, summarizeLedger, updateLedgerWithEvidence } from '../../skills/browser/search-research/constraint-ledger.mjs';
+import { buildRouteUrl, chooseKoreanRoute, detectSourceHints, needsBrowseEscalation } from '../../skills/browser/search-research/korean-routes.mjs';
+import { planKoreanResearch } from '../../skills/browser/search-research/search-strategy.mjs';
+
+describe('K-BrowseComp search research planning', () => {
+    it('rewrites a Korean policy freshness prompt into focused official URL-candidate queries', () => {
+        const plan = planKoreanResearch('2026년 한국 전기차 보조금 지자체별 차이 최신 기준 찾아봐');
+        expect(plan.sourceHints).toEqual(expect.arrayContaining(['official', 'date']));
+        expect(plan.atomicQueries.length).toBeGreaterThanOrEqual(2);
+        expect(plan.atomicQueries.length).toBeLessThanOrEqual(3);
+        expect(plan.atomicQueries[0].query).toContain('2026');
+        expect(plan.atomicQueries.some(query => query.query.includes('공식'))).toBe(true);
+        expect(plan.followUp.searchResultRole).toBe('url-candidates');
+        expect(plan.followUp.fetchOriginalPages).toBe(true);
+    });
+
+    it('marks Naver original review checks as requiring browse verification after candidate discovery', () => {
+        const plan = planKoreanResearch('네이버 블로그 글에서 특정 후기 원문 확인이 필요한 경우 검색 결과만으로 충분한가');
+        expect(plan.sourceHints).toContain('naver');
+        expect(plan.atomicQueries.some(query => query.query.includes('site:blog.naver.com'))).toBe(true);
+        expect(plan.followUp.browseRequired).toBe(true);
+        expect(plan.followUp.browseReasons).toContain('naver-shell-or-iframe-risk');
+    });
+
+    it('splits K-BrowseComp-style multi-constraint prompts instead of searching the full problem once', () => {
+        const plan = planKoreanResearch('한국 영화 중 신인 감독상과 신인 여우상 조건이 모두 맞고, 뮤지컬화 여부와 네이버 영화 평점을 확인해야 하는 사례를 찾아봐');
+        expect(plan.constraints.length).toBeGreaterThanOrEqual(3);
+        expect(plan.atomicQueries.length).toBeGreaterThanOrEqual(2);
+        expect(plan.atomicQueries.every(query => query.query.length < plan.problem.length)).toBe(true);
+        expect(new Set(plan.atomicQueries.flatMap(query => query.constraintIds)).size).toBeGreaterThanOrEqual(2);
+    });
+
+    it('routes source hints to Korean-specific routes and URLs', () => {
+        expect(detectSourceHints('교보문고 2024년 출판 도서 목차')).toEqual(expect.arrayContaining(['bookstore', 'date']));
+        expect(chooseKoreanRoute('나무위키 인물 정보')).toBe('namuwiki');
+        expect(buildRouteUrl('naver_search', '네이버 블로그 후기')).toContain('search.naver.com');
+        expect(needsBrowseEscalation('표에서 n번째 항목을 확인')).toBe(true);
+    });
+
+    it('keeps the constraint ledger pending until original evidence supports every mandatory condition', () => {
+        const plan = planKoreanResearch('고려대학교출판문화원 2024년 12월 27일 540쪽 MOOC 목차');
+        let ledger = createConstraintLedger(plan.constraints);
+        ledger = updateLedgerWithEvidence(ledger, {
+            url: 'https://example.com/book',
+            title: '고려대학교출판문화원 MOOC 도서',
+            text: '고려대학교출판문화원에서 출판한 MOOC 도서 소개입니다.',
+            candidate: 'MOOC 도서',
+        });
+        expect(summarizeLedger(ledger).ready).toBe(false);
+        ledger = updateLedgerWithEvidence(ledger, {
+            url: 'https://example.com/book-detail',
+            title: 'MOOC 목차',
+            text: '2024년 12월 27일 출간, 540쪽, 목차 제공.',
+            candidate: 'MOOC 도서',
+        });
+        const summary = summarizeLedger(ledger);
+        expect(summary.status).toBe('complete');
+        expect(summary.pending).toEqual([]);
+    });
+});
