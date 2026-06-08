@@ -29,6 +29,10 @@ describe.sequential('CLI help', () => {
         expect(result.stdout).toContain('install-skills --target <dir>');
         expect(result.stdout).toContain('--headless|--headed');
         expect(result.stdout).toContain('tab-cleanup');
+        expect(result.stdout).toContain('active-tab');
+        expect(result.stdout).toContain('new-tab <url>');
+        expect(result.stdout).toContain('--no-activate');
+        expect(result.stdout).toContain('tab-close <targetId>');
         expect(result.stdout).toContain('--force');
         expect(result.stdout).toContain('leaseClosedTabs');
         expect(result.stdout).toContain('--effort <alias>');
@@ -38,6 +42,7 @@ describe.sequential('CLI help', () => {
         expect(result.stdout).toContain('runway selectors');
         expect(result.stdout).toContain('runway poll');
         expect(result.stdout).toContain('never submits a generation');
+        expect(result.stdout).toContain('Use when snapshot refs are unavailable');
     });
 
     it('shows Runway help without touching the browser', async () => {

@@ -32,6 +32,9 @@
  *   reload                           Reload current page
  *   resize <w> <h> [--fullscreen]    Resize browser window or viewport
  *   tabs [--json]                    List open tabs
+ *   active-tab --json                 Show active tab target-id contract
+ *   new-tab <url> [--no-activate] [--json]  Create a browser tab
+ *   tab-close <targetId> [--json]     Close a browser tab
  *   tab-switch <index-or-targetId> [--json] [--force]  Activate a tab
  *   select-tab <index-or-targetId> [--json] [--force]  Alias for tab-switch
  *   tab-cleanup [--provider chatgpt --keep-provider-tabs 1]  Close idle/overflow tabs
@@ -1054,6 +1057,31 @@ async function getActiveTargetId(port = getPort()) {
     const page = await getActivePage(port);
     if (!page) return null;
     return getPageTargetId(page);
+}
+
+/**
+ * @param {any} port
+ */
+async function getActiveTabInfo(port = getPort()) {
+    const state = readPersistedState() || {};
+    const persistedTargetId = state.activeTargetId || null;
+    const page = await getActivePage(port);
+    const currentTargetId = page ? await getPageTargetId(page).catch(() => null) : null;
+    const tabs = await listManagedTabs(port).catch(() => []);
+    const tab = tabs.find((/** @type {any} */ row) => row.targetId === currentTargetId)
+        || tabs.find((/** @type {any} */ row) => row.targetId === persistedTargetId)
+        || null;
+    return {
+        ok: Boolean(currentTargetId),
+        port,
+        persistedTargetId,
+        currentTargetId,
+        targetId: currentTargetId,
+        tab: tab ? tabDisplayState(tab) : null,
+        url: page?.url?.() || tab?.url || null,
+        title: page ? await page.title().catch(() => tab?.title || '') : tab?.title || '',
+        source: persistedTargetId ? 'persisted-active-target' : 'current-playwright-page',
+    };
 }
 
 /**
@@ -2453,17 +2481,61 @@ try {
             else console.log(`switched to ${ts.tab ? `tab ${ts.tab}` : ts.targetId}: ${ts.title}`);
             break;
         }
+        case 'active-tab': {
+            const json = process.argv.includes('--json');
+            const info = await getActiveTabInfo(getPort());
+            if (json) {
+                console.log(JSON.stringify(info, null, 2));
+            } else if (info.targetId) {
+                console.log(`active tab: ${info.targetId} ${info.title || ''}`);
+                if (info.url) console.log(`   ${info.url}`);
+            } else {
+                console.log('active tab: none');
+            }
+            break;
+        }
         case 'new-tab': {
-            const url = process.argv[3] || 'about:blank';
-            const tab = await createTab(getPort(), url);
-            console.log(`created tab: ${tab.targetId} (${tab.url})`);
+            const { values, positionals } = parseArgs({
+                args: process.argv.slice(3),
+                options: {
+                    json: { type: 'boolean', default: false },
+                    'no-activate': { type: 'boolean', default: false },
+                },
+                allowPositionals: true,
+                strict: false,
+            });
+            const json = values.json;
+            const noActivate = values['no-activate'];
+            const url = positionals[0] || 'about:blank';
+            const tab = await createTab(getPort(), url, { activate: !noActivate });
+            if (tab.activated) {
+                updatePersistedState({ port: getPort(), activeTargetId: tab.targetId });
+                clearPersistedSnapshot();
+            }
+            if (json) console.log(JSON.stringify({ ok: true, status: 'created', ...tab }, null, 2));
+            else console.log(`created tab: ${tab.targetId} (${tab.url})${tab.activated ? '' : ' [not activated]'}`);
             break;
         }
         case 'tab-close': {
-            const target = process.argv[3];
-            if (!target) { console.error('Usage: browser.mjs tab-close <targetId>'); process.exit(1); }
+            const { values, positionals } = parseArgs({
+                args: process.argv.slice(3),
+                options: {
+                    json: { type: 'boolean', default: false },
+                },
+                allowPositionals: true,
+                strict: false,
+            });
+            const json = values.json;
+            const target = positionals[0];
+            if (!target) { console.error('Usage: browser.mjs tab-close <targetId> [--json]'); process.exit(1); }
             const result = await closeTab(getPort(), target);
-            console.log(`closed tab: ${result.targetId}`);
+            const state = readPersistedState();
+            if (state?.activeTargetId === target) {
+                updatePersistedState({ activeTargetId: null });
+                clearPersistedSnapshot();
+            }
+            if (json) console.log(JSON.stringify({ ok: true, status: 'closed', ...result }, null, 2));
+            else console.log(`closed tab: ${result.targetId}`);
             break;
         }
         case 'tab-cleanup': {
@@ -2960,8 +3032,11 @@ try {
     reload                 Reload current page
     resize <w> <h>         Resize browser window / viewport [--fullscreen]
      tabs                   List tabs [--json]
+     active-tab             Show active tab target-id contract [--json]
+     new-tab <url>          Create a browser tab [--no-activate] [--json]
      tab-switch <target>    Switch to tab index or CDP target id [--json] [--force]
      select-tab <target>    Alias for tab-switch [--json] [--force]
+     tab-close <targetId>   Close a browser tab [--json]
      tab-cleanup            Close idle/overflow tabs
        --dry-run            Preview cleanup plan without closing any tabs
        --idle-after <30m>   Override idle threshold for this cleanup
@@ -3072,6 +3147,7 @@ try {
 
   Vision click:
     agbrowse-vision-click "<target description>" [--double] [--prepare-stable]
+    Use when snapshot refs are unavailable after trying snapshot --interactive.
 
   Environment:
     BROWSER_AGENT_HOME     Data directory (default: ~/.browser-agent).

@@ -39,6 +39,23 @@ describe('active tab persistence contract', () => {
         expect(browserSrc).toMatch(/updatePersistedState\(/);
     });
 
+    it('exposes active-tab as the read-only persisted active target surface', () => {
+        expect(browserSrc).toContain("case 'active-tab'");
+        expect(browserSrc).toContain('async function getActiveTabInfo');
+        expect(browserSrc).toContain('persistedTargetId');
+        expect(browserSrc).toContain('currentTargetId');
+        expect(browserSrc).toContain('persisted-active-target');
+    });
+
+    it('aligns new-tab and tab-close with the cli-jaw browser mirror surface', () => {
+        expect(browserSrc).toContain("case 'new-tab'");
+        expect(browserSrc).toContain("'no-activate': { type: 'boolean'");
+        expect(browserSrc).toContain('activate: !noActivate');
+        expect(browserSrc).toContain("status: 'created'");
+        expect(browserSrc).toContain("case 'tab-close'");
+        expect(browserSrc).toContain("status: 'closed'");
+    });
+
     it('protects active-command tabs from accidental tab-switch and exposes select-tab alias', () => {
         expect(browserSrc).toContain("import { listActiveCommands } from '../../web-ai/active-command-store.mjs'");
         expect(browserSrc).toContain('active-command.target-owned');

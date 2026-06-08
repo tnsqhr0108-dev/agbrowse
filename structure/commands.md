@@ -23,7 +23,7 @@ aliases: [agbrowse commands, agbrowse CLI 표면, web-ai commands]
 | Observe | `snapshot`, `screenshot`, `text`, `get-dom` | DOM/ref/text/screenshot 관찰 |
 | URL read | `fetch` | candidate URL을 public endpoint, HTTP fetch, metadata, optional reader, browser render/network 후보로 읽음. Generic search 아님 |
 | Act | `click`, `type`, `press`, `hover`, `select`, `check`, `uncheck`, `drag`, `mouse-click`, `move-mouse`, `mouse-down`, `mouse-up` | ref 기반 또는 coordinate 기반 mutation |
-| Navigate | `navigate`, `reload`, `resize`, `tabs`, `tab-switch`, `select-tab`, `new-tab`, `tab-close`, `tab-cleanup`, `scroll` | navigation, viewport, tab 관리 (multi-tab create/close 포함) |
+| Navigate | `navigate`, `reload`, `resize`, `tabs`, `active-tab`, `tab-switch`, `select-tab`, `new-tab`, `tab-close`, `tab-cleanup`, `scroll` | navigation, viewport, active target 조회, tab 관리 (multi-tab create/close 포함) |
 | Wait | `wait`, `wait-for-selector`, `wait-for-text`, `wait-for` | time, selector, text, legacy ref wait |
 | Diagnostics | `console`, `network`, `evaluate` | console/network capture와 explicit unsafe JS evaluation |
 | Web AI | `web-ai` | provider workflow subcommand |

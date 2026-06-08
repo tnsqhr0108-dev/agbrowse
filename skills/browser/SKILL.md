@@ -253,7 +253,10 @@ agbrowse reload                           # Reload current page
 agbrowse resize 1440 900                 # Resize browser window
 agbrowse resize 0 0 --fullscreen         # Fullscreen or 1920x1080 viewport fallback
 agbrowse tabs                             # List tabs
+agbrowse active-tab --json                # Read the active target-id contract
+agbrowse new-tab "https://example.com" --json
 agbrowse tab-switch 2                     # Switch to tab 2
+agbrowse tab-close <targetId> --json      # Close a tab by target id
 agbrowse scroll down                      # Scroll down 500px
 agbrowse scroll up --amount 1000          # Scroll up 1000px
 agbrowse scroll --ref e15                 # Scroll element into view
@@ -320,10 +323,12 @@ agbrowse snapshot --interactive --max-nodes 20  # Next items
 
 ```bash
 agbrowse navigate "https://docs.example.com"  # Tab 1
-agbrowse evaluate "window.open('https://api.example.com')"  # Tab 2
+agbrowse new-tab "https://api.example.com" --json  # Tab 2
+agbrowse active-tab --json       # Verify the current target id
 agbrowse tabs                  # List tabs
 agbrowse tab-switch 2          # Switch to tab 2
 agbrowse snapshot --interactive
+agbrowse tab-close <targetId> --json
 ```
 
 ### Inspect DOM / Console / Network
@@ -344,7 +349,7 @@ If something goes wrong, follow this escalation path:
 3. **CDP connection fails** → `status`, then `start` if Chrome is not running
 4. **Chrome frozen** → ask before `reset --force`; reset deletes local browser state
 5. **Fullscreen resize falls back in headless mode** → The command uses a 1920x1080 viewport fallback when window APIs are unavailable
-6. **DOM ref unavailable** (Canvas/WebGL/Shadow DOM) → Use `vision-click` skill after confirming no usable ref exists
+6. **DOM ref unavailable** (Canvas/WebGL/Shadow DOM) → Use `agbrowse-vision-click` after confirming no usable ref exists
 
 ## Environment Variables
 
@@ -391,4 +396,4 @@ CHROME_HEADLESS=1 agbrowse start --headed  # force a visible headed Chrome
 - CDP reconnection uses exponential backoff (1s → 2s → 4s → 8s).
 - `console` reads a page-side buffer. Use `--clear` before a flow and `--reload` if you want logs from a fresh navigation.
 - `network` merges current page performance entries with optional live CDP capture. Use `--duration 0` for a fast current-state dump only, add a non-zero duration with `--reload` if the page triggers late `fetch`/XHR activity, and use `--live-only` to skip performance history.
-- Non-DOM elements (Canvas, iframe, Shadow DOM): use **vision-click** skill.
+- Non-DOM elements (Canvas, iframe, Shadow DOM): use **agbrowse-vision-click**.

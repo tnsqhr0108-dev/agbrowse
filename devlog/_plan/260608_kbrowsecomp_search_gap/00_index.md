@@ -44,6 +44,7 @@ source-domain statistics to avoid republishing query-answer pairs.
 | 17 | `17_cli_jaw_browser_mirror_plan.md` | cli-jaw browser mirror plan | Required browser command parity between cli-jaw and agbrowse |
 | 18 | `18_browser_surface_inventory.md` | Browser surface inventory | A/B inventory of cli-jaw-only, agbrowse-only, shared, and drifted command surfaces |
 | 19 | `19_standalone_orchestrated_architecture.md` | Standalone/orchestrated architecture | cli-jaw-only, agbrowse-only, and integrated operating modes |
+| 20 | `20_p0a_browser_surface_parity_plan.md` | P0a implementation plan | Concrete browser command parity patch plan before research CLI work |
 
 ## Key Dataset Facts
 
