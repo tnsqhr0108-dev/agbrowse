@@ -130,6 +130,7 @@ dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed, X/Twitter oEmbed
 | `send` | Yes | prompt 제출 후 `sessionId` 반환 |
 | `poll` | Yes | session 또는 latest baseline completion 대기 |
 | `query` | Yes | `send`와 `poll`을 한 번에 실행 |
+| `code` | Yes | ChatGPT 전용. strict code-mode 계약 prompt 전송 → 생성된 `/mnt/data/result.zip`을 버튼 없이 in-page presigned fetch로 회수·검증. `--prompt` 빌드 명세, `--output-zip` 저장 경로, `--model thinking` 권장 |
 | `stop` | Yes | active provider tab에 Escape 전송 |
 | `watch` | Yes | persisted session을 terminal 상태까지 감시 |
 | `snapshot` | Yes | active provider tab의 compact accessibility snapshot 출력 |

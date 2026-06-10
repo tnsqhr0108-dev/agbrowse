@@ -136,3 +136,23 @@ GET  <download_url>  (쿠키 필수, 외부 403)          → zip 바이너리
   `unzip -t` 0 에러. 순수 EOCD 파서의 파일 목록이 unzip과 일치.
 - 다음: Phase 11 (code prompt 템플릿 + ask 연동), Phase 12 (CLI 표면 + policy
   allow + truth table).
+
+## Phase 11–12 구현 결과 (2026-06-11)
+
+- `web-ai/code-mode-prompt.mjs`: `buildCodeModePrompt`(검증된 strict 계약 +
+  강화 규칙 코드화), `checkContractCompliance`(plain-path/bracket-wrap 판정).
+- `web-ai/code-mode.mjs`: `codeWebAi` 오케스트레이터 (ChatGPT 전용 가드 →
+  query → conversationId 해석 → retrieveCodeArtifact), `extractConversationId`.
+- `web-ai/cli.mjs`: `code` 명령 배선 — COMMANDS/BROWSER_REQUIRED 등록,
+  `--output-zip` 옵션, 새 탭 per-call, code 전용 human 출력(저장 경로+파일수),
+  usage 텍스트.
+- 테스트: code-artifact 10 + code-mode 6 + prompt 4 = 20 신규, 전체 781/781,
+  tsc 0, drift 140/counts 60 PASS.
+- **라이브 e2e (실제 CLI 명령)**: `agbrowse web-ai code --vendor chatgpt
+  --model thinking --effort standard --prompt "Flask hello MVP" --output-zip ...`
+  → `/tmp/cli-codemode/out.zip` 818B 저장, app.py/requirements.txt/README 3파일,
+  `python3 ast.parse(app.py)` 통과. 버튼 클릭 0회, 완전 무인.
+- 문서: CAPABILITY_TRUTH_TABLE에 code mode(beta) 행, commands.md에 `code` 행.
+- 남은 것: Phase 13 (provider DOM/endpoint drift e2e 게이트), policy allow
+  플래그는 cli-jaw browser evaluate가 아닌 agbrowse 자체 page.evaluate를 쓰므로
+  현 구현에선 불필요(코드가 deps.getPage()로 직접 실행).

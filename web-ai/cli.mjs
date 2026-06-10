@@ -6,6 +6,7 @@
  */
 import { parseArgs } from 'node:util';
 import { renderWebAi, statusWebAi, sendWebAi, pollWebAi, queryWebAi, stopWebAi, deepResearchWebAi } from './chatgpt.mjs';
+import { codeWebAi } from './code-mode.mjs';
 import { geminiStatusWebAi, geminiSendWebAi, geminiPollWebAi, geminiQueryWebAi, geminiStopWebAi } from './gemini-live.mjs';
 import { grokStatusWebAi, grokSendWebAi, grokPollWebAi, grokQueryWebAi, grokStopWebAi } from './grok-live.mjs';
 import { buildContextPackageResult, prepareContextForBrowser, renderContextDryRunReport } from './context-pack/index.mjs';
@@ -47,10 +48,10 @@ const COMMANDS = new Set([
     'sessions', 'doctor',
     'context-dry-run', 'context-render',
     'mcp-server', 'eval', 'claim-audit',
-    'project-sources',
+    'project-sources', 'code',
 ]);
 
-const BROWSER_REQUIRED_COMMANDS = new Set(['status', 'send', 'poll', 'query', 'stop', 'watch', 'snapshot', 'doctor', 'project-sources']);
+const BROWSER_REQUIRED_COMMANDS = new Set(['status', 'send', 'poll', 'query', 'stop', 'watch', 'snapshot', 'doctor', 'project-sources', 'code']);
 const BROWSER_REQUIRED_SESSION_COMMANDS = new Set(['resume', 'reattach', 'doctor']);
 export const WEB_AI_USAGE = `
 Usage:
@@ -74,6 +75,10 @@ Commands:
   context-dry-run     Build a context package without sending
   context-render      Render full prompt/context package text
   project-sources     ChatGPT Project Sources list/add; append-only, explicit project URL required
+  code                ChatGPT-only. Send a strict code-mode contract prompt, then
+                      retrieve the generated /mnt/data/result.zip headlessly
+                      (no button click) and verify it. --prompt = build spec,
+                      --output-zip = save path. Best with --model thinking.
   mcp-server          Run stdio MCP bridge exposing web-ai tools
   eval                Run offline provider DOM fixture evals; never opens Chrome
   claim-audit         Scan repo docs for forbidden hosted/cloud/stealth claims (G10).
@@ -386,6 +391,7 @@ async function runWebAiCliInner(argv = [], deps) {
             'source-audit-date': { type: 'string' },
             file: { type: 'string' },
             'output-image': { type: 'string' },
+            'output-zip': { type: 'string' },
             research: { type: 'string' },
             archive: { type: 'string' },
             'follow-up': { type: 'string', multiple: true },
@@ -467,6 +473,7 @@ async function runWebAiCliInner(argv = [], deps) {
         attachmentPolicy: values.file ? 'upload' : 'inline-only',
         filePath: values.file,
         outputImage: values['output-image'],
+        outputZip: values['output-zip'],
         research: values.research,
         archiveFlag: values.archive,
         followUps: values['follow-up'] || [],
@@ -500,7 +507,7 @@ async function runWebAiCliInner(argv = [], deps) {
         maxDepth: values['max-depth'],
         rootSelector: values['root-selector'],
         forceNewTab: values['new-tab'] === true || values.parallel === true,
-        newTab: values['new-tab'] === true || values.parallel === true || (['send', 'query'].includes(command) && values['reuse-tab'] !== true && !values.session && process.env.AGBROWSE_REUSE_TAB !== '1'),
+        newTab: values['new-tab'] === true || values.parallel === true || (['send', 'query', 'code'].includes(command) && values['reuse-tab'] !== true && !values.session && process.env.AGBROWSE_REUSE_TAB !== '1'),
         reuseTab: values['reuse-tab'] === true || process.env.AGBROWSE_REUSE_TAB === '1',
         evalConfig: values.config,
         evalFixtures: values.fixtures,
@@ -1093,8 +1100,8 @@ async function runCommand(command, deps, input) {
     if (boundSendOrQuery) return boundSendOrQuery;
     input = resolveSessionVendorInput(command, input);
 
-    // Phase 9.1: create new tab per session for send/query
-    if (['send', 'query'].includes(command)) {
+    // Phase 9.1: create new tab per session for send/query (code reuses query)
+    if (['send', 'query', 'code'].includes(command)) {
         deps = await ensureProviderTab(deps, input);
     }
 
@@ -1168,6 +1175,7 @@ async function runCommand(command, deps, input) {
             return result;
         });
         case 'stop': return runBoundCommand(command, deps, input, pollWebAi, stopWebAi);
+        case 'code': return withWebAiActiveCommand(command, deps, input, () => codeWebAi(deps, input, { queryWebAi, getSession }));
         default: throw new Error(`unknown web-ai command: ${command}`);
     }
 }
@@ -1493,6 +1501,16 @@ function printEvalHuman(result) {
 function printHuman(command, result) {
     if (command === 'render') {
         console.log(result.rendered.composerText);
+        if (result.warnings?.length) console.error(`[warnings] ${result.warnings.join(', ')}`);
+        return;
+    }
+    if (command === 'code') {
+        if (result.ok && result.artifact?.savedPath) {
+            console.log(result.artifact.savedPath);
+            console.error(`[code] ${result.artifact.files.length} files, ${result.artifact.sizeBytes} bytes`);
+        } else {
+            console.error(`[code] failed: ${result.errorCode || result.artifact?.reason || 'unknown'}`);
+        }
         if (result.warnings?.length) console.error(`[warnings] ${result.warnings.join(', ')}`);
         return;
     }
