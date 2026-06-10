@@ -147,7 +147,7 @@ known URL / search-result URL / source URL -> use agbrowse fetch
 
 1. **Public endpoints + direct fetch** — known API resolvers (GitHub, Reddit, HN, Wikipedia, npm, PyPI, arXiv, Bluesky, Mastodon, Stack Exchange, dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube/X oEmbed, HN Algolia, V2EX, Lobsters, generic oEmbed), direct HTTP with identity headers, discovered RSS/Atom feeds, metadata extraction
 2. **Third-party readers** — opt-in public readers like Jina (`--allow-third-party-reader`)
-3. **Isolated Chrome render** — fresh Chrome profile + network API JSON discovery
+3. **Isolated Chrome render** — fresh Chrome profile + in-page Defuddle main-content→markdown extraction (vendored bundle; evidence `browser-defuddle`) + network API JSON discovery
 4. **User session** — user's authenticated browser session (`--browser-session user`, explicit opt-in)
 5. **Human-in-the-loop** — human resolves challenges (`--browser-session interactive`, 5-minute timeout)
 
