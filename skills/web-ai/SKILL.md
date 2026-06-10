@@ -39,6 +39,7 @@ agbrowse web-ai status
 agbrowse web-ai send
 agbrowse web-ai poll
 agbrowse web-ai query
+agbrowse web-ai code
 agbrowse web-ai stop
 agbrowse web-ai project-sources
 agbrowse web-ai context-dry-run
@@ -251,12 +252,14 @@ agbrowse web-ai query \
   --url https://gemini.google.com/app \
   --model fast \
   --file /path/to/user-requested-file.pdf \
+  --file /path/to/user-requested-image.png \
   --prompt "Summarize the attached file."
 ```
 
-Use `--file` only when the user explicitly wants that single file uploaded. For
-source/project context, use context packaging instead of creating a temporary
-`.txt`/`.md` file.
+`--file` is repeatable and may mix file types such as images, archives, PDFs,
+and text files in one prompt. Use it only when the user explicitly wants those
+specific files uploaded. For source/project context, use context packaging
+instead of creating temporary `.txt`/`.md` files.
 
 Upload must verify visible attachment evidence and sent-turn evidence where the
 provider exposes it. Input-only success is not enough.
@@ -264,6 +267,41 @@ provider exposes it. Input-only success is not enough.
 Use `--max-upload-file-size <bytes>` for live `--file` uploads. Use
 `--max-context-file-size <bytes>` for context package selection; legacy
 `--max-file-size <bytes>` is the context-budget alias, not the live upload cap.
+
+## ChatGPT Code Mode
+
+Use ChatGPT only. `web-ai code` sends a strict code-generation contract, waits
+for ChatGPT to create zip artifacts in its sandbox, retrieves the artifacts via
+the provider download API, and validates the local zip before returning.
+
+Single zip:
+
+```bash
+agbrowse web-ai code \
+  --vendor chatgpt \
+  --model thinking \
+  --effort standard \
+  --prompt "Create a Flask hello-world MVP." \
+  --output-zip ./result.zip
+```
+
+Multiple named zips:
+
+```bash
+agbrowse web-ai code \
+  --vendor chatgpt \
+  --model thinking \
+  --effort standard \
+  --multi-zip \
+  --output-dir ./artifacts \
+  --prompt "Create backend.zip and frontend.zip as separate deliverables."
+```
+
+Code mode is beta and ChatGPT-only. It does not depend on visible download
+buttons; plain sandbox paths in the assistant answer are enough for the runtime
+to retrieve the archives. Do not claim cli-jaw parity for this command unless
+the equivalent cli-jaw command surface, retrieval runtime, tests, and installed
+skill docs are implemented there.
 
 ## Generated Images
 
@@ -404,6 +442,17 @@ ChatGPT:
   `[data-testid="model-switcher-gpt-5-5-thinking-thinking-effort"]`
   with `Light`, `Standard`, `Extended`, and `Heavy`.
 - Use regular Pro by selecting `--model pro --effort standard`.
+
+2026-06-11 ChatGPT Intelligence UI note:
+
+- The visible picker may be the simplified `Intelligence` menu instead of the
+  older model row plus separate effort submenu.
+- `instant` and `thinking --effort light` select `Instant`.
+- `thinking --effort standard` selects `Medium`.
+- `thinking --effort extended` selects `High`.
+- `thinking --effort heavy` selects `Extra High`.
+- `pro --effort standard` selects `Pro Standard`.
+- `pro --effort extended` selects `Pro Extended`.
 
 Gemini:
 
