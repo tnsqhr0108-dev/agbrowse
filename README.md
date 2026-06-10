@@ -26,6 +26,7 @@ workflow. It gives an agent a small CLI surface for:
 - structured web-ai prompt rendering
 - live ChatGPT, Gemini, and Grok web UI execution
 - file upload and context-package upload for implemented providers
+- ChatGPT code-mode zip generation and later artifact re-extraction
 
 It does not require a long-running MCP server. Each command is a short-lived
 Node process that reconnects to the same Chrome DevTools Protocol endpoint.
@@ -86,6 +87,9 @@ Agent rule: observe before acting. Use `status`, `tabs`, `snapshot
   stable across commands.
 - **Web-AI execution**: submit and poll ChatGPT, Gemini, and Grok sessions with
   provider-specific model selection and fail-closed capability checks.
+- **ChatGPT code artifacts**: ask ChatGPT to build a small project, package it
+  as `/mnt/data/*.zip`, retrieve the zip headlessly, and re-extract it later
+  from the same saved conversation.
 - **Evidence-heavy research**: require source audits, save answer artifacts, and
   preserve traces without relying on hidden browser state.
 - **Standalone skill distribution**: install bundled `browser`, `web-ai`, and
@@ -473,6 +477,8 @@ agbrowse web-ai poll              # wait for completion
 agbrowse web-ai query             # send + poll
 agbrowse web-ai stop              # press Escape on the active tab
 agbrowse web-ai project-sources   # list/add ChatGPT Project Sources
+agbrowse web-ai code              # generate + retrieve ChatGPT code zip artifacts
+agbrowse web-ai code-extract      # re-retrieve zip artifacts from an old conversation
 agbrowse web-ai context-dry-run   # preview a context package
 agbrowse web-ai context-render    # render full prompt + context text
 ```
@@ -650,6 +656,65 @@ Model aliases:
 Current headed ChatGPT UI may expose Pro as a `Heavy` composer pill. The runtime
 treats `Heavy` as active Pro/Heavy and can select the direct DOM fallback
 `[data-testid="model-switcher-gpt-5-5-pro-thinking-effort"]`.
+
+### ChatGPT Code Mode
+
+`web-ai code` is a ChatGPT-only beta for generating small codebases through the
+visible ChatGPT web UI, then retrieving the resulting zip without clicking a
+download button. The prompt contract asks ChatGPT to use its plan tool, create a
+visible `turn_plan.update_turn_plan` checklist, implement, self-check, package,
+and answer only with sandbox artifact path text such as `/mnt/data/result.zip`.
+
+Single zip:
+
+```bash
+agbrowse web-ai code \
+  --vendor chatgpt \
+  --model thinking \
+  --effort standard \
+  --prompt "Create a Flask hello-world MVP." \
+  --output-zip ./result.zip
+```
+
+Several named zips:
+
+```bash
+agbrowse web-ai code \
+  --vendor chatgpt \
+  --model thinking \
+  --effort standard \
+  --multi-zip \
+  --output-dir ./artifacts \
+  --prompt "Create backend.zip and frontend.zip as separate deliverables."
+```
+
+Later extraction from an existing conversation:
+
+```bash
+agbrowse web-ai code-extract \
+  --vendor chatgpt \
+  --url "https://chatgpt.com/c/<conversation-id>" \
+  --output-zip ./result.zip
+```
+
+If the ChatGPT conversation tab is already open, `--url` can be omitted. If the
+conversation was created by agbrowse and the session record still exists, pass
+`--session <sessionId>` instead. Multiple old zips can be recovered with
+`--multi-zip --output-dir ./artifacts`.
+
+The extractor does not send a follow-up prompt. It scans the saved conversation
+JSON for `/mnt/data/*.zip`, mints the provider download URL, fetches the
+cookie-bound payload inside the page, validates the zip, and writes it locally.
+The original conversation URL/session/current tab plus a logged-in ChatGPT
+browser profile are still required; a copied `/mnt/data/result.zip` line alone
+is not enough.
+
+Verify recovered archives locally when correctness matters:
+
+```bash
+unzip -t ./result.zip
+unzip -l ./result.zip
+```
 
 ### Gemini
 

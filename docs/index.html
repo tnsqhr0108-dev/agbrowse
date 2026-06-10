@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>agbrowse - Browser automation for AI agents</title>
-  <meta name="description" content="Standalone Chrome/CDP browser automation and web-ai CLI for AI agents.">
+  <meta name="description" content="Standalone Chrome/CDP browser automation, web-ai sessions, and ChatGPT code artifact extraction for AI agents.">
   <link rel="canonical" href="https://lidge-jun.github.io/agbrowse/">
   <meta property="og:type" content="website">
   <meta property="og:title" content="agbrowse">
-  <meta property="og:description" content="Browser automation, web-ai sessions, screenshots, traces, and source audits from one CLI.">
+  <meta property="og:description" content="Browser automation, web-ai sessions, ChatGPT code zip extraction, screenshots, traces, and source audits from one CLI.">
   <meta property="og:url" content="https://lidge-jun.github.io/agbrowse/">
   <meta property="og:image" content="https://lidge-jun.github.io/agbrowse/assets/social-preview.svg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="agbrowse">
-  <meta name="twitter:description" content="A small, inspectable command surface for AI agents using real browser state.">
+  <meta name="twitter:description" content="A small, inspectable command surface for AI agents using real browser state and retrievable ChatGPT code artifacts.">
   <meta name="twitter:image" content="https://lidge-jun.github.io/agbrowse/assets/social-preview.svg">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <style>
@@ -239,6 +239,7 @@
         <div class="nav-links">
           <a href="#workflow">Workflow</a>
           <a href="#web-ai">Web AI</a>
+          <a href="#code-artifacts">Code Artifacts</a>
           <a href="#verification">Verification</a>
           <a href="https://github.com/lidge-jun/agbrowse">GitHub</a>
         </div>
@@ -266,11 +267,10 @@
 agbrowse start
 agbrowse navigate "https://chatgpt.com/"
 agbrowse snapshot --interactive
-agbrowse web-ai query \
-  --vendor grok \
-  --model expert \
-  --inline-only \
-  --prompt "Reply exactly AGBROWSE_OK"</code></pre>
+agbrowse web-ai code-extract \
+  --vendor chatgpt \
+  --url "https://chatgpt.com/c/&lt;conversation-id&gt;" \
+  --output-zip ./result.zip</code></pre>
         </div>
       </section>
 
@@ -286,8 +286,8 @@ agbrowse web-ai query \
             <p>Web-ai sends return a session id so a later shell can poll the same provider tab after sleep or timeout.</p>
           </article>
           <article class="card">
-            <h3>Fail-closed adapters</h3>
-            <p>Unsupported providers, missing composers, model drift, and unsafe context-package paths fail with explicit evidence.</p>
+            <h3>Code artifacts</h3>
+            <p>ChatGPT code mode packages projects as zip files, then re-extracts them later from the original conversation text.</p>
           </article>
         </div>
       </section>
@@ -309,6 +309,28 @@ agbrowse web-ai poll \
   --vendor chatgpt \
   --session "$SID" \
   --timeout 1800</code></pre>
+        </div>
+      </section>
+
+      <section class="section split" id="code-artifacts">
+        <div>
+          <h2>Recover code zips from old ChatGPT conversations.</h2>
+          <p>When ChatGPT answers with plain sandbox text like <code>/mnt/data/result.zip</code>, agbrowse can revisit the conversation JSON, mint the provider download URL, validate the zip, and save it locally.</p>
+        </div>
+        <div class="terminal">
+          <pre><code>agbrowse web-ai code \
+  --vendor chatgpt \
+  --model thinking \
+  --effort standard \
+  --prompt "Create a Flask MVP." \
+  --output-zip ./result.zip
+
+agbrowse web-ai code-extract \
+  --vendor chatgpt \
+  --url "https://chatgpt.com/c/&lt;conversation-id&gt;" \
+  --output-zip ./result.zip
+
+unzip -t ./result.zip</code></pre>
         </div>
       </section>
 
