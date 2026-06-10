@@ -7,6 +7,7 @@
 import { WebAiError } from './errors.mjs';
 import { buildCodeModePrompt, checkContractCompliance } from './code-mode-prompt.mjs';
 import { retrieveAllCodeArtifacts, retrieveCodeArtifact } from './code-artifact.mjs';
+import { ensureCodeDevContextZip } from './code-dev-context.mjs';
 
 const CONVERSATION_ID_RE = /\/c\/([a-z0-9-]+)/i;
 const BARE_CONVERSATION_ID_RE = /^[a-z0-9][a-z0-9-]{8,}$/i;
@@ -38,7 +39,19 @@ export async function codeWebAi(deps, input, services) {
     }
     const multiZip = input.multiZip === true;
     const contractPrompt = buildCodeModePrompt(input.prompt, { multiZip });
-    const result = await services.queryWebAi(deps, { ...input, prompt: contractPrompt, inlineOnly: true });
+    const contextZip = await ensureCodeDevContextZip();
+    const callerFilePaths = Array.isArray(input.filePaths) && input.filePaths.length
+        ? input.filePaths
+        : (input.filePath ? [input.filePath] : []);
+    const filePaths = [contextZip.path, ...callerFilePaths];
+    const result = await services.queryWebAi(deps, {
+        ...input,
+        prompt: contractPrompt,
+        inlineOnly: false,
+        attachmentPolicy: 'upload',
+        filePath: filePaths[0],
+        filePaths,
+    });
     if (!result?.ok) return result;
 
     const warnings = [...(result.warnings || [])];
@@ -61,22 +74,22 @@ export async function codeWebAi(deps, input, services) {
 
     if (multiZip) {
         const outputDir = input.outputDir || `${process.cwd()}/code-artifacts-${conversationId.slice(0, 8)}`;
-        const multi = await retrieveAllCodeArtifacts(page, { conversationId, outputDir });
+        const multi = await retrieveAllCodeArtifacts(page, { conversationId, outputDir, requirePlan: true });
         if (!multi.ok) {
-            return { ...result, ok: false, errorCode: multi.reason || 'code-mode.retrieval-failed', artifacts: multi.artifacts, warnings };
+            return { ...result, ok: false, errorCode: multi.reason || 'code-mode.retrieval-failed', artifacts: multi.artifacts, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
         }
         const failed = multi.artifacts.filter(a => !a.ok);
         if (failed.length) warnings.push(`code-mode:partial-retrieval(${failed.length} failed)`);
-        return { ...result, ok: true, artifacts: multi.artifacts, outputDir, warnings };
+        return { ...result, ok: true, artifacts: multi.artifacts, outputDir, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
     }
 
     const outputPath = input.outputZip
         || `${process.cwd()}/code-artifact-${conversationId.slice(0, 8)}.zip`;
-    const artifact = await retrieveCodeArtifact(page, { conversationId, outputPath });
+    const artifact = await retrieveCodeArtifact(page, { conversationId, outputPath, requirePlan: true });
     if (!artifact.ok) {
-        return { ...result, ok: false, errorCode: artifact.reason || 'code-mode.retrieval-failed', artifact, warnings };
+        return { ...result, ok: false, errorCode: artifact.reason || 'code-mode.retrieval-failed', artifact, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
     }
-    return { ...result, ok: true, artifact, warnings };
+    return { ...result, ok: true, artifact, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
 }
 
 /**

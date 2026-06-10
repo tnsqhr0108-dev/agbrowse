@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { codeWebAi, extractCodeArtifacts, extractConversationId } from '../../web-ai/code-mode.mjs';
 
-const FIXTURE_ZIP_B64 = 'UEsDBAoAAAAAANwQy1wgMDo2BgAAAAYAAAAJABwAUkVBRE1FLm1kVVQJAAOwmSlqsJkpanV4CwABBPUBAAAEAAAAAGhlbGxvClBLAwQKAAAAAADcEMtcAAAAAAAAAAAAAAAABAAcAHNyYy9VVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAUEsDBAoAAAAAANwQy1wH7v1xDwAAAA8AAAAIABwAc3JjL2EuanNVVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAY29uc29sZS5sb2coMSkKUEsBAh4DCgAAAAAA3BDLXCAwOjYGAAAABgAAAAkAGAAAAAAAAQAAAKSBAAAAAFJFQURNRS5tZFVUBQADsJkpanV4CwABBPUBAAAEAAAAAFBLAQIeAwoAAAAAANwQy1wAAAAAAAAAAAAAAAAEABgAAAAAAAAAEADtQUkAAABzcmMvVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsBAh4DCgAAAAAA3BDLXAfu/XEPAAAADwAAAAgAGAAAAAAAAQAAAKSBhwAAAHNyYy9hLmpzVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsFBgAAAAADAAMA5wAAANgAAAAAAA==';
+const FIXTURE_ZIP_B64 = 'UEsDBAoAAAAAAO41y1w9+YHGFAAAABQAAAAHABwAUExBTi5tZFVUCQADcNspanDbKWp1eAsAAQT1AQAABBQAAAAjIFBsYW4KLSBbIF0gdmVyaWZ5ClBLAwQKAAAAAADuNctcIDA6NgYAAAAGAAAACQAcAFJFQURNRS5tZFVUCQADcNspanDbKWp1eAsAAQT1AQAABBQAAABoZWxsbwpQSwMECgAAAAAA7jXLXAfu/XEPAAAADwAAAAgAHABzcmMvYS5qc1VUCQADcNspanDbKWp1eAsAAQT1AQAABBQAAABjb25zb2xlLmxvZygxKQpQSwECHgMKAAAAAADuNctcPfmBxhQAAAAUAAAABwAYAAAAAAABAAAApIEAAAAAUExBTi5tZFVUBQADcNspanV4CwABBPUBAAAEFAAAAFBLAQIeAwoAAAAAAO41y1wgMDo2BgAAAAYAAAAJABgAAAAAAAEAAACkgVUAAABSRUFETUUubWRVVAUAA3DbKWp1eAsAAQT1AQAABBQAAABQSwECHgMKAAAAAADuNctcB+79cQ8AAAAPAAAACAAYAAAAAAABAAAApIGeAAAAc3JjL2EuanNVVAUAA3DbKWp1eAsAAQT1AQAABBQAAABQSwUGAAAAAAMAAwDqAAAA7wAAAAAA';
 
 function conversationFixture() {
     return {
@@ -109,9 +109,35 @@ describe('codeWebAi', () => {
         }));
         expect(result.ok).toBe(true);
         expect(result.artifact.files).toContain('src/a.js');
+        expect(result.artifact.hasPlanArtifact).toBe(true);
+        expect(result.codeContextAttached).toBe(true);
+        expect(result.codeContextZip).toMatch(/gpt-dev-agent-context\.zip$/);
         expect(result.compliance.compliant).toBe(true);
         expect(existsSync(outputZip)).toBe(true);
         expect(readFileSync(outputZip).length).toBe(result.artifact.sizeBytes);
+    });
+
+    it('prepends the automatic context zip before caller-provided files', async () => {
+        const page = makePage('https://chatgpt.com/c/conv-abc');
+        const deps = { getPage: async () => page };
+        let sentInput = null;
+        const result = await codeWebAi(deps, {
+            vendor: 'chatgpt',
+            prompt: 'ping API',
+            outputZip,
+            filePaths: ['/tmp/user.png', '/tmp/spec.txt'],
+        }, {
+            queryWebAi: async (_deps, input) => {
+                sentInput = input;
+                return { ok: true, sessionId: 's1', answerText: '/mnt/data/result.zip', warnings: [] };
+            },
+            getSession: () => ({ conversationUrl: 'https://chatgpt.com/c/conv-abc' }),
+        });
+        expect(result.ok).toBe(true);
+        expect(sentInput.inlineOnly).toBe(false);
+        expect(sentInput.attachmentPolicy).toBe('upload');
+        expect(sentInput.filePaths[0]).toMatch(/gpt-dev-agent-context\.zip$/);
+        expect(sentInput.filePaths.slice(1)).toEqual(['/tmp/user.png', '/tmp/spec.txt']);
     });
 
     it('flags contract drift when the answer is chatty but still retrieves', async () => {

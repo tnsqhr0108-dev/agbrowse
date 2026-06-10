@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
     fetchBinaryBase64,
+    hasPlanArtifact,
+    readZipTextEntry,
     retrieveAllCodeArtifacts,
     retrieveCodeArtifact,
     scanConversationForAllZips,
@@ -16,6 +18,7 @@ const FRONTEND_ZIP_B64 = 'UEsDBAoAAAAAAAQYy1x8GERLAwAAAAMAAAAIABwAaW5kZXguanNVVA
 
 // Real 469-byte zip (README.md, src/, src/a.js) generated with `zip -r`.
 const FIXTURE_ZIP_B64 = 'UEsDBAoAAAAAANwQy1wgMDo2BgAAAAYAAAAJABwAUkVBRE1FLm1kVVQJAAOwmSlqsJkpanV4CwABBPUBAAAEAAAAAGhlbGxvClBLAwQKAAAAAADcEMtcAAAAAAAAAAAAAAAABAAcAHNyYy9VVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAUEsDBAoAAAAAANwQy1wH7v1xDwAAAA8AAAAIABwAc3JjL2EuanNVVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAY29uc29sZS5sb2coMSkKUEsBAh4DCgAAAAAA3BDLXCAwOjYGAAAABgAAAAkAGAAAAAAAAQAAAKSBAAAAAFJFQURNRS5tZFVUBQADsJkpanV4CwABBPUBAAAEAAAAAFBLAQIeAwoAAAAAANwQy1wAAAAAAAAAAAAAAAAEABgAAAAAAAAAEADtQUkAAABzcmMvVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsBAh4DCgAAAAAA3BDLXAfu/XEPAAAADwAAAAgAGAAAAAAAAQAAAKSBhwAAAHNyYy9hLmpzVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsFBgAAAAADAAMA5wAAANgAAAAAAA==';
+const PLAN_ZIP_B64 = 'UEsDBAoAAAAAAO41y1w9+YHGFAAAABQAAAAHABwAUExBTi5tZFVUCQADcNspanDbKWp1eAsAAQT1AQAABBQAAAAjIFBsYW4KLSBbIF0gdmVyaWZ5ClBLAwQKAAAAAADuNctcIDA6NgYAAAAGAAAACQAcAFJFQURNRS5tZFVUCQADcNspanDbKWp1eAsAAQT1AQAABBQAAABoZWxsbwpQSwMECgAAAAAA7jXLXAfu/XEPAAAADwAAAAgAHABzcmMvYS5qc1VUCQADcNspanDbKWp1eAsAAQT1AQAABBQAAABjb25zb2xlLmxvZygxKQpQSwECHgMKAAAAAADuNctcPfmBxhQAAAAUAAAABwAYAAAAAAABAAAApIEAAAAAUExBTi5tZFVUBQADcNspanV4CwABBPUBAAAEFAAAAFBLAQIeAwoAAAAAAO41y1wgMDo2BgAAAAYAAAAJABgAAAAAAAEAAACkgVUAAABSRUFETUUubWRVVAUAA3DbKWp1eAsAAQT1AQAABBQAAABQSwECHgMKAAAAAADuNctcB+79cQ8AAAAPAAAACAAYAAAAAAABAAAApIGeAAAAc3JjL2EuanNVVAUAA3DbKWp1eAsAAQT1AQAABBQAAABQSwUGAAAAAAMAAwDqAAAA7wAAAAAA';
 
 function conversationFixture() {
     return {
@@ -68,6 +71,15 @@ describe('verifyZipBuffer', () => {
         expect(verified).not.toBeNull();
         expect(verified.files).toContain('README.md');
         expect(verified.files).toContain('src/a.js');
+        expect(hasPlanArtifact(verified.files)).toBe(false);
+    });
+
+    it('detects plan markdown artifacts and can read stored text entries', () => {
+        const buffer = Buffer.from(PLAN_ZIP_B64, 'base64');
+        const verified = verifyZipBuffer(buffer);
+        expect(verified.files).toContain('PLAN.md');
+        expect(hasPlanArtifact(verified.files)).toBe(true);
+        expect(readZipTextEntry(buffer, 'PLAN.md')).toContain('# Plan');
     });
 
     it('rejects non-zip payloads (e.g. JSON error bodies)', () => {
@@ -117,6 +129,18 @@ describe('retrieveCodeArtifact', () => {
         });
         const result = await retrieveCodeArtifact(page, { conversationId: 'conv-1', outputPath });
         expect(result.reason).toBe('code-artifact:invalid-zip');
+    });
+
+    it('fails closed when requirePlan is set and the zip lacks PLAN.md or 00_plan.md', async () => {
+        const page = makeRetrievalPage({
+            conversation: conversationFixture(),
+            urlByMid: { 'mid-code': 'https://chatgpt.com/no-plan' },
+            binaryByUrl: { 'https://chatgpt.com/no-plan': { status: 200, base64: FIXTURE_ZIP_B64 } },
+        });
+        const result = await retrieveCodeArtifact(page, { conversationId: 'conv-1', outputPath, requirePlan: true });
+        expect(result.ok).toBe(false);
+        expect(result.reason).toBe('code-artifact:plan-missing');
+        expect(result.files).toContain('README.md');
     });
 
     it('reports conversation-unavailable when the session/API is dead', async () => {

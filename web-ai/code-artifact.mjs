@@ -7,6 +7,7 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
+import { inflateRawSync } from 'node:zlib';
 
 /** @typedef {import('playwright-core').Page} Page */
 
@@ -24,6 +25,7 @@ import { basename, dirname, join } from 'node:path';
  * @property {string|null} savedPath
  * @property {number} sizeBytes
  * @property {string[]} files
+ * @property {boolean} [hasPlanArtifact]
  */
 
 const ZIP_PATH_RE = /\/mnt\/data\/[A-Za-z0-9_\-./]+\.zip/;
@@ -98,6 +100,47 @@ export function scanConversationForAllZips(conversation) {
  * @returns {{ files: string[] } | null}
  */
 export function verifyZipBuffer(buffer) {
+    const entries = readZipCentralDirectory(buffer);
+    if (!entries) return null;
+    return { files: entries.map(entry => entry.name) };
+}
+
+/**
+ * @param {string[]} files
+ */
+export function hasPlanArtifact(files) {
+    return files.some(file => /(?:^|\/)(?:PLAN|00_plan)\.md$/i.test(file));
+}
+
+/**
+ * Read a small text file from a zip buffer. Supports stored and deflated
+ * entries, enough for our generated context manifests.
+ *
+ * @param {Buffer} buffer
+ * @param {string} entryName
+ * @returns {string|null}
+ */
+export function readZipTextEntry(buffer, entryName) {
+    const entries = readZipCentralDirectory(buffer);
+    const entry = entries?.find(candidate => candidate.name === entryName);
+    if (!entry) return null;
+    if (entry.localHeaderOffset + 30 > buffer.length || buffer.readUInt32LE(entry.localHeaderOffset) !== 0x04034b50) return null;
+    const nameLength = buffer.readUInt16LE(entry.localHeaderOffset + 26);
+    const extraLength = buffer.readUInt16LE(entry.localHeaderOffset + 28);
+    const dataStart = entry.localHeaderOffset + 30 + nameLength + extraLength;
+    const dataEnd = dataStart + entry.compressedSize;
+    if (dataStart < 0 || dataEnd > buffer.length) return null;
+    const payload = buffer.subarray(dataStart, dataEnd);
+    if (entry.method === 0) return payload.toString('utf8');
+    if (entry.method === 8) return inflateRawSync(payload).toString('utf8');
+    return null;
+}
+
+/**
+ * @param {Buffer} buffer
+ * @returns {{ name: string, method: number, compressedSize: number, localHeaderOffset: number }[] | null}
+ */
+function readZipCentralDirectory(buffer) {
     if (!buffer || buffer.length < 22) return null;
     if (buffer.readUInt32LE(0) !== 0x04034b50) return null;
     const eocdStart = Math.max(0, buffer.length - 22 - 65535);
@@ -108,18 +151,26 @@ export function verifyZipBuffer(buffer) {
     if (eocd < 0) return null;
     const entryCount = buffer.readUInt16LE(eocd + 10);
     const cdOffset = buffer.readUInt32LE(eocd + 16);
-    /** @type {string[]} */
-    const files = [];
+    /** @type {{ name: string, method: number, compressedSize: number, localHeaderOffset: number }[]} */
+    const entries = [];
     let cursor = cdOffset;
     for (let i = 0; i < entryCount; i++) {
         if (cursor + 46 > buffer.length || buffer.readUInt32LE(cursor) !== 0x02014b50) return null;
+        const method = buffer.readUInt16LE(cursor + 10);
+        const compressedSize = buffer.readUInt32LE(cursor + 20);
         const nameLength = buffer.readUInt16LE(cursor + 28);
         const extraLength = buffer.readUInt16LE(cursor + 30);
         const commentLength = buffer.readUInt16LE(cursor + 32);
-        files.push(buffer.toString('utf8', cursor + 46, cursor + 46 + nameLength));
+        const localHeaderOffset = buffer.readUInt32LE(cursor + 42);
+        entries.push({
+            name: buffer.toString('utf8', cursor + 46, cursor + 46 + nameLength),
+            method,
+            compressedSize,
+            localHeaderOffset,
+        });
         cursor += 46 + nameLength + extraLength + commentLength;
     }
-    return { files };
+    return entries;
 }
 
 /**
@@ -189,7 +240,7 @@ export async function fetchBinaryBase64(page, url) {
  * @param {{ conversationId: string, outputPath: string }} params
  * @returns {Promise<RetrieveResult>}
  */
-export async function retrieveCodeArtifact(page, { conversationId, outputPath }) {
+export async function retrieveCodeArtifact(page, { conversationId, outputPath, requirePlan = false } = {}) {
     /** @type {RetrieveResult} */
     const result = { ok: false, reason: null, zipPath: null, savedPath: null, sizeBytes: 0, files: [] };
 
@@ -200,7 +251,7 @@ export async function retrieveCodeArtifact(page, { conversationId, outputPath })
     if (!zipPath) return { ...result, reason: 'code-artifact:missing' };
     if (!candidateMids.length) return { ...result, zipPath, reason: 'code-artifact:no-tool-messages' };
 
-    return downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath });
+    return downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath, requirePlan });
 }
 
 /**
@@ -212,7 +263,7 @@ export async function retrieveCodeArtifact(page, { conversationId, outputPath })
  * @param {{ conversationId: string, outputDir: string }} params
  * @returns {Promise<{ ok: boolean, reason: string|null, artifacts: RetrieveResult[] }>}
  */
-export async function retrieveAllCodeArtifacts(page, { conversationId, outputDir }) {
+export async function retrieveAllCodeArtifacts(page, { conversationId, outputDir, requirePlan = false }) {
     const conversation = await fetchConversationJson(page, conversationId);
     if (!conversation) return { ok: false, reason: 'code-artifact:conversation-unavailable', artifacts: [] };
 
@@ -225,7 +276,7 @@ export async function retrieveAllCodeArtifacts(page, { conversationId, outputDir
     for (const zipPath of zipPaths) {
         const outputPath = join(outputDir, basename(zipPath));
         // eslint-disable-next-line no-await-in-loop -- sequential to reuse one page and avoid presigned-URL races
-        artifacts.push(await downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath }));
+        artifacts.push(await downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath, requirePlan }));
     }
     const ok = artifacts.some(a => a.ok);
     return { ok, reason: ok ? null : 'code-artifact:all-failed', artifacts };
@@ -239,7 +290,7 @@ export async function retrieveAllCodeArtifacts(page, { conversationId, outputDir
  * @param {{ conversationId: string, zipPath: string, candidateMids: string[], outputPath: string }} params
  * @returns {Promise<RetrieveResult>}
  */
-async function downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath }) {
+async function downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath, requirePlan = false }) {
     /** @type {RetrieveResult} */
     const result = { ok: false, reason: null, zipPath, savedPath: null, sizeBytes: 0, files: [] };
 
@@ -257,13 +308,17 @@ async function downloadAndSaveZip(page, { conversationId, zipPath, candidateMids
     const buffer = Buffer.from(payload.base64, 'base64');
     const verified = verifyZipBuffer(buffer);
     if (!verified) return { ...result, sizeBytes: buffer.length, reason: 'code-artifact:invalid-zip' };
+    const planArtifact = hasPlanArtifact(verified.files);
+    if (requirePlan && !planArtifact) {
+        return { ...result, sizeBytes: buffer.length, files: verified.files, hasPlanArtifact: false, reason: 'code-artifact:plan-missing' };
+    }
 
     try {
         mkdirSync(dirname(outputPath), { recursive: true });
         writeFileSync(outputPath, buffer);
     } catch (error) {
         console.error('[code-artifact]', /** @type {Error} */ (error)?.message || error);
-        return { ...result, sizeBytes: buffer.length, files: verified.files, reason: 'code-artifact:write-failed' };
+        return { ...result, sizeBytes: buffer.length, files: verified.files, hasPlanArtifact: planArtifact, reason: 'code-artifact:write-failed' };
     }
-    return { ok: true, reason: null, zipPath, savedPath: outputPath, sizeBytes: buffer.length, files: verified.files };
+    return { ok: true, reason: null, zipPath, savedPath: outputPath, sizeBytes: buffer.length, files: verified.files, hasPlanArtifact: planArtifact };
 }
