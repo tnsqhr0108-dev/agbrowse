@@ -40,7 +40,8 @@ describe('code dev-agent context bundle', () => {
         const contextMarkdown = readZipTextEntry(buffer, GPT_DEV_AGENT_CONTEXT_MARKDOWN_ENTRY);
         expect(contextMarkdown).toContain('Linux sandbox');
         expect(contextMarkdown).toContain('turn_plan.update_turn_plan');
-        expect(contextMarkdown).toContain('20+ items');
+        expect(contextMarkdown).toContain('at most 8 top-level items');
+        expect(contextMarkdown).toContain('Detailed stage instructions');
         expect(contextMarkdown).toContain('marked `[x]`');
         expect(contextMarkdown).toContain('visible todo UI may disappear');
 

@@ -667,8 +667,9 @@ visible ChatGPT web UI, then retrieving the resulting zip without clicking a
 download button. The prompt contract asks ChatGPT to create a durable
 `PLAN.md` or `00_plan.md` checklist inside the generated artifact, use
 `turn_plan.update_turn_plan` only when that tool is actually available during
-the response, allow longer 20+ item todo lists for complex work, treat that
-visible todo UI as transient after completion,
+the response, keep visible todo/checklist tools to 8 or fewer top-level items,
+put extra detailed stage instructions in the plan file, treat that visible todo
+UI as transient after completion,
 implement, self-check, package, and answer with both a human clickable sandbox
 link and a machine-readable plain path. Each `web-ai code` call automatically
 uploads `skills/web-ai/modules/gpt-dev-agent-context.zip` as the first
@@ -735,9 +736,10 @@ New code-mode runs fail closed if the recovered code zip does not contain
 conversations, but old artifacts may predate the plan-file contract.
 Do not treat disappearance of the visible todo UI after the response finishes
 as a failure; the zip-root plan file is the durable checklist. Small generated
-projects usually need 5-10 plan items, but complex projects may use 20 or more.
-Completed items in the zip-root plan file should be marked `[x]` before final
-packaging.
+projects should keep the top-level checklist to 8 items or fewer. Complex
+projects should add textual detailed stage instructions instead of expanding
+the visible todo/checklist beyond 8. Completed items in the zip-root plan file
+should be marked `[x]` before final packaging.
 
 Verify recovered archives locally when correctness matters:
 

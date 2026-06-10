@@ -21,8 +21,8 @@ describe('buildCodeModePrompt', () => {
         expect(prompt).toContain(PLAN_FILE_REQUIREMENT);
         expect(prompt).toContain('turn_plan.update_turn_plan');
         expect(prompt).toContain('PLAN.md 또는 00_plan.md');
-        expect(prompt).toContain('가능하면 8개');
-        expect(prompt).toContain('20개 이상도 작성해도 된다');
+        expect(prompt).toContain('최대 8개 top-level');
+        expect(prompt).toContain('추가 세부 단계');
         expect(prompt).toContain('응답 종료 후 사라질 수 있으므로');
         expect(prompt).toContain('[x] 로 갱신');
         expect(prompt).toContain('도구가 없으면 절대 사용했다고 말하지 말고');
@@ -52,6 +52,7 @@ describe('buildCodeModePrompt', () => {
         expect(prompt).toContain(PLAN_FILE_REQUIREMENT);
         expect(prompt).toContain('turn_plan.update_turn_plan');
         expect(prompt).toContain('각 코드 zip 안에 PLAN.md 또는 00_plan.md');
+        expect(prompt).toContain('최대 8개 top-level');
         // the single-zip "exactly one result.zip" clause must NOT appear
         expect(prompt).not.toContain('단 하나의 /mnt/data/result.zip');
     });
