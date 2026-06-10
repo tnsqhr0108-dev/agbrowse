@@ -300,11 +300,39 @@ agbrowse web-ai code \
   --prompt "Create backend.zip and frontend.zip as separate deliverables."
 ```
 
+Later extraction from an existing ChatGPT conversation:
+
+```bash
+agbrowse web-ai code-extract \
+  --vendor chatgpt \
+  --url "https://chatgpt.com/c/<conversation-id>" \
+  --output-zip ./result.zip
+```
+
+For multiple zips from the same old conversation:
+
+```bash
+agbrowse web-ai code-extract \
+  --vendor chatgpt \
+  --url "https://chatgpt.com/c/<conversation-id>" \
+  --multi-zip \
+  --output-dir ./artifacts
+```
+
+If the ChatGPT conversation tab is already open, `--url` can be omitted. If the
+conversation was created by agbrowse and the session is still recorded, use
+`--session <sessionId>` instead. A bare `--conversation <conversation-id>` also
+works. The extractor does not send a new prompt; it scans the saved conversation
+JSON for `/mnt/data/*.zip` paths and reuses the provider download API.
+
 Code mode is beta and ChatGPT-only. It does not depend on visible download
 buttons; plain sandbox paths in the assistant answer are enough for the runtime
-to retrieve the archives. Do not claim cli-jaw parity for this command unless
-the equivalent cli-jaw command surface, retrieval runtime, tests, and installed
-skill docs are implemented there.
+to retrieve the archives, including later `code-extract` runs. Text copied away
+from ChatGPT is not enough by itself: the extractor still needs the original
+conversation URL/session/current tab plus the logged-in ChatGPT browser profile.
+Do not claim cli-jaw parity for this command unless the equivalent cli-jaw
+command surface, retrieval runtime, tests, and installed skill docs are
+implemented there.
 
 ## Generated Images
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { codeWebAi, extractConversationId } from '../../web-ai/code-mode.mjs';
+import { codeWebAi, extractCodeArtifacts, extractConversationId } from '../../web-ai/code-mode.mjs';
 
 const FIXTURE_ZIP_B64 = 'UEsDBAoAAAAAANwQy1wgMDo2BgAAAAYAAAAJABwAUkVBRE1FLm1kVVQJAAOwmSlqsJkpanV4CwABBPUBAAAEAAAAAGhlbGxvClBLAwQKAAAAAADcEMtcAAAAAAAAAAAAAAAABAAcAHNyYy9VVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAUEsDBAoAAAAAANwQy1wH7v1xDwAAAA8AAAAIABwAc3JjL2EuanNVVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAY29uc29sZS5sb2coMSkKUEsBAh4DCgAAAAAA3BDLXCAwOjYGAAAABgAAAAkAGAAAAAAAAQAAAKSBAAAAAFJFQURNRS5tZFVUBQADsJkpanV4CwABBPUBAAAEAAAAAFBLAQIeAwoAAAAAANwQy1wAAAAAAAAAAAAAAAAEABgAAAAAAAAAEADtQUkAAABzcmMvVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsBAh4DCgAAAAAA3BDLXAfu/XEPAAAADwAAAAgAGAAAAAAAAQAAAKSBhwAAAHNyYy9hLmpzVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsFBgAAAAADAAMA5wAAANgAAAAAAA==';
 
@@ -31,8 +31,57 @@ function makePage(url) {
 describe('extractConversationId', () => {
     it('pulls the id from a chatgpt conversation url', () => {
         expect(extractConversationId('https://chatgpt.com/c/6a29932e-4848-83aa-871b-3850096c0224')).toBe('6a29932e-4848-83aa-871b-3850096c0224');
+        expect(extractConversationId('6a29932e-4848-83aa-871b-3850096c0224')).toBe('6a29932e-4848-83aa-871b-3850096c0224');
         expect(extractConversationId('https://chatgpt.com/')).toBeNull();
         expect(extractConversationId(null)).toBeNull();
+    });
+});
+
+describe('extractCodeArtifacts', () => {
+    const outputZip = join(tmpdir(), 'code-extract-test', 'out.zip');
+
+    it('retrieves from an existing conversation URL without sending a prompt', async () => {
+        rmSync(outputZip, { force: true });
+        let gotoUrl = null;
+        const page = {
+            url: () => 'https://example.com/',
+            goto: async (url) => { gotoUrl = url; },
+            evaluate: async (_fn, arg) => {
+                if (typeof arg === 'string' && arg.startsWith('http')) return { status: 200, base64: FIXTURE_ZIP_B64 };
+                if (typeof arg === 'string') return conversationFixture();
+                if (arg && typeof arg === 'object' && 'messageId' in arg) return 'https://chatgpt.com/estuary?sig=1';
+                return null;
+            },
+        };
+        const result = await extractCodeArtifacts({ getPage: async () => page }, {
+            vendor: 'chatgpt',
+            url: 'https://chatgpt.com/c/conv-abc',
+            outputZip,
+        });
+        expect(result.ok).toBe(true);
+        expect(gotoUrl).toBe('https://chatgpt.com/c/conv-abc');
+        expect(result.conversationId).toBe('conv-abc');
+        expect(result.artifact.files).toContain('src/a.js');
+        expect(existsSync(outputZip)).toBe(true);
+    });
+
+    it('retrieves from the current ChatGPT tab when only the assistant text contains the zip path', async () => {
+        rmSync(outputZip, { force: true });
+        const page = makePage('https://chatgpt.com/c/conv-abc');
+        const result = await extractCodeArtifacts({ getPage: async () => page }, {
+            vendor: 'chatgpt',
+            outputZip,
+        });
+        expect(result.ok).toBe(true);
+        expect(result.artifact.zipPath).toBe('/mnt/data/result.zip');
+        expect(existsSync(outputZip)).toBe(true);
+    });
+
+    it('reports a clear error when no conversation id is available', async () => {
+        const page = makePage('https://chatgpt.com/');
+        const result = await extractCodeArtifacts({ getPage: async () => page }, { vendor: 'chatgpt', outputZip });
+        expect(result.ok).toBe(false);
+        expect(result.errorCode).toBe('code-extract.conversation-id-missing');
     });
 });
 

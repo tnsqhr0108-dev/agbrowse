@@ -9,6 +9,7 @@ import { buildCodeModePrompt, checkContractCompliance } from './code-mode-prompt
 import { retrieveAllCodeArtifacts, retrieveCodeArtifact } from './code-artifact.mjs';
 
 const CONVERSATION_ID_RE = /\/c\/([a-z0-9-]+)/i;
+const BARE_CONVERSATION_ID_RE = /^[a-z0-9][a-z0-9-]{8,}$/i;
 
 /**
  * @param {string|null|undefined} url
@@ -16,7 +17,9 @@ const CONVERSATION_ID_RE = /\/c\/([a-z0-9-]+)/i;
  */
 export function extractConversationId(url) {
     const match = String(url || '').match(CONVERSATION_ID_RE);
-    return match ? match[1] : null;
+    if (match) return match[1];
+    const value = String(url || '').trim();
+    return BARE_CONVERSATION_ID_RE.test(value) ? value : null;
 }
 
 /**
@@ -74,4 +77,98 @@ export async function codeWebAi(deps, input, services) {
         return { ...result, ok: false, errorCode: artifact.reason || 'code-mode.retrieval-failed', artifact, warnings };
     }
     return { ...result, ok: true, artifact, warnings };
+}
+
+/**
+ * Re-retrieve code-mode zip artifacts from an existing ChatGPT conversation.
+ * This does not send a prompt; it only uses the saved conversation JSON plus
+ * the same interpreter/download API that `web-ai code` uses immediately after
+ * generation.
+ *
+ * @param {{ getPage: () => Promise<import('playwright-core').Page> }} deps
+ * @param {Record<string, any>} input
+ * @param {{ getSession?: (id: string) => any }} [services]
+ */
+export async function extractCodeArtifacts(deps, input, services = {}) {
+    if (input.vendor && input.vendor !== 'chatgpt') {
+        throw new WebAiError({
+            errorCode: 'code-mode.vendor-unsupported',
+            stage: 'code-extract',
+            retryHint: 'use-chatgpt',
+            message: 'web-ai code-extract is ChatGPT-only (container artifact contract)',
+        });
+    }
+
+    const session = input.session && services.getSession ? services.getSession(input.session) : null;
+    const page = await deps.getPage();
+    const pageUrl = typeof page?.url === 'function' ? page.url() : '';
+    const conversationRef = input.conversation || input.url || session?.conversationUrl || session?.url || pageUrl;
+    const conversationId = extractConversationId(conversationRef);
+    if (!conversationId) {
+        return {
+            ok: false,
+            status: 'error',
+            errorCode: 'code-extract.conversation-id-missing',
+            warnings: [],
+        };
+    }
+
+    const targetUrl = resolveConversationUrl(conversationRef, conversationId);
+    if (targetUrl && shouldNavigateForExtraction(pageUrl, targetUrl)) {
+        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+    }
+
+    if (input.multiZip === true) {
+        const outputDir = input.outputDir || `${process.cwd()}/code-artifacts-${conversationId.slice(0, 8)}`;
+        const multi = await retrieveAllCodeArtifacts(page, { conversationId, outputDir });
+        return {
+            ok: multi.ok,
+            status: multi.ok ? 'complete' : 'error',
+            errorCode: multi.ok ? undefined : (multi.reason || 'code-extract.retrieval-failed'),
+            url: targetUrl || pageUrl,
+            conversationId,
+            artifacts: multi.artifacts,
+            outputDir,
+            warnings: [],
+        };
+    }
+
+    const outputPath = input.outputZip
+        || `${process.cwd()}/code-artifact-${conversationId.slice(0, 8)}.zip`;
+    const artifact = await retrieveCodeArtifact(page, { conversationId, outputPath });
+    return {
+        ok: artifact.ok,
+        status: artifact.ok ? 'complete' : 'error',
+        errorCode: artifact.ok ? undefined : (artifact.reason || 'code-extract.retrieval-failed'),
+        url: targetUrl || pageUrl,
+        conversationId,
+        artifact,
+        warnings: [],
+    };
+}
+
+/**
+ * @param {string} conversationRef
+ * @param {string} conversationId
+ */
+function resolveConversationUrl(conversationRef, conversationId) {
+    const value = String(conversationRef || '').trim();
+    if (/^https:\/\/chatgpt\.com\/c\//i.test(value)) return value;
+    return `https://chatgpt.com/c/${conversationId}`;
+}
+
+/**
+ * @param {string} pageUrl
+ * @param {string} targetUrl
+ */
+function shouldNavigateForExtraction(pageUrl, targetUrl) {
+    if (!pageUrl) return true;
+    try {
+        const current = new URL(pageUrl);
+        const target = new URL(targetUrl);
+        if (current.origin !== target.origin) return true;
+        return extractConversationId(current.href) !== extractConversationId(target.href);
+    } catch {
+        return true;
+    }
 }

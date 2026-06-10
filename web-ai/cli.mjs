@@ -6,7 +6,7 @@
  */
 import { parseArgs } from 'node:util';
 import { renderWebAi, statusWebAi, sendWebAi, pollWebAi, queryWebAi, stopWebAi, deepResearchWebAi } from './chatgpt.mjs';
-import { codeWebAi } from './code-mode.mjs';
+import { codeWebAi, extractCodeArtifacts } from './code-mode.mjs';
 import { geminiStatusWebAi, geminiSendWebAi, geminiPollWebAi, geminiQueryWebAi, geminiStopWebAi } from './gemini-live.mjs';
 import { grokStatusWebAi, grokSendWebAi, grokPollWebAi, grokQueryWebAi, grokStopWebAi } from './grok-live.mjs';
 import { buildContextPackageResult, prepareContextForBrowser, renderContextDryRunReport } from './context-pack/index.mjs';
@@ -48,10 +48,10 @@ const COMMANDS = new Set([
     'sessions', 'doctor',
     'context-dry-run', 'context-render',
     'mcp-server', 'eval', 'claim-audit',
-    'project-sources', 'code',
+    'project-sources', 'code', 'code-extract',
 ]);
 
-const BROWSER_REQUIRED_COMMANDS = new Set(['status', 'send', 'poll', 'query', 'stop', 'watch', 'snapshot', 'doctor', 'project-sources', 'code']);
+const BROWSER_REQUIRED_COMMANDS = new Set(['status', 'send', 'poll', 'query', 'stop', 'watch', 'snapshot', 'doctor', 'project-sources', 'code', 'code-extract']);
 const BROWSER_REQUIRED_SESSION_COMMANDS = new Set(['resume', 'reattach', 'doctor']);
 export const WEB_AI_USAGE = `
 Usage:
@@ -81,6 +81,13 @@ Commands:
                       --output-zip = save path. Best with --model thinking.
                       --multi-zip allows several named archives (e.g.
                       frontend.zip + backend.zip); saved into --output-dir.
+  code-extract        ChatGPT-only. Re-retrieve existing code-mode zip artifacts
+                      from a saved conversation without sending a new prompt.
+                      Use --url <chatgpt conversation URL>, --conversation
+                      <id|url>, --session <id>, or the currently open
+                      ChatGPT conversation tab. Plain assistant text such as
+                      /mnt/data/result.zip is enough when the original
+                      conversation is still accessible.
   mcp-server          Run stdio MCP bridge exposing web-ai tools
   eval                Run offline provider DOM fixture evals; never opens Chrome
   claim-audit         Scan repo docs for forbidden hosted/cloud/stealth claims (G10).
@@ -398,6 +405,7 @@ async function runWebAiCliInner(argv = [], deps) {
             'output-zip': { type: 'string' },
             'output-dir': { type: 'string' },
             'multi-zip': { type: 'boolean', default: false },
+            conversation: { type: 'string' },
             research: { type: 'string' },
             archive: { type: 'string' },
             'follow-up': { type: 'string', multiple: true },
@@ -485,6 +493,7 @@ async function runWebAiCliInner(argv = [], deps) {
         outputZip: values['output-zip'],
         outputDir: values['output-dir'],
         multiZip: values['multi-zip'] === true,
+        conversation: values.conversation,
         research: values.research,
         archiveFlag: values.archive,
         followUps: values['follow-up'] || [],
@@ -1187,8 +1196,30 @@ async function runCommand(command, deps, input) {
         });
         case 'stop': return runBoundCommand(command, deps, input, pollWebAi, stopWebAi);
         case 'code': return withWebAiActiveCommand(command, deps, input, () => codeWebAi(deps, input, { queryWebAi, getSession }));
+        case 'code-extract': return runCodeExtractCommand(deps, input);
         default: throw new Error(`unknown web-ai command: ${command}`);
     }
+}
+
+/**
+ * @param {any} deps
+ * @param {any} input
+ */
+async function runCodeExtractCommand(deps, input) {
+    if (input.session) {
+        return withSessionPage(deps, input.session, async ({ page, targetId, session }) => {
+            const sessionDeps = {
+                ...deps,
+                getPage: async () => page,
+                getTargetId: async () => targetId,
+                getCdpSession: async () => (/** @type {any} */ (page)).context().newCDPSession(page),
+            };
+            return withWebAiActiveCommand('code-extract', sessionDeps, { ...input, vendor: session.vendor, session: session.sessionId }, () => {
+                return extractCodeArtifacts(sessionDeps, { ...input, vendor: session.vendor, session: session.sessionId }, { getSession });
+            });
+        });
+    }
+    return withWebAiActiveCommand('code-extract', deps, input, () => extractCodeArtifacts(deps, input, { getSession }));
 }
 
 /**
@@ -1515,7 +1546,7 @@ function printHuman(command, result) {
         if (result.warnings?.length) console.error(`[warnings] ${result.warnings.join(', ')}`);
         return;
     }
-    if (command === 'code') {
+    if (command === 'code' || command === 'code-extract') {
         if (result.ok && Array.isArray(result.artifacts)) {
             for (const artifact of result.artifacts) {
                 if (artifact.savedPath) {
