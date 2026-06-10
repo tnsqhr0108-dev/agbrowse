@@ -527,12 +527,14 @@ npm --prefix /Users/jun/Developer/new/700_projects/cli-jaw test -- \
   /Users/jun/Developer/new/700_projects/cli-jaw/tests/unit/browser-web-ai-cli-contract.test.ts \
   /Users/jun/Developer/new/700_projects/cli-jaw/tests/unit/web-ai-skill-policy.test.ts
 npm --prefix /Users/jun/Developer/new/700_projects/cli-jaw run typecheck
+npm --prefix /Users/jun/Developer/new/700_projects/cli-jaw run build
 npm --prefix /Users/jun/Developer/new/700_projects/cli-jaw pack --dry-run --json
 bash /Users/jun/Developer/new/700_projects/cli-jaw/structure/verify-counts.sh
 git -C /Users/jun/Developer/new/700_projects/cli-jaw diff --check
 ```
 
 cli-jaw `npm pack --dry-run --json` pass condition:
+- run only after `npm run build`, because cli-jaw packages compiled `dist/` rather than raw `src/`;
 - do not require `skills_ref/web-ai/modules/...` in the packed artifact unless `package.json files` is explicitly changed to include it;
 - do require the compiled packaged fallback module under `dist/browser/web-ai/` so code mode can still generate the automatic context ZIP after install.
 
