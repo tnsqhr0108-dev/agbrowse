@@ -10,6 +10,8 @@ describe('web-ai ChatGPT model selector policy', () => {
         expect(modelSrc).toContain('model-switcher-gpt-5-5-thinking-thinking-effort');
         expect(modelSrc).toContain('Extended Pro');
         expect(modelSrc).toContain('Heavy');
+        expect(modelSrc).toContain('Extra High');
+        expect(modelSrc).toContain('Pro Extended');
         expect(modelSrc).toContain('readActiveModelPill');
     });
 
@@ -58,7 +60,11 @@ describe('web-ai ChatGPT model selector policy', () => {
             expect(result).toMatchObject({
                 selected: testCase.selected,
                 effort: testCase.selectedEffort,
+                warnings: [],
             });
+            if (testCase.effort && testCase.selected === 'thinking') {
+                expect(result.usedFallbacks).toContain(`${testCase.selected}-effort-simplified-direct`);
+            }
         }
     });
 
@@ -577,6 +583,25 @@ describe('web-ai ChatGPT model selector policy', () => {
         await expect(selectChatGptModel(page, 'thinking', { effort: 'heavy' })).resolves.toMatchObject({
             selected: 'thinking',
             effort: 'heavy',
+        });
+    });
+
+    it('reads the new Extra High composer pill as Thinking heavy', async () => {
+        const { selectChatGptModel } = await import('../../web-ai/chatgpt-model.mjs');
+        const page = createFakeModelPage({
+            model: 'thinking',
+            initialModelMenuOpen: false,
+            initialSelectedEffort: 'heavy',
+            activePillTexts: { heavy: 'Extra High' },
+            checkedModelRows: false,
+            checkedEffortRows: false,
+            roleButtonPill: true,
+        });
+
+        await expect(selectChatGptModel(page, 'thinking', { effort: 'heavy' })).resolves.toMatchObject({
+            selected: 'thinking',
+            effort: 'heavy',
+            warnings: [],
         });
     });
 

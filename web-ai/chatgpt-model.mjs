@@ -240,14 +240,22 @@ export async function selectChatGptModel(page, model, options = {}) {
     /** @type {{ requested: string, selected: string|null, changed: boolean } | null} */
     let selectedEffort = null;
     if (requestedEffort) {
-        try {
-            selectedEffort = await selectChatGptEffort(page, /** @type {string} */ (targetModel), requestedEffort, usedFallbacks);
-            await openModelMenu(page, usedFallbacks);
-        } catch (err) {
-            if (!isSelectionUnavailable(err)) throw err;
-            usedFallbacks.push('reasoning-effort-unavailable-current-effort');
-            warnings.push(`reasoning effort ${requestedEffort} was not enforced: ${errorMessage(err)}`);
-            await closeModelMenu(page);
+        const simplifiedSelected = currentEvidence?.label
+            ? effortChoiceFromSimplifiedText(currentEvidence.label, /** @type {string} */ (targetModel), requestedEffort)
+            : null;
+        if (simplifiedSelected === requestedEffort) {
+            selectedEffort = { requested: requestedEffort, selected: requestedEffort, changed: modelChanged };
+            usedFallbacks.push(`${targetModel}-effort-simplified-direct`);
+        } else {
+            try {
+                selectedEffort = await selectChatGptEffort(page, /** @type {string} */ (targetModel), requestedEffort, usedFallbacks);
+                await openModelMenu(page, usedFallbacks);
+            } catch (err) {
+                if (!isSelectionUnavailable(err)) throw err;
+                usedFallbacks.push('reasoning-effort-unavailable-current-effort');
+                warnings.push(`reasoning effort ${requestedEffort} was not enforced: ${errorMessage(err)}`);
+                await closeModelMenu(page);
+            }
         }
     }
     const afterEvidence = await readCheckedModelEvidence(page, targetModel);
@@ -559,6 +567,11 @@ async function findEffortOption(page, model, effort) {
 async function openEffortMenu(page, model, effort, usedFallbacks) {
     if (await isEffortMenuOpen(page, model, { effort })) return;
     if (!(await isModelMenuOpen(page))) await openModelMenu(page, usedFallbacks);
+    const simplifiedDirect = await findOptionByExactLabels(page, simplifiedEffortLabels(model, effort));
+    if (simplifiedDirect && await simplifiedDirect.isVisible().catch(() => false)) {
+        usedFallbacks.push(`${model}-effort-simplified-direct`);
+        return;
+    }
     const config = CHATGPT_MODEL_EFFORT_OPTIONS[model];
     const row = await findModelOption(page, /** @type {ModelChoice} */ (model));
     const rowBox = row ? await row.boundingBox().catch(() => null) : null;
@@ -849,7 +862,10 @@ async function readActiveModelPill(page, options = {}) {
  * @returns {Promise<string>}
  */
 async function readActiveEffortPill(page) {
-    const labels = [...new Set(Object.values(CHATGPT_MODEL_EFFORT_OPTIONS).flatMap(option => Object.values(option.efforts)))];
+    const labels = [...new Set([
+        ...Object.values(CHATGPT_MODEL_EFFORT_OPTIONS).flatMap(option => Object.values(option.efforts)),
+        ...Object.values(CHATGPT_SIMPLIFIED_INTELLIGENCE_OPTIONS).flatMap(option => Object.values(option.efforts).flat()),
+    ])];
     for (const selector of CHATGPT_COMPOSER_MODEL_PILL_SELECTORS) {
         const candidates = await page.locator(selector).count().catch(() => 0);
         for (let index = candidates - 1; index >= 0; index -= 1) {

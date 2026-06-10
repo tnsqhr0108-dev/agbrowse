@@ -509,7 +509,7 @@ ChatGPT:
 - `thinking --effort standard` selects `Medium`.
 - `thinking --effort extended` selects `High`.
 - `thinking --effort heavy` selects `Extra High`.
-- `pro --effort standard` selects `Pro Extended` when the simplified UI only exposes Pro Extended.
+- `pro --effort standard` selects `Pro Extended` when the simplified UI only exposes Pro Extended; if ChatGPT exposes a `Pro Standard` hover submenu, treat it as an optional refinement rather than a required selector.
 - `pro --effort extended` selects `Pro Extended`.
 
 Gemini:

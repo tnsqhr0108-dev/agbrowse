@@ -653,9 +653,12 @@ Model aliases:
 - `thinking`, `think`, `gpt-5.5-thinking`
 - `pro`, `gpt-5.5-pro`
 
-Current headed ChatGPT UI may expose Pro as a `Heavy` composer pill. The runtime
-treats `Heavy` as active Pro/Heavy and can select the direct DOM fallback
-`[data-testid="model-switcher-gpt-5-5-pro-thinking-effort"]`.
+Current headed ChatGPT UI may expose a simplified `Intelligence` picker instead
+of the older model row plus separate effort submenu. The runtime maps
+`thinking --effort light|standard|extended|heavy` to `Instant|Medium|High|Extra
+High`, and maps Pro requests through `Pro Extended` when that is the visible Pro
+entry. Legacy `model-switcher-*` rows and composer-pill fallbacks remain
+supported.
 
 ### ChatGPT Code Mode
 
