@@ -273,10 +273,14 @@ Use `--max-upload-file-size <bytes>` for live `--file` uploads. Use
 Use ChatGPT only. `web-ai code` sends a strict code-generation contract, waits
 for ChatGPT to create zip artifacts in its sandbox, retrieves the artifacts via
 the provider download API, and validates the local zip before returning. The
-contract tells ChatGPT to use its plan tool first, create/update a visible
-`turn_plan.update_turn_plan` todo checklist, then implement, self-check,
-package, and return both human clickable sandbox links and machine-readable
-plain artifact paths.
+contract tells ChatGPT to use its plan tool when available, create/update a
+visible `turn_plan.update_turn_plan` todo checklist only when that tool is
+actually available, create `PLAN.md` or `00_plan.md` inside every generated
+code zip, then implement, self-check, package, and return both human clickable
+sandbox links and machine-readable plain artifact paths. `web-ai code`
+automatically uploads `skills/web-ai/modules/gpt-dev-agent-context.zip` as the
+first attachment; this saved skill module is a GPT/Linux-sandbox dev-agent guide
+built from the dev skills and AGENTS rules.
 
 Single zip:
 
@@ -336,6 +340,13 @@ MACHINE: /mnt/data/result.zip
 For multi-zip mode, ChatGPT repeats the same two-line block for each zip. The
 `DOWNLOAD:` line is for humans in the ChatGPT UI; the `MACHINE:` line is for
 agbrowse and other automation.
+
+Current ChatGPT web sessions may not expose `turn_plan.update_turn_plan` at all
+(live probe returned `NO_TURN_PLAN_TOOL` on 2026-06-11). Do not fail a run only
+because that visible todo tool is absent; the durable plan file inside the zip
+is the required checklist. New `web-ai code` retrieval fails closed when a code
+zip lacks `PLAN.md` or `00_plan.md`; `code-extract` can still recover legacy
+artifacts from older conversations.
 
 After extraction, verify locally when correctness matters:
 

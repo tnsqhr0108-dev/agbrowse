@@ -79,6 +79,9 @@ Commands:
                       retrieve the generated /mnt/data/result.zip headlessly
                       (no button click) and verify it. --prompt = build spec,
                       --output-zip = save path. Best with --model thinking.
+                      Automatically uploads the saved GPT dev-agent context zip
+                      first and requires PLAN.md or 00_plan.md inside new code
+                      artifacts.
                       --multi-zip allows several named archives (e.g.
                       frontend.zip + backend.zip); saved into --output-dir.
   code-extract        ChatGPT-only. Re-retrieve existing code-mode zip artifacts

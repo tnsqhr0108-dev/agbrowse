@@ -664,10 +664,14 @@ supported.
 
 `web-ai code` is a ChatGPT-only beta for generating small codebases through the
 visible ChatGPT web UI, then retrieving the resulting zip without clicking a
-download button. The prompt contract asks ChatGPT to use its plan tool, create a
-visible `turn_plan.update_turn_plan` checklist, implement, self-check, package,
-and answer with both a human clickable sandbox link and a machine-readable
-plain path.
+download button. The prompt contract asks ChatGPT to create a durable
+`PLAN.md` or `00_plan.md` checklist inside the generated artifact, use
+`turn_plan.update_turn_plan` only when that tool is actually available,
+implement, self-check, package, and answer with both a human clickable sandbox
+link and a machine-readable plain path. Each `web-ai code` call automatically
+uploads `skills/web-ai/modules/gpt-dev-agent-context.zip` as the first
+attachment so ChatGPT has the Linux sandbox and serial-agent build rules before
+the user build spec.
 
 Single zip:
 
@@ -723,6 +727,10 @@ MACHINE: /mnt/data/result.zip
 For multi-zip output, ChatGPT repeats the same two-line block for each zip. The
 `DOWNLOAD:` line is for humans in the ChatGPT UI; the `MACHINE:` line is for
 agbrowse and other automation.
+
+New code-mode runs fail closed if the recovered code zip does not contain
+`PLAN.md` or `00_plan.md`. `code-extract` remains able to recover old
+conversations, but old artifacts may predate the plan-file contract.
 
 Verify recovered archives locally when correctness matters:
 

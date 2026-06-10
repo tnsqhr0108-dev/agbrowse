@@ -24,6 +24,7 @@ must be treated as historical  do not edit them after release.evidence
 | --- | --- | --- |
 | K-BrowseComp search gap analysis | `_plan/260608_kbrowsecomp_search_gap/` | Research/spec complete; implementation deferred. |
 | web-ai GPT Code Mode (artifact zip 회수) | `_plan/260611_webai_gpt_code_mode/` | Implemented as ChatGPT-only beta: single zip, multi-zip, and JS-only artifact retrieval verified. |
+| web-ai code mode GPT dev-agent context | `_plan/260611_code_mode_gpt_agent_context/` | Active: auto-upload saved GPT dev-agent context zip, require `PLAN.md`/`00_plan.md`, and mirror independent runtime into cli-jaw. |
 | web-ai skill + cli-jaw mirror closeout | `_plan/260611_webai_skill_cli_jaw_mirror/` | Active: update agent-facing skill docs and mirror the simplified ChatGPT Intelligence picker into cli-jaw. |
 
 ## `_fin/mvp/` topics
