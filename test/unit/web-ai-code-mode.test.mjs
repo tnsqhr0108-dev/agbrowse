@@ -81,6 +81,33 @@ describe('codeWebAi', () => {
         expect(result.errorCode).toBe('provider.timeout');
     });
 
+    it('retrieves multiple zips into outputDir when multiZip is set', async () => {
+        const outputDir = join(tmpdir(), 'code-mode-multi');
+        rmSync(outputDir, { force: true, recursive: true });
+        const conversation = { mapping: {
+            a: { message: { id: 'mid-code', content: { content_type: 'code', text: '/mnt/data/a.zip /mnt/data/b.zip' } } },
+        } };
+        let lastSandbox = null;
+        const page = {
+            url: () => 'https://chatgpt.com/c/conv-abc',
+            evaluate: async (_fn, arg) => {
+                if (typeof arg === 'string' && arg.startsWith('http')) return { status: 200, base64: FIXTURE_ZIP_B64 };
+                if (typeof arg === 'string') return conversation;
+                if (arg && typeof arg === 'object' && 'sandboxPath' in arg) { lastSandbox = arg.sandboxPath; return 'https://chatgpt.com/e?p=' + lastSandbox; }
+                return null;
+            },
+        };
+        const deps = { getPage: async () => page };
+        const result = await codeWebAi(deps, { vendor: 'chatgpt', prompt: 'fullstack', multiZip: true, outputDir }, {
+            queryWebAi: async () => ({ ok: true, sessionId: 's1', answerText: '/mnt/data/a.zip\n/mnt/data/b.zip', warnings: [] }),
+            getSession: () => ({ conversationUrl: 'https://chatgpt.com/c/conv-abc' }),
+        });
+        expect(result.ok).toBe(true);
+        expect(result.artifacts).toHaveLength(2);
+        expect(existsSync(join(outputDir, 'a.zip'))).toBe(true);
+        expect(existsSync(join(outputDir, 'b.zip'))).toBe(true);
+    });
+
     it('errors when no conversation id can be resolved', async () => {
         const page = makePage('https://chatgpt.com/');
         const deps = { getPage: async () => page };

@@ -156,3 +156,24 @@ GET  <download_url>  (쿠키 필수, 외부 403)          → zip 바이너리
 - 남은 것: Phase 13 (provider DOM/endpoint drift e2e 게이트), policy allow
   플래그는 cli-jaw browser evaluate가 아닌 agbrowse 자체 page.evaluate를 쓰므로
   현 구현에선 불필요(코드가 deps.getPage()로 직접 실행).
+
+## 멀티 zip 패치 (2026-06-11)
+
+질문: "zip 여러개 넣는것도 패치 가능한가?" → 가능, 구현 완료.
+
+- `code-artifact.mjs`: `scanConversationForAllZips`(global regex로 모든
+  /mnt/data/*.zip 수집, first-seen 순서) + `retrieveAllCodeArtifacts`(각 zip을
+  basename으로 outputDir에 저장, per-artifact reason, 최소 1개 성공 시 ok) +
+  공통 `downloadAndSaveZip` 헬퍼로 단일/멀티 회수 로직 통합.
+- `code-mode-prompt.mjs`: `buildCodeModePrompt(spec, {multiZip})` —
+  멀티 모드는 "논리적 산출물마다 이름있는 zip, 최종 응답은 경로 한 줄씩" 계약.
+  단일 모드 계약은 그대로.
+- `code-mode.mjs`: `input.multiZip`이면 retrieveAllCodeArtifacts + outputDir,
+  partial-retrieval 경고. 단일 모드는 기존대로.
+- `cli.mjs`: `--multi-zip`, `--output-dir` 옵션; human 출력이 artifacts 배열
+  대응.
+- 테스트: 멀티 스캔/회수 4 + 프롬프트 1 + 오케스트레이터 1 = 신규 6, 전체
+  786/786, tsc 0, drift 140/counts 60.
+- **라이브 e2e**: `agbrowse web-ai code --multi-zip --output-dir ...` →
+  backend.zip(app.py+requirements+README, ast 통과) + frontend.zip(index.html,
+  /api/ping 참조) 동시 생성·회수. 버튼 0회.

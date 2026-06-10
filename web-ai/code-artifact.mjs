@@ -6,7 +6,7 @@
 // external fetches get 403 — verified 2026-06-11, see 01_prompt_contract.md).
 
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
 /** @typedef {import('playwright-core').Page} Page */
 
@@ -27,6 +27,7 @@ import { dirname } from 'node:path';
  */
 
 const ZIP_PATH_RE = /\/mnt\/data\/[A-Za-z0-9_\-./]+\.zip/;
+const ZIP_PATH_RE_GLOBAL = /\/mnt\/data\/[A-Za-z0-9_\-./]+\.zip/g;
 
 /**
  * Pure scan of a conversation JSON for the newest /mnt/data/*.zip reference
@@ -57,6 +58,35 @@ export function scanConversationForZip(conversation) {
         }
     }
     return { zipPath, candidateMids };
+}
+
+/**
+ * Multi-zip variant: collect every distinct /mnt/data/*.zip referenced anywhere
+ * in the conversation (in first-seen order) plus the same tool-message id
+ * candidates. Used when the contract permits more than one archive.
+ *
+ * @param {{ mapping?: Record<string, { message?: { id?: string, content?: { content_type?: string } } }> }} conversation
+ * @returns {{ zipPaths: string[], candidateMids: string[] }}
+ */
+export function scanConversationForAllZips(conversation) {
+    /** @type {string[]} */
+    const zipPaths = [];
+    const seen = new Set();
+    /** @type {string[]} */
+    const candidateMids = [];
+    for (const node of Object.values(conversation?.mapping || {})) {
+        const message = node?.message;
+        if (!message) continue;
+        const contentType = message.content?.content_type || '';
+        const blob = JSON.stringify(message.content || {});
+        for (const match of blob.match(ZIP_PATH_RE_GLOBAL) || []) {
+            if (!seen.has(match)) { seen.add(match); zipPaths.push(match); }
+        }
+        if ((contentType === 'execution_output' || contentType === 'code') && message.id) {
+            candidateMids.push(message.id);
+        }
+    }
+    return { zipPaths, candidateMids };
 }
 
 /**
@@ -169,12 +199,56 @@ export async function retrieveCodeArtifact(page, { conversationId, outputPath })
     const { zipPath, candidateMids } = scanConversationForZip(conversation);
     if (!zipPath) return { ...result, reason: 'code-artifact:missing' };
     if (!candidateMids.length) return { ...result, zipPath, reason: 'code-artifact:no-tool-messages' };
-    result.zipPath = zipPath;
+
+    return downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath });
+}
+
+/**
+ * Retrieve EVERY /mnt/data/*.zip in the conversation, saving each under
+ * outputDir using its sandbox basename. Per-artifact failures are reported in
+ * the artifacts array; the call succeeds when at least one zip was saved.
+ *
+ * @param {Page} page
+ * @param {{ conversationId: string, outputDir: string }} params
+ * @returns {Promise<{ ok: boolean, reason: string|null, artifacts: RetrieveResult[] }>}
+ */
+export async function retrieveAllCodeArtifacts(page, { conversationId, outputDir }) {
+    const conversation = await fetchConversationJson(page, conversationId);
+    if (!conversation) return { ok: false, reason: 'code-artifact:conversation-unavailable', artifacts: [] };
+
+    const { zipPaths, candidateMids } = scanConversationForAllZips(conversation);
+    if (!zipPaths.length) return { ok: false, reason: 'code-artifact:missing', artifacts: [] };
+    if (!candidateMids.length) return { ok: false, reason: 'code-artifact:no-tool-messages', artifacts: [] };
+
+    /** @type {RetrieveResult[]} */
+    const artifacts = [];
+    for (const zipPath of zipPaths) {
+        const outputPath = join(outputDir, basename(zipPath));
+        // eslint-disable-next-line no-await-in-loop -- sequential to reuse one page and avoid presigned-URL races
+        artifacts.push(await downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath }));
+    }
+    const ok = artifacts.some(a => a.ok);
+    return { ok, reason: ok ? null : 'code-artifact:all-failed', artifacts };
+}
+
+/**
+ * Mint a URL for one sandbox path (trying each candidate mid), fetch in-page,
+ * verify, and save. Shared by single- and multi-zip retrieval.
+ *
+ * @param {Page} page
+ * @param {{ conversationId: string, zipPath: string, candidateMids: string[], outputPath: string }} params
+ * @returns {Promise<RetrieveResult>}
+ */
+async function downloadAndSaveZip(page, { conversationId, zipPath, candidateMids, outputPath }) {
+    /** @type {RetrieveResult} */
+    const result = { ok: false, reason: null, zipPath, savedPath: null, sizeBytes: 0, files: [] };
 
     let payload = null;
     for (const messageId of candidateMids) {
+        // eslint-disable-next-line no-await-in-loop -- try mids in order; stop at first that mints a working URL
         const downloadUrl = await mintDownloadUrl(page, { conversationId, messageId, sandboxPath: zipPath });
         if (!downloadUrl) continue;
+        // eslint-disable-next-line no-await-in-loop
         const fetched = await fetchBinaryBase64(page, downloadUrl);
         if (fetched?.base64) { payload = fetched; break; }
     }

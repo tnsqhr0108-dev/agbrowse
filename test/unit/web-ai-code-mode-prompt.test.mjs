@@ -22,6 +22,15 @@ describe('buildCodeModePrompt', () => {
     it('rejects empty requirements', () => {
         expect(() => buildCodeModePrompt('   ')).toThrow(/must not be empty/);
     });
+
+    it('emits a multi-zip contract when multiZip is set', () => {
+        const prompt = buildCodeModePrompt('FastAPI backend + React frontend', { multiZip: true });
+        expect(prompt).toContain('MULTI-ZIP');
+        expect(prompt).toContain('frontend.zip');
+        expect(prompt).toContain('한 줄에 하나씩');
+        // the single-zip "exactly one result.zip" clause must NOT appear
+        expect(prompt).not.toContain('단 하나의 /mnt/data/result.zip');
+    });
 });
 
 describe('checkContractCompliance', () => {

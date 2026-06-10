@@ -4,10 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
     fetchBinaryBase64,
+    retrieveAllCodeArtifacts,
     retrieveCodeArtifact,
+    scanConversationForAllZips,
     scanConversationForZip,
     verifyZipBuffer,
 } from '../../web-ai/code-artifact.mjs';
+
+const BACKEND_ZIP_B64 = 'UEsDBAoAAAAAAAQYy1ygsE1MAwAAAAMAAAAGABwAYXBwLnB5VVQJAAMnpilqJ6YpanV4CwABBPUBAAAEAAAAAGJlClBLAQIeAwoAAAAAAAQYy1ygsE1MAwAAAAMAAAAGABgAAAAAAAEAAACkgQAAAABhcHAucHlVVAUAAyemKWp1eAsAAQT1AQAABAAAAABQSwUGAAAAAAEAAQBMAAAAQwAAAAAA';
+const FRONTEND_ZIP_B64 = 'UEsDBAoAAAAAAAQYy1x8GERLAwAAAAMAAAAIABwAaW5kZXguanNVVAkAAyemKWonpilqdXgLAAEE9QEAAAQAAAAAZmUKUEsBAh4DCgAAAAAABBjLXHwYREsDAAAAAwAAAAgAGAAAAAAAAQAAAKSBAAAAAGluZGV4LmpzVVQFAAMnpilqdXgLAAEE9QEAAAQAAAAAUEsFBgAAAAABAAEATgAAAEUAAAAAAA==';
 
 // Real 469-byte zip (README.md, src/, src/a.js) generated with `zip -r`.
 const FIXTURE_ZIP_B64 = 'UEsDBAoAAAAAANwQy1wgMDo2BgAAAAYAAAAJABwAUkVBRE1FLm1kVVQJAAOwmSlqsJkpanV4CwABBPUBAAAEAAAAAGhlbGxvClBLAwQKAAAAAADcEMtcAAAAAAAAAAAAAAAABAAcAHNyYy9VVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAUEsDBAoAAAAAANwQy1wH7v1xDwAAAA8AAAAIABwAc3JjL2EuanNVVAkAA7CZKWqwmSlqdXgLAAEE9QEAAAQAAAAAY29uc29sZS5sb2coMSkKUEsBAh4DCgAAAAAA3BDLXCAwOjYGAAAABgAAAAkAGAAAAAAAAQAAAKSBAAAAAFJFQURNRS5tZFVUBQADsJkpanV4CwABBPUBAAAEAAAAAFBLAQIeAwoAAAAAANwQy1wAAAAAAAAAAAAAAAAEABgAAAAAAAAAEADtQUkAAABzcmMvVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsBAh4DCgAAAAAA3BDLXAfu/XEPAAAADwAAAAgAGAAAAAAAAQAAAKSBhwAAAHNyYy9hLmpzVVQFAAOwmSlqdXgLAAEE9QEAAAQAAAAAUEsFBgAAAAADAAMA5wAAANgAAAAAAA==';
@@ -118,6 +123,65 @@ describe('retrieveCodeArtifact', () => {
         const page = { evaluate: async () => null };
         const result = await retrieveCodeArtifact(page, { conversationId: 'conv-1', outputPath });
         expect(result.reason).toBe('code-artifact:conversation-unavailable');
+    });
+});
+
+describe('scanConversationForAllZips', () => {
+    it('collects every distinct zip path in first-seen order', () => {
+        const conversation = { mapping: {
+            a: { message: { id: 'mid-code', content: { content_type: 'code', text: 'zip /mnt/data/backend.zip; zip /mnt/data/frontend.zip' } } },
+            b: { message: { id: 'mid-final', content: { content_type: 'text', parts: ['/mnt/data/backend.zip\n/mnt/data/frontend.zip'] } } },
+        } };
+        const { zipPaths, candidateMids } = scanConversationForAllZips(conversation);
+        expect(zipPaths).toEqual(['/mnt/data/backend.zip', '/mnt/data/frontend.zip']);
+        expect(candidateMids).toEqual(['mid-code']);
+    });
+});
+
+describe('retrieveAllCodeArtifacts', () => {
+    const outputDir = join(tmpdir(), 'code-artifact-multi');
+
+    function multiPage() {
+        const conversation = { mapping: {
+            a: { message: { id: 'mid-code', content: { content_type: 'code', text: '/mnt/data/backend.zip /mnt/data/frontend.zip' } } },
+        } };
+        const binaryByPath = {
+            '/mnt/data/backend.zip': BACKEND_ZIP_B64,
+            '/mnt/data/frontend.zip': FRONTEND_ZIP_B64,
+        };
+        let lastSandbox = null;
+        return {
+            evaluate: async (_fn, arg) => {
+                if (typeof arg === 'string' && arg.startsWith('http')) {
+                    return { status: 200, base64: binaryByPath[lastSandbox] };
+                }
+                if (typeof arg === 'string') return conversation;
+                if (arg && typeof arg === 'object' && 'sandboxPath' in arg) {
+                    lastSandbox = arg.sandboxPath;
+                    return 'https://chatgpt.com/estuary?p=' + encodeURIComponent(arg.sandboxPath);
+                }
+                return null;
+            },
+        };
+    }
+
+    it('saves each zip under its basename', async () => {
+        rmSync(outputDir, { force: true, recursive: true });
+        const result = await retrieveAllCodeArtifacts(multiPage(), { conversationId: 'conv-1', outputDir });
+        expect(result.ok).toBe(true);
+        expect(result.artifacts).toHaveLength(2);
+        expect(result.artifacts.every(a => a.ok)).toBe(true);
+        expect(existsSync(join(outputDir, 'backend.zip'))).toBe(true);
+        expect(existsSync(join(outputDir, 'frontend.zip'))).toBe(true);
+        const be = result.artifacts.find(a => a.zipPath.endsWith('backend.zip'));
+        expect(be.files).toContain('app.py');
+    });
+
+    it('reports missing when no zips are present', async () => {
+        const page = { evaluate: async (_fn, arg) => (typeof arg === 'string' && !arg.startsWith('http') ? { mapping: {} } : null) };
+        const result = await retrieveAllCodeArtifacts(page, { conversationId: 'conv-1', outputDir });
+        expect(result.ok).toBe(false);
+        expect(result.reason).toBe('code-artifact:missing');
     });
 });
 

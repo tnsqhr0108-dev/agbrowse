@@ -79,6 +79,8 @@ Commands:
                       retrieve the generated /mnt/data/result.zip headlessly
                       (no button click) and verify it. --prompt = build spec,
                       --output-zip = save path. Best with --model thinking.
+                      --multi-zip allows several named archives (e.g.
+                      frontend.zip + backend.zip); saved into --output-dir.
   mcp-server          Run stdio MCP bridge exposing web-ai tools
   eval                Run offline provider DOM fixture evals; never opens Chrome
   claim-audit         Scan repo docs for forbidden hosted/cloud/stealth claims (G10).
@@ -392,6 +394,8 @@ async function runWebAiCliInner(argv = [], deps) {
             file: { type: 'string' },
             'output-image': { type: 'string' },
             'output-zip': { type: 'string' },
+            'output-dir': { type: 'string' },
+            'multi-zip': { type: 'boolean', default: false },
             research: { type: 'string' },
             archive: { type: 'string' },
             'follow-up': { type: 'string', multiple: true },
@@ -474,6 +478,8 @@ async function runWebAiCliInner(argv = [], deps) {
         filePath: values.file,
         outputImage: values['output-image'],
         outputZip: values['output-zip'],
+        outputDir: values['output-dir'],
+        multiZip: values['multi-zip'] === true,
         research: values.research,
         archiveFlag: values.archive,
         followUps: values['follow-up'] || [],
@@ -1505,7 +1511,16 @@ function printHuman(command, result) {
         return;
     }
     if (command === 'code') {
-        if (result.ok && result.artifact?.savedPath) {
+        if (result.ok && Array.isArray(result.artifacts)) {
+            for (const artifact of result.artifacts) {
+                if (artifact.savedPath) {
+                    console.log(artifact.savedPath);
+                    console.error(`[code] ${artifact.zipPath} → ${artifact.files.length} files, ${artifact.sizeBytes} bytes`);
+                } else {
+                    console.error(`[code] ${artifact.zipPath} failed: ${artifact.reason}`);
+                }
+            }
+        } else if (result.ok && result.artifact?.savedPath) {
             console.log(result.artifact.savedPath);
             console.error(`[code] ${result.artifact.files.length} files, ${result.artifact.sizeBytes} bytes`);
         } else {
