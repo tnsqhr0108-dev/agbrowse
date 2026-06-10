@@ -74,6 +74,7 @@ cli-jaw/
 │   ├── code-mode-prompt.ts               NEW
 │   ├── code-artifact.ts                  NEW
 │   ├── code-dev-context.ts               NEW
+│   ├── code-dev-context-template.ts       NEW packaged fallback content
 │   └── context-pack/*
 ├── skills_ref/web-ai/
 │   ├── SKILL.md
@@ -289,14 +290,30 @@ TypeScript port of agbrowse code prompt contract. Use strict-compatible exported
 
 #### NEW `/Users/jun/Developer/new/700_projects/cli-jaw/src/browser/web-ai/code-dev-context.ts`
 
-TypeScript port of the saved context zip resolver/builder. Must use cli-jaw paths:
-- `skills_ref/web-ai/modules/gpt-dev-agent-context.md`
-- `skills_ref/web-ai/modules/gpt-dev-agent-context.zip`
+TypeScript port of the saved context zip resolver/builder. It must support three resolution tiers:
+
+1. Installed runtime skill module:
+   - `$JAW_HOME/skills/web-ai/modules/gpt-dev-agent-context.md`
+   - `$JAW_HOME/skills/web-ai/modules/gpt-dev-agent-context.zip`
+2. Source checkout canonical skill module:
+   - `skills_ref/web-ai/modules/gpt-dev-agent-context.md`
+   - `skills_ref/web-ai/modules/gpt-dev-agent-context.zip`
+3. Packaged fallback:
+   - generated deterministically from `src/browser/web-ai/code-dev-context-template.ts`, which compiles into `dist/` and is therefore included in the npm package.
 
 Path resolution rule:
 - Resolve from the compiled/source module location or an explicit package root, not caller cwd.
 - For source tests, support an explicit `packageRoot` override.
-- For runtime, prefer cli-jaw's package root resolution conventions if an existing helper exists; otherwise derive from the module URL/path and verify with a non-repo cwd test.
+- For runtime, prefer installed `$JAW_HOME/skills/...` when present, then source `skills_ref/...`, then packaged fallback.
+- Because cli-jaw npm `files` does not include `skills_ref/`, packaged runtime correctness must not depend on `skills_ref/`.
+
+#### NEW `/Users/jun/Developer/new/700_projects/cli-jaw/src/browser/web-ai/code-dev-context-template.ts`
+
+Packaged fallback content module:
+- Exports the same GPT dev-agent context markdown as a string constant.
+- Exports manifest metadata.
+- Used only when no installed or source saved skill ZIP is available.
+- Lets packaged cli-jaw generate the automatic first attachment deterministically without shipping `skills_ref/`.
 
 #### NEW `/Users/jun/Developer/new/700_projects/cli-jaw/src/browser/web-ai/code-artifact.ts`
 
@@ -380,6 +397,11 @@ Same semantic content as agbrowse, adjusted for cli-jaw wording.
 
 Saved bundle for cli-jaw.
 
+Packaging note:
+- This saved skill ZIP is canonical for source checkout and installed skills.
+- It is not sufficient for npm package runtime because cli-jaw currently excludes `skills_ref/` from `package.json files`.
+- Packaged runtime must use the compiled fallback template if installed skill assets are unavailable.
+
 #### MODIFY `/Users/jun/Developer/new/700_projects/cli-jaw/skills_ref/web-ai/SKILL.md`
 
 Document independent code mode, automatic context zip, and plan artifact contract.
@@ -412,7 +434,10 @@ Zip bundle validation:
 - saved markdown and zip entries exist;
 - manifest is readable;
 - resolver works when the current process cwd is a temporary directory outside the repo;
-- package dry-run includes `skills_ref/web-ai/modules/gpt-dev-agent-context.md` and `.zip` if npm packaging includes `skills_ref`.
+- source checkout resolves `skills_ref/web-ai/modules/...`;
+- installed-skill override resolves `$JAW_HOME/skills/web-ai/modules/...` when provided by a temp fake JAW_HOME;
+- packaged fallback works when neither installed skill nor `skills_ref` exists;
+- package dry-run verifies compiled fallback code is present in `dist/` / packed artifact rather than assuming `skills_ref/` ships.
 
 #### NEW `/Users/jun/Developer/new/700_projects/cli-jaw/tests/unit/browser-web-ai-code-mode.test.ts`
 
@@ -506,6 +531,10 @@ npm --prefix /Users/jun/Developer/new/700_projects/cli-jaw pack --dry-run --json
 bash /Users/jun/Developer/new/700_projects/cli-jaw/structure/verify-counts.sh
 git -C /Users/jun/Developer/new/700_projects/cli-jaw diff --check
 ```
+
+cli-jaw `npm pack --dry-run --json` pass condition:
+- do not require `skills_ref/web-ai/modules/...` in the packed artifact unless `package.json files` is explicitly changed to include it;
+- do require the compiled packaged fallback module under `dist/browser/web-ai/` so code mode can still generate the automatic context ZIP after install.
 
 Optional cli-jaw live smoke only after unit/typecheck pass:
 
