@@ -120,6 +120,48 @@ Pass `--timeout 1800` (30 min) or higher for unusually long Pro/Deep Think
 runs. The provider tab and the agbrowse Chrome process stay open across a
 poll timeout — only the polling loop gives up.
 
+## Long-Running / Background Sessions
+
+For responses that may take many minutes (ChatGPT Pro/Heavy, Gemini Deep
+Think, Deep Research), do not block your agent turn on `query`. Split into
+`send` + background `watch`:
+
+```bash
+SID=$(agbrowse web-ai send --vendor chatgpt --model pro --inline-only \
+  --prompt "..." --json | jq -r .sessionId)
+# separate/background process:
+agbrowse web-ai watch --session "$SID" --json --navigate
+```
+
+Key facts (verified 2026-06-11, details in
+`devlog/_plan/260611_background_runtime_hook/02_agbrowse_sufficiency.md`):
+
+- Sessions persist in `~/.browser-agent/web-ai-sessions.json` and survive
+  process/machine restarts. `sessions show <SID> --json` is safe from any
+  process.
+- ⚠️ `sessions show` is **read-only** — it never advances state. Only
+  `watch`/`poll` drive the browser DOM and move a session to a terminal
+  status (`complete`/`timeout`/`error`). A monitor that only re-reads the
+  store will wait forever.
+- `watch` emits line-delimited JSON events (`watch.start`, `watch.tick`
+  every 15s by default, then `watch.complete`/`watch.timeout`/`watch.error`)
+  and exits on terminal status. Parse the last terminal line, then fetch the
+  full answer with `sessions show <SID> --json`.
+- A per-session watcher lock makes concurrent/duplicate `watch` calls fail
+  closed and auto-recovers stale locks from dead processes — re-running
+  `watch` after a crash is safe.
+- There is no `--on-complete` callback flag. Chain with the shell instead:
+  `agbrowse web-ai watch --session "$SID" --json; <notify command>`.
+
+Per-runtime pattern for the background `watch` process:
+
+| Agent runtime | Recommended pattern |
+| --- | --- |
+| Claude Code | Run `watch` via `Bash run_in_background: true` — process exit injects a completion notification that re-activates the agent (no polling). |
+| Cursor | Run `watch` as a background shell, then use the `Await` tool to wait for a `watch.complete` sentinel line. |
+| Codex | Background terminal polling works (15s ticks avoid the 5-min empty-poll window), but for very long runs prefer a fully external watcher that calls `codex exec resume` on completion. |
+| cli-jaw | Boss turns are disposable — do not background `watch` inside a turn. Use the server-side bgtask hook (design: cli-jaw devlog) or block on `watch` in a dispatched employee. |
+
 ## Multi-Tab Behavior (Phase 9.1+)
 
 By default, `send` and `query` create a **new browser tab** for each session.
