@@ -34,6 +34,8 @@ Related release docs:
 - [docs/production-readiness.md](../docs/production-readiness.md)
 - [docs/comparison.md](../docs/comparison.md)
 - [docs/benchmarks.md](../docs/benchmarks.md)
+- [docs/dev/index.html](../docs/dev/index.html)
+- [docs/dev/ko/index.html](../docs/dev/ko/index.html)
 
 ## 읽기 순서
 
@@ -73,6 +75,7 @@ graph LR
 - [ ] release script, workflow, package `files` 목록이 바뀌면 [release_gates.md](release_gates.md)를 갱신한다.
 - [ ] public support label이 바뀌면 `README.md`, [phase_status.md](phase_status.md), [release_gates.md](release_gates.md), 관련 `devlog/` phase 문서를 같이 갱신한다.
 - [ ] benchmark 또는 comparison claim이 바뀌면 `docs/benchmarks.md`, `docs/comparison.md`, `docs/production-readiness.md`를 같이 갱신한다.
+- [ ] GitHub Pages developer docs가 바뀌면 `docs/dev/`, `docs/dev/ko/`, `.github/workflows/pages.yml`, README의 Pages 링크를 같이 갱신한다.
 
 ## QA
 

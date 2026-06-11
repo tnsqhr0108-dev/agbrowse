@@ -19,7 +19,7 @@ aliases: [agbrowse release gates, agbrowse 릴리즈 게이트, production readi
 | 라벨 | 의미 | 현재 기준 |
 | --- | --- | --- |
 | `ready` | deterministic tests와 docs가 모두 뒷받침한다 | CLI primitive, session store, offline eval fixture, policy/trace schema |
-| `beta` | 구현은 있으나 live provider UI와 계정 상태에 영향받는다 | ChatGPT/Gemini/Grok live send/poll/query |
+| `beta` | 구현은 있으나 live provider UI와 계정 상태에 영향받는다 | ChatGPT/Gemini/Grok live send/poll/query, ChatGPT code mode/code-extract, Project Sources |
 | `experimental` | optional adapter, benchmark score, hosted/cloud claim 전 단계다 | external CDP는 deferred, benchmark score는 deferred, broader MCP production claim은 deferred |
 
 ## Public Claim Gate
@@ -37,6 +37,7 @@ aliases: [agbrowse release gates, agbrowse 릴리즈 게이트, production readi
 - [ ] `git diff --check`
 - [ ] `bash structure/check-doc-drift.sh`
 - [ ] `bash structure/verify-counts.sh`
+- [ ] GitHub Pages validation (`.github/workflows/pages.yml`) for `docs/dev/` EN/KO entrypoints, local links, language pairs, and landing quickstart order
 - [ ] `npm run test:unit`
 - [ ] `npm run test:integration`
 - [ ] `npm run test:eval`
@@ -67,6 +68,7 @@ aliases: [agbrowse release gates, agbrowse 릴리즈 게이트, production readi
 | `npm run test:mcp` | MCP protocol/schema/policy tests | Phase 18 ready claim이 실제 tool surface와 일치하는지 확인 |
 | `npm run test:source-audit` | answer artifact + source audit tests | Phase 17 research/source claim 차단 |
 | `npm run test:release-gates` | structure drift + count checks | Phase status, command, release claim drift 차단 |
+| `.github/workflows/pages.yml` validate job | static Pages docs validation | `docs/index.html`, `docs/dev/`, `docs/dev/ko/`, local links, language pairs, quickstart ordering 검증 |
 | `npm run gate:all` | Phase 22 named release gates (`gate:typecheck`, `gate:tests`, `gate:truth-table-fresh`, `gate:mcp-scope-frozen`, `gate:no-experimental-in-readme-ready-section`) | capability table freshness, frozen MCP scope, README 라벨 일치를 단일 명령으로 검증 |
 | `npm run gate:typecheck` | `node --check` + `check-doc-drift.sh` | 공개 .mjs 진입점 syntax + 구조 문서 일치 |
 | `npm run gate:tests` | unit + MCP + source-audit + trace-policy 통합 실행 | 핵심 회귀 suite 한 번에 |
@@ -96,6 +98,7 @@ aliases: [agbrowse release gates, agbrowse 릴리즈 게이트, production readi
 
 ## 변경 기록
 
+- 2026-06-11: GitHub Pages developer docs V1(EN/KO), ChatGPT code-mode/code-extract beta 표면, Pages validation gate를 release gate 문서에 반영했다.
 - 2026-05-14: stability-upgrade register review를 release 전 claim 점검 항목으로 추가했다. 이 register는 speculative security가 아니라 live 작동 취약점만 기록한다.
 - 2026-05-06: Phase 22 named release gates (`gate:all`, `gate:typecheck`, `gate:tests`, `gate:truth-table-fresh`, `gate:mcp-scope-frozen`, `gate:no-experimental-in-readme-ready-section`)와 strict-baseline / module-graph / bin smoke / pack dry-run 명령을 release path에 추가했다. capability 주장은 [CAPABILITY_TRUTH_TABLE.md](CAPABILITY_TRUTH_TABLE.md)가 단일 source of truth다.
 - 2026-05-05: MCP/source-audit/release-gate named scripts를 release path에 추가해 public claim gate가 `npm test` 안에 묻히지 않게 했다.

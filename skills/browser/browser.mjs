@@ -3300,15 +3300,23 @@ try {
                            [--clear] [--reload] [--live-only]
      evaluate <js>          Execute JavaScript only with --unsafe-allow evaluate
 
-  Web AI:
-    web-ai render          Render the provider prompt without a browser
-    web-ai status          Check active provider tab state
-    web-ai send            Send a prompt; returns a sessionId for later resume
-    web-ai poll            Poll a session (or latest baseline) for completion
-    web-ai query           send + poll in one call
-    web-ai stop            Send Escape to the active provider tab
-    web-ai context-dry-run Build a context package without sending
-    web-ai context-render  Render full prompt/context package text
+	  Web AI:
+	    web-ai render          Render the provider prompt without a browser
+	    web-ai status          Check active provider tab state
+	    web-ai send            Send a prompt; returns a sessionId for later resume
+	    web-ai poll            Poll a session (or latest baseline) for completion
+	    web-ai query           send + poll in one call
+	    web-ai code            ChatGPT-only code generation + verified zip retrieval
+	    web-ai code-extract    Re-retrieve ChatGPT code zip artifacts without prompting
+	    web-ai stop            Send Escape to the active provider tab
+	    web-ai watch           Watch a persisted session until terminal status
+	    web-ai snapshot        Compact accessibility snapshot for provider tab
+	    web-ai sessions        list/show/resume/reattach/doctor/prune sessions
+	    web-ai doctor          Provider diagnostics and target candidates
+	    web-ai project-sources ChatGPT Project Sources list/add
+	    web-ai context-dry-run Build a context package without sending
+	    web-ai context-render  Render full prompt/context package text
+	    web-ai claim-audit     Scan repo docs for forbidden hosted/cloud claims
 
       Common flags:
         --vendor <chatgpt|gemini|grok>

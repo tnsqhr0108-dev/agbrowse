@@ -7,7 +7,7 @@
 [![npm](https://img.shields.io/npm/v/agbrowse?label=npm)](https://www.npmjs.com/package/agbrowse)
 [![Contract Drift Check](https://github.com/lidge-jun/agbrowse/actions/workflows/contract-drift.yml/badge.svg)](https://github.com/lidge-jun/agbrowse/actions/workflows/contract-drift.yml)
 [![GitHub stars](https://img.shields.io/github/stars/lidge-jun/agbrowse?style=flat&label=stars)](https://github.com/lidge-jun/agbrowse)
-[![GitHub Pages ready](https://img.shields.io/badge/GitHub%20Pages-docs%20ready-111827)](docs/index.html)
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-0f766e)](https://lidge-jun.github.io/agbrowse/)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-0f766e)](package.json)
 [![Package license](https://img.shields.io/badge/package%20metadata-MIT-1f2937)](package.json)
 
@@ -37,13 +37,14 @@ Node process that reconnects to the same Chrome DevTools Protocol endpoint.
 | --- | --- | --- |
 | npm package | [`agbrowse`](https://www.npmjs.com/package/agbrowse) | public package metadata |
 | Repository | [`lidge-jun/agbrowse`](https://github.com/lidge-jun/agbrowse) | public source |
-| Docs landing page | [`docs/index.html`](docs/index.html) | local Pages entrypoint, deploys after an authorized push |
+| Docs landing page | [`https://lidge-jun.github.io/agbrowse/`](https://lidge-jun.github.io/agbrowse/) | live GitHub Pages site |
+| Developer docs | [`docs/dev/index.html`](docs/dev/index.html) / [`docs/dev/ko/index.html`](docs/dev/ko/index.html) | English and Korean V1 docs |
 | Architecture source | [`structure/INDEX.md`](structure/INDEX.md) | capability and release truth source |
 | Production notes | [`docs/production-readiness.md`](docs/production-readiness.md) | verification and risk checklist |
 
-GitHub Pages is intentionally documented as **ready, not live** in this local
-state because the GitHub Pages API currently returns 404 for this repository.
-The added Pages workflow publishes `/docs` once the owner authorizes a push.
+GitHub Pages publishes the repository `/docs` directory at
+[`https://lidge-jun.github.io/agbrowse/`](https://lidge-jun.github.io/agbrowse/).
+Developer documentation is available in English and Korean under `docs/dev/`.
 
 ## Quick Start
 
@@ -176,6 +177,8 @@ Beta surfaces:
 - ChatGPT, Gemini, and Grok live web-ai send/poll/query flows
 - provider model and reasoning-effort selection
 - provider source/citation quality checks
+- ChatGPT code mode (`web-ai code`) and later artifact extraction
+  (`web-ai code-extract`)
 
 Experimental or deferred surfaces:
 
@@ -687,6 +690,9 @@ agbrowse web-ai code \
   --output-zip ./result.zip
 ```
 
+If `--output-zip` is omitted, agbrowse saves under the current working directory
+as `code-artifact-<conversation>.zip`.
+
 Several named zips:
 
 ```bash
@@ -698,6 +704,10 @@ agbrowse web-ai code \
   --output-dir ./artifacts \
   --prompt "Create backend.zip and frontend.zip as separate deliverables."
 ```
+
+`--multi-zip` cannot be combined with `--output-zip`; use `--output-dir`. If
+`--output-dir` is omitted, agbrowse saves under the current working directory as
+`code-artifacts-<conversation>/`.
 
 Later extraction from an existing conversation:
 

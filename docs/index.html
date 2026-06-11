@@ -241,6 +241,8 @@
           <a href="#web-ai">Web AI</a>
           <a href="#code-artifacts">Code Artifacts</a>
           <a href="#verification">Verification</a>
+          <a href="dev/index.html">Developer Docs</a>
+          <a href="dev/ko/index.html">한국어</a>
           <a href="https://github.com/lidge-jun/agbrowse">GitHub</a>
         </div>
       </div>
@@ -254,7 +256,7 @@
           <p>Drive real Chrome tabs from terminal commands, collect visible evidence, and run ChatGPT, Gemini, or Grok web sessions through a durable CLI workflow.</p>
           <div class="actions">
             <a class="button" href="https://www.npmjs.com/package/agbrowse">Install from npm</a>
-            <a class="button secondary" href="https://github.com/lidge-jun/agbrowse/blob/main/README.md">Read the README</a>
+            <a class="button secondary" href="dev/index.html">Open developer docs</a>
           </div>
         </div>
         <div class="terminal" aria-label="agbrowse quickstart terminal">
@@ -264,12 +266,14 @@
             <span class="dot green"></span>
           </div>
           <pre><code>npm install -g agbrowse
-agbrowse start
+agbrowse start --headed
 agbrowse navigate "https://chatgpt.com/"
 agbrowse snapshot --interactive
-agbrowse web-ai code-extract \
+agbrowse web-ai code \
   --vendor chatgpt \
-  --url "https://chatgpt.com/c/&lt;conversation-id&gt;" \
+  --model thinking \
+  --effort standard \
+  --prompt "Create a small CLI app with tests." \
   --output-zip ./result.zip</code></pre>
         </div>
       </section>
@@ -287,7 +291,7 @@ agbrowse web-ai code-extract \
           </article>
           <article class="card">
             <h3>Code artifacts</h3>
-            <p>ChatGPT code mode packages projects as zip files, then re-extracts them later from the original conversation text.</p>
+            <p>ChatGPT code mode generates projects as zip files, then code-extract can recover old artifacts from the original conversation.</p>
           </article>
         </div>
       </section>
@@ -314,8 +318,8 @@ agbrowse web-ai poll \
 
       <section class="section split" id="code-artifacts">
         <div>
-          <h2>Recover code zips from old ChatGPT conversations.</h2>
-          <p>ChatGPT returns a human <code>DOWNLOAD:</code> sandbox link plus a machine <code>MACHINE:</code> path. agbrowse can revisit the conversation JSON, mint the provider download URL, validate the zip, and save it locally.</p>
+          <h2>Generate first, recover later.</h2>
+          <p>Start with <code>web-ai code</code> for a new build. Use <code>code-extract</code> later when the original ChatGPT conversation is still accessible and already contains <code>/mnt/data/*.zip</code> artifacts.</p>
         </div>
         <div class="terminal">
           <pre><code>agbrowse web-ai code \
@@ -343,7 +347,7 @@ unzip -t ./result.zip</code></pre>
           <li><strong>Type and module checks:</strong> <code>npm run typecheck</code>, <code>npm run check:module-graph</code>.</li>
           <li><strong>Capability truth checks:</strong> <code>npm run test:release-gates</code> and <code>npm run gate:all</code>.</li>
           <li><strong>Runtime contracts:</strong> MCP, source audit, trace policy, fixture evals, and browser primitive tests.</li>
-          <li><strong>Remote Pages state:</strong> this page is a local Pages entrypoint until an authorized push deploys the `/docs` workflow.</li>
+          <li><strong>Remote Pages state:</strong> GitHub Pages publishes the repository <code>/docs</code> directory at <code>https://lidge-jun.github.io/agbrowse/</code>.</li>
         </ul>
       </section>
     </main>

@@ -44,10 +44,16 @@ agbrowse web-ai send
 agbrowse web-ai poll
 agbrowse web-ai query
 agbrowse web-ai code
+agbrowse web-ai code-extract
 agbrowse web-ai stop
+agbrowse web-ai watch
+agbrowse web-ai snapshot
+agbrowse web-ai sessions
+agbrowse web-ai doctor
 agbrowse web-ai project-sources
 agbrowse web-ai context-dry-run
 agbrowse web-ai context-render
+agbrowse web-ai claim-audit
 ```
 
 Direct script form is equivalent:
@@ -299,6 +305,9 @@ agbrowse web-ai code \
   --output-zip ./result.zip
 ```
 
+If `--output-zip` is omitted, agbrowse saves under the current working directory
+as `code-artifact-<conversation>.zip`.
+
 Multiple named zips:
 
 ```bash
@@ -310,6 +319,10 @@ agbrowse web-ai code \
   --output-dir ./artifacts \
   --prompt "Create backend.zip and frontend.zip as separate deliverables."
 ```
+
+Do not combine `--multi-zip` with `--output-zip`; multi-zip mode saves each
+archive under `--output-dir` or, when omitted, `code-artifacts-<conversation>/`
+in the current working directory.
 
 Later extraction from an existing ChatGPT conversation:
 

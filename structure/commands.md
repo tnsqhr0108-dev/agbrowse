@@ -131,6 +131,7 @@ dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed, X/Twitter oEmbed
 | `poll` | Yes | session 또는 latest baseline completion 대기 |
 | `query` | Yes | `send`와 `poll`을 한 번에 실행 |
 | `code` | Yes | ChatGPT 전용. saved GPT dev-agent context zip을 첫 첨부로 자동 업로드 → strict code-mode 계약 prompt 전송 → 생성된 `/mnt/data/result.zip`을 버튼 없이 in-page presigned fetch로 회수·검증. 새 code artifact는 `PLAN.md` 또는 `00_plan.md`를 포함해야 한다. `--prompt` 빌드 명세, `--output-zip` 저장 경로, `--model thinking` 권장 |
+| `code-extract` | Yes | ChatGPT 전용. 기존 ChatGPT conversation에서 새 prompt 없이 `/mnt/data/*.zip` artifact를 재회수한다. `--url`, `--conversation`, `--session`, 또는 현재 ChatGPT conversation tab을 selector로 쓰며, single zip은 `--output-zip`, multi zip은 `--multi-zip --output-dir`를 사용한다. |
 | `stop` | Yes | active provider tab에 Escape 전송 |
 | `watch` | Yes | persisted session을 terminal 상태까지 감시 |
 | `snapshot` | Yes | active provider tab의 compact accessibility snapshot 출력 |
@@ -149,6 +150,7 @@ dev.to, DOI/CrossRef, OpenLibrary, Wayback CDX, YouTube oEmbed, X/Twitter oEmbed
 | `mcp-server` | No at startup | stdio JSON-RPC MCP bridge 실행 |
 | `eval` | No | offline provider DOM fixture eval 실행 |
 | `doctor` | Yes | provider diagnostics와 semantic target 후보 출력 |
+| `claim-audit` | No | repo docs의 hosted/cloud/stealth 등 금지 claim을 검사한다. release gate `gate:no-cloud-claims`와 같은 claim-audit 모듈을 사용하며 `--json`을 지원한다. |
 
 ## Provider Alias
 

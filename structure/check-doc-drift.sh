@@ -75,10 +75,11 @@ const runwayCommands = [
 ];
 
 const webAiCommands = [
-  'render', 'status', 'send', 'poll', 'query', 'stop', 'watch',
-  'snapshot', 'sessions list', 'sessions show', 'sessions resume',
+  'render', 'status', 'send', 'poll', 'query', 'code', 'code-extract',
+  'stop', 'watch', 'snapshot', 'project-sources list/add',
+  'sessions list', 'sessions show', 'sessions resume',
   'sessions reattach', 'sessions prune', 'context-dry-run',
-  'context-render', 'mcp-server', 'eval', 'doctor',
+  'context-render', 'mcp-server', 'eval', 'doctor', 'claim-audit',
 ];
 
 const mcpTools = [

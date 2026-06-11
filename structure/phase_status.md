@@ -22,6 +22,7 @@ partial phase must not be marketed as complete.
 | 19 remote CDP adapters | deferred | No `external-cdp` provider runtime yet | Do not claim hosted/cloud/external-CDP support |
 | 20 benchmark trajectory | ready for trajectory bundles | `benchmarks/agbrowse/trajectory.mjs`, `benchmarks/agbrowse/run-task.mjs`, `docs/benchmarks.md` | Do not publish scores until fixed tasks/planner/environment exist |
 | 21 release gates | ready | `scripts/release*.sh`, `.github/workflows/release.yml`, `structure/release_gates.md`, `docs/production-readiness.md`, `docs/comparison.md` | Keep named claim gates visible in release output |
+| 22 GitHub Pages developer docs | ready | `docs/index.html`, `docs/dev/`, `docs/dev/ko/`, `.github/workflows/pages.yml`, `README.md` | Keep EN/KO docs paired, local links validated, and Pages live URL checked after push |
 
 ## Mirror Rules
 

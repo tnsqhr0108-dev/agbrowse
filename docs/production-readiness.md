@@ -36,6 +36,8 @@ state, and browser profile state.
 | Model and reasoning-effort selection | Provider menus can be hidden or renamed |
 | Provider source/citation behavior | Models may place citations in source drawers or omit inline sources |
 | Context-package upload | Provider upload UI and file limits can change |
+| ChatGPT code mode (`web-ai code`) | ChatGPT container/tool behavior and conversation artifact APIs can change |
+| ChatGPT code artifact extraction (`web-ai code-extract`) | Requires the original ChatGPT conversation to remain accessible in the logged-in browser profile |
 | Web-AI durable session recovery | Beta until the #77 matrix is green: closed target recovery, root-to-conversation URL drift, stale command lock, wrong active tab, and watch transient timeout recovery. |
 
 ## Experimental / Deferred
