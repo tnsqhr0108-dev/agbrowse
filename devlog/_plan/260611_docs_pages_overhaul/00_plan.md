@@ -36,6 +36,41 @@ Deliver and deploy the agbrowse documentation and code-mode reliability overhaul
    - preserve multi-zip retrieval ordering by conversation recency
 5. Extend focused tests for the above error and artifact-selection behavior.
 
+#### Runtime Implementation Contract
+
+The CLI preflight hook must be explicit, not implied by `code-mode.mjs` runtime guards:
+
+- Add `validateCodeModeCliInput(command, input)` in `web-ai/cli.mjs`.
+- Call it from `runWebAiCliInner` after `buildCliInput(command, values)` and before `enforceCliPolicy`, `ensureHeadedBrowserForWebAi`, `ensureProviderTab`, and vendor-specific dispatch.
+- Throw `WebAiError` with these canonical codes:
+  - `code-mode.vendor-unsupported` for `code` and `code-extract` when `--vendor` is not `chatgpt`.
+  - `code-mode.prompt-missing` for `web-ai code` without a non-empty `--prompt`.
+  - `code-mode.output-conflict` for `--multi-zip --output-zip`.
+- Keep the lower-level `code-mode.mjs` ChatGPT guards as defensive module-boundary checks, but the CLI smoke contract must fail before browser/provider mutation.
+- Include these codes in the human help failure catalog so JSON users can reason about retry behavior.
+
+`code-extract` navigation must be wrapped at the call site:
+
+- Catch `page.goto()` failures inside `extractCodeArtifacts`.
+- Return a structured result with `errorCode: code-extract.navigation-failed`, `stage: code-extract`, the attempted URL, and the original error message.
+- Do not let Playwright navigation errors bubble to `internal.unhandled`.
+
+The artifact scan contract must be fixture-backed:
+
+- Sort candidate messages by `message.create_time`, then `message.update_time`, then original mapping index as a deterministic tie-breaker.
+- Treat assistant text, tool, and execution-output messages as valid artifact path sources.
+- Ignore user-authored messages and `content_type: "code"` text as artifact path sources so prompts or shell snippets containing stale `/mnt/data/*.zip` strings cannot win.
+- Still collect code/execution-output message ids as download candidates because ChatGPT may mint download URLs from those tool messages.
+- For multi-zip retrieval, return distinct zip paths in deterministic conversation order after sorting.
+
+Focused tests must include explicit `it(...)` coverage for:
+
+- non-ChatGPT `code` and `code-extract` preflight with `AGBROWSE_WEB_AI_AUTO_START=0`;
+- missing `--prompt`;
+- `--multi-zip --output-zip`;
+- `code-extract.navigation-failed`;
+- stale user/code-command zip path ignored while the latest assistant artifact path wins.
+
 ### Source-of-Truth Documentation
 
 1. Add missing `code-extract` coverage to `structure/commands.md`.
@@ -202,6 +237,8 @@ Before delivery, grep for stale integration strings and resolve any unexpected h
 
 Runtime validation must live in `runWebAiCliInner` after argument parsing and before `enforceCliPolicy`, `ensureHeadedBrowserForWebAi`, and `ensureProviderTab`, so fail-fast CLI errors remain browser-mutation-free where the command can be rejected from flags alone.
 
+Build order dependency: `structure/commands.md` must gain missing public command rows before `structure/check-doc-drift.sh` starts enforcing those command tokens, and help/skill surfaces must land in the same source-of-truth slice as the runtime preflight changes.
+
 Commit after each logical green slice where possible.
 
 ### C - Check
@@ -236,3 +273,37 @@ Minimum verification:
 - Live provider smoke tests can hang or mutate browser state. Prefer structured preflight smoke commands that fail before provider mutation.
 - Full Korean parity can become too large if every reference is over-expanded. Keep V1 pages concise and navigable, with deeper pages as future backlog.
 - Existing ahead commits and version bump must be preserved; do not rewrite history.
+
+## Post-Delivery Evidence
+
+Delivered commits:
+
+- `0583e89 docs: plan docs pages overhaul`
+- `e39a71a fix(web-ai): preflight code mode errors`
+- `16e835a docs: add developer pages site`
+- `e7329c8 docs: polish korean code mode guide`
+
+Runtime anchors shipped:
+
+- `web-ai/cli.mjs` calls `validateCodeModeCliInput(command, input)` before browser/provider setup.
+- `web-ai/code-mode.mjs` wraps `page.goto()` failures as `code-extract.navigation-failed`.
+- `web-ai/code-artifact.mjs` uses deterministic ordered conversation messages and ignores user/code-command text for zip path extraction.
+- `test/integration/web-ai-cli-contract.test.mjs`, `test/unit/web-ai-code-mode.test.mjs`, and `test/unit/web-ai-code-artifact.test.mjs` cover the new contracts.
+
+Final local verification passed:
+
+- `npm run typecheck`
+- focused Vitest: 3 files, 51 tests
+- `npm run test:release-gates`: 144 drift checks and 60 count checks
+- static Pages validation: 29 HTML files
+- Playwright render validation
+- JSON smoke for `code-mode.vendor-unsupported`, `code-mode.prompt-missing`, and `code-mode.output-conflict`
+
+Deployment evidence:
+
+- Pushed `main` to `e7329c8`.
+- GitHub Pages run `27326155929` completed successfully.
+- Live checks returned HTTP 200 for:
+  - `https://lidge-jun.github.io/agbrowse/`
+  - `https://lidge-jun.github.io/agbrowse/dev/index.html`
+  - `https://lidge-jun.github.io/agbrowse/dev/ko/index.html`
