@@ -41,7 +41,7 @@ No requirement is UNPROVEN or CONTRADICTED.
 
 ## Final State
 
-- Local and remote branch: `main` at `292c197`.
+- Local and remote branch: `main` synchronized with `origin/main`; verify the exact hash with `git rev-parse --short HEAD` and `git rev-parse --short origin/main`.
 - Package metadata: `agbrowse@0.1.12`, `vitest ^3.2.6`.
-- npm registry latest: `0.1.6`; publish is intentionally out of scope without explicit user approval.
+- npm registry latest observed during the second pause-gate audit: `0.1.12`.
 - GitHub Pages: live documentation verified.
