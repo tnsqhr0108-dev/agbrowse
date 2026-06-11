@@ -160,7 +160,7 @@ Per-runtime pattern for the background `watch` process:
 | Claude Code | Run `watch` via `Bash run_in_background: true` — process exit injects a completion notification that re-activates the agent (no polling). |
 | Cursor | Run `watch` as a background shell, then use the `Await` tool to wait for a `watch.complete` sentinel line. |
 | Codex | Background terminal polling works (15s ticks avoid the 5-min empty-poll window), but for very long runs prefer a fully external watcher that calls `codex exec resume` on completion. |
-| cli-jaw | Boss turns are disposable — do not background `watch` inside a turn. Use the server-side bgtask hook (design: cli-jaw devlog) or block on `watch` in a dispatched employee. |
+| cli-jaw | Boss turns are disposable — do not background `watch` inside a turn. Register a server-owned task instead: `cli-jaw bgtask add --preset web-ai --session "$SID"` (native session probe), then end the turn — the jaw server re-invokes the boss with a `[bgtask:*]` prompt on completion (restart-durable). |
 
 ## Multi-Tab Behavior (Phase 9.1+)
 
