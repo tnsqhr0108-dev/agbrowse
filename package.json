@@ -1,6 +1,6 @@
 {
   "name": "agbrowse",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Standalone Chrome/CDP browser automation and web-ai workflow skills for AI agents.",
   "license": "MIT",
   "private": false,
@@ -88,6 +88,6 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^5.6.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.6"
   }
 }
