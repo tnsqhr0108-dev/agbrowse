@@ -83,6 +83,22 @@ describe('extractCodeArtifacts', () => {
         expect(result.ok).toBe(false);
         expect(result.errorCode).toBe('code-extract.conversation-id-missing');
     });
+
+    it('wraps navigation failures in a structured extraction error', async () => {
+        const page = {
+            url: () => 'https://example.com/',
+            goto: async () => { throw new Error('navigation timeout'); },
+            evaluate: async () => null,
+        };
+        const result = await extractCodeArtifacts({ getPage: async () => page }, {
+            vendor: 'chatgpt',
+            url: 'https://chatgpt.com/c/conv-abc',
+            outputZip,
+        });
+        expect(result.ok).toBe(false);
+        expect(result.errorCode).toBe('code-extract.navigation-failed');
+        expect(result.errorMessage).toContain('navigation timeout');
+    });
 });
 
 describe('codeWebAi', () => {
@@ -161,6 +177,7 @@ describe('codeWebAi', () => {
         rmSync(outputDir, { force: true, recursive: true });
         const conversation = { mapping: {
             a: { message: { id: 'mid-code', content: { content_type: 'code', text: '/mnt/data/a.zip /mnt/data/b.zip' } } },
+            b: { message: { id: 'mid-final', content: { content_type: 'text', parts: ['/mnt/data/a.zip\n/mnt/data/b.zip'] } } },
         } };
         let lastSandbox = null;
         const page = {

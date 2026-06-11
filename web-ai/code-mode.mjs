@@ -128,7 +128,19 @@ export async function extractCodeArtifacts(deps, input, services = {}) {
 
     const targetUrl = resolveConversationUrl(conversationRef, conversationId);
     if (targetUrl && shouldNavigateForExtraction(pageUrl, targetUrl)) {
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        try {
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+        } catch (error) {
+            return {
+                ok: false,
+                status: 'error',
+                errorCode: 'code-extract.navigation-failed',
+                url: targetUrl,
+                conversationId,
+                warnings: [],
+                errorMessage: /** @type {Error} */ (error)?.message || String(error),
+            };
+        }
     }
 
     if (input.multiZip === true) {

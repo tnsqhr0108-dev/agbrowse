@@ -28,7 +28,6 @@ import { inflateRawSync } from 'node:zlib';
  * @property {boolean} [hasPlanArtifact]
  */
 
-const ZIP_PATH_RE = /\/mnt\/data\/[A-Za-z0-9_\-./]+\.zip/;
 const ZIP_PATH_RE_GLOBAL = /\/mnt\/data\/[A-Za-z0-9_\-./]+\.zip/g;
 
 /**
@@ -36,11 +35,11 @@ const ZIP_PATH_RE_GLOBAL = /\/mnt\/data\/[A-Za-z0-9_\-./]+\.zip/g;
  * and the tool-message ids usable as interpreter/download `message_id`.
  *
  * The path is NOT reliably present in execution_output text (verified empty
- * for container.exec runs) — scan every message's content JSON instead, and
- * collect code/execution_output mids as download candidates (no single-mid
- * assumption; callers try each until one mints a URL).
+ * for container.exec runs) — scan assistant/output content in turn order, ignore
+ * command source text, and collect code/execution_output mids as download
+ * candidates (no single-mid assumption; callers try each until one mints a URL).
  *
- * @param {{ mapping?: Record<string, { message?: { id?: string, content?: { content_type?: string } } }> }} conversation
+ * @param {{ mapping?: Record<string, { message?: { id?: string, author?: { role?: string }, create_time?: number, update_time?: number, content?: { content_type?: string } } }> }} conversation
  * @returns {ZipScanResult}
  */
 export function scanConversationForZip(conversation) {
@@ -48,14 +47,12 @@ export function scanConversationForZip(conversation) {
     let zipPath = null;
     /** @type {string[]} */
     const candidateMids = [];
-    for (const node of Object.values(conversation?.mapping || {})) {
-        const message = node?.message;
-        if (!message) continue;
+    for (const message of orderedConversationMessages(conversation)) {
         const contentType = message.content?.content_type || '';
-        const blob = JSON.stringify(message.content || {});
-        const match = blob.match(ZIP_PATH_RE);
-        if (match) zipPath = match[0];
-        if ((contentType === 'execution_output' || contentType === 'code') && message.id) {
+        for (const match of extractZipPathsFromMessage(message)) {
+            zipPath = match;
+        }
+        if (isDownloadCandidateContent(contentType) && message.id) {
             candidateMids.push(message.id);
         }
     }
@@ -63,32 +60,79 @@ export function scanConversationForZip(conversation) {
 }
 
 /**
- * Multi-zip variant: collect every distinct /mnt/data/*.zip referenced anywhere
- * in the conversation (in first-seen order) plus the same tool-message id
- * candidates. Used when the contract permits more than one archive.
+ * @param {{ mapping?: Record<string, { message?: { id?: string, author?: { role?: string }, create_time?: number, update_time?: number, content?: { content_type?: string } } }> }} conversation
+ * @returns {{ id?: string, author?: { role?: string }, create_time?: number, update_time?: number, content?: { content_type?: string } }[]}
+ */
+function orderedConversationMessages(conversation) {
+    return Object.values(conversation?.mapping || {})
+        .map((node, index) => ({ message: node?.message, index }))
+        .filter(item => item.message)
+        .sort((a, b) => {
+            const at = Number(a.message?.create_time ?? a.message?.update_time);
+            const bt = Number(b.message?.create_time ?? b.message?.update_time);
+            const aHasTime = Number.isFinite(at);
+            const bHasTime = Number.isFinite(bt);
+            if (aHasTime && bHasTime && at !== bt) return at - bt;
+            if (aHasTime !== bHasTime) return aHasTime ? -1 : 1;
+            return a.index - b.index;
+        })
+        .map(item => /** @type {any} */ (item.message));
+}
+
+/**
+ * @param {{ author?: { role?: string }, content?: { content_type?: string } }} message
+ * @returns {string[]}
+ */
+function extractZipPathsFromMessage(message) {
+    const contentType = message.content?.content_type || '';
+    if (contentType === 'code') return [];
+    if (message.author?.role === 'user') return [];
+    const blob = JSON.stringify(message.content || {});
+    return blob.match(ZIP_PATH_RE_GLOBAL) || [];
+}
+
+/**
+ * @param {string} contentType
+ */
+function isDownloadCandidateContent(contentType) {
+    return contentType === 'execution_output' || contentType === 'code';
+}
+
+/**
+ * Pure scan of a conversation JSON for the newest /mnt/data/*.zip reference
+ * and the tool-message ids usable as interpreter/download `message_id`.
  *
- * @param {{ mapping?: Record<string, { message?: { id?: string, content?: { content_type?: string } } }> }} conversation
+ * @param {{ mapping?: Record<string, { message?: { id?: string, author?: { role?: string }, create_time?: number, update_time?: number, content?: { content_type?: string } } }> }} conversation
  * @returns {{ zipPaths: string[], candidateMids: string[] }}
  */
-export function scanConversationForAllZips(conversation) {
+function scanConversation(conversation) {
     /** @type {string[]} */
     const zipPaths = [];
     const seen = new Set();
     /** @type {string[]} */
     const candidateMids = [];
-    for (const node of Object.values(conversation?.mapping || {})) {
-        const message = node?.message;
-        if (!message) continue;
+    for (const message of orderedConversationMessages(conversation)) {
         const contentType = message.content?.content_type || '';
-        const blob = JSON.stringify(message.content || {});
-        for (const match of blob.match(ZIP_PATH_RE_GLOBAL) || []) {
+        for (const match of extractZipPathsFromMessage(message)) {
             if (!seen.has(match)) { seen.add(match); zipPaths.push(match); }
         }
-        if ((contentType === 'execution_output' || contentType === 'code') && message.id) {
+        if (isDownloadCandidateContent(contentType) && message.id) {
             candidateMids.push(message.id);
         }
     }
     return { zipPaths, candidateMids };
+}
+
+/**
+ * Multi-zip variant: collect every distinct /mnt/data/*.zip referenced anywhere
+ * in the conversation (in first-seen order) plus the same tool-message id
+ * candidates. Used when the contract permits more than one archive.
+ *
+ * @param {{ mapping?: Record<string, { message?: { id?: string, author?: { role?: string }, create_time?: number, update_time?: number, content?: { content_type?: string } } }> }} conversation
+ * @returns {{ zipPaths: string[], candidateMids: string[] }}
+ */
+export function scanConversationForAllZips(conversation) {
+    return scanConversation(conversation);
 }
 
 /**

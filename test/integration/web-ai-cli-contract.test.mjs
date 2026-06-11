@@ -56,6 +56,48 @@ describe('web-ai CLI contract', () => {
         expect(result.stdout).toContain('A copied /mnt/data/result.zip text line alone is not enough');
     });
 
+    it('rejects non-ChatGPT code mode before browser startup with a structured JSON error', async () => {
+        const result = await execBrowser(['web-ai', 'code', '--vendor', 'gemini', '--prompt', 'x', '--json'], {
+            env: { AGBROWSE_WEB_AI_AUTO_START: '0' },
+        });
+        expect(result.code).not.toBe(0);
+        const parsed = JSON.parse(result.stderr);
+        expect(parsed.error.errorCode).toBe('code-mode.vendor-unsupported');
+        expect(parsed.error.retryHint).toBe('use-chatgpt');
+        expect(parsed.error.mutationAllowed).toBe(false);
+    });
+
+    it('rejects non-ChatGPT code extraction before browser startup with a structured JSON error', async () => {
+        const result = await execBrowser(['web-ai', 'code-extract', '--vendor', 'grok', '--conversation', 'conv-abc', '--json'], {
+            env: { AGBROWSE_WEB_AI_AUTO_START: '0' },
+        });
+        expect(result.code).not.toBe(0);
+        const parsed = JSON.parse(result.stderr);
+        expect(parsed.error.errorCode).toBe('code-mode.vendor-unsupported');
+        expect(parsed.error.stage).toBe('code-extract');
+        expect(parsed.error.mutationAllowed).toBe(false);
+    });
+
+    it('rejects code mode without a prompt before browser startup', async () => {
+        const result = await execBrowser(['web-ai', 'code', '--vendor', 'chatgpt', '--json'], {
+            env: { AGBROWSE_WEB_AI_AUTO_START: '0' },
+        });
+        expect(result.code).not.toBe(0);
+        const parsed = JSON.parse(result.stderr);
+        expect(parsed.error.errorCode).toBe('code-mode.prompt-missing');
+        expect(parsed.error.retryHint).toBe('add-prompt');
+    });
+
+    it('rejects multi-zip with output-zip before browser startup', async () => {
+        const result = await execBrowser(['web-ai', 'code', '--vendor', 'chatgpt', '--prompt', 'x', '--multi-zip', '--output-zip', './result.zip', '--json'], {
+            env: { AGBROWSE_WEB_AI_AUTO_START: '0' },
+        });
+        expect(result.code).not.toBe(0);
+        const parsed = JSON.parse(result.stderr);
+        expect(parsed.error.errorCode).toBe('code-mode.output-conflict');
+        expect(parsed.error.retryHint).toBe('use-output-dir');
+    });
+
     it('supports render command without a running browser', async () => {
         const result = await execBrowser(['web-ai', 'render', '--vendor', 'chatgpt', '--prompt', 'hello']);
         expect(result.code).toBe(0);

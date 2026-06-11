@@ -23,10 +23,10 @@ const PLAN_ZIP_B64 = 'UEsDBAoAAAAAAO41y1w9+YHGFAAAABQAAAAHABwAUExBTi5tZFVUCQADcN
 function conversationFixture() {
     return {
         mapping: {
-            a: { message: { id: 'mid-prompt', content: { content_type: 'text', parts: ['make a zip'] } } },
-            b: { message: { id: 'mid-code', content: { content_type: 'code', text: 'bash -lc zip ...' } } },
-            c: { message: { id: 'mid-output', content: { content_type: 'execution_output', text: '' } } },
-            d: { message: { id: 'mid-final', content: { content_type: 'text', parts: ['/mnt/data/result.zip'] } } },
+            a: { message: { id: 'mid-prompt', author: { role: 'user' }, create_time: 1, content: { content_type: 'text', parts: ['make a zip'] } } },
+            b: { message: { id: 'mid-code', author: { role: 'assistant' }, create_time: 2, content: { content_type: 'code', text: 'bash -lc zip ...' } } },
+            c: { message: { id: 'mid-output', author: { role: 'tool' }, create_time: 3, content: { content_type: 'execution_output', text: '' } } },
+            d: { message: { id: 'mid-final', author: { role: 'assistant' }, create_time: 4, content: { content_type: 'text', parts: ['/mnt/data/result.zip'] } } },
         },
     };
 }
@@ -62,6 +62,17 @@ describe('scanConversationForZip', () => {
         } });
         expect(zipPath).toBeNull();
         expect(candidateMids).toEqual([]);
+    });
+
+    it('ignores user/code command text and chooses the latest assistant artifact path', () => {
+        const { zipPath, candidateMids } = scanConversationForZip({ mapping: {
+            late: { message: { id: 'mid-final', author: { role: 'assistant' }, create_time: 30, content: { content_type: 'text', parts: ['/mnt/data/fresh.zip'] } } },
+            command: { message: { id: 'mid-code', author: { role: 'assistant' }, create_time: 20, content: { content_type: 'code', text: 'rm /mnt/data/deleted.zip && zip /mnt/data/deleted.zip .' } } },
+            user: { message: { id: 'mid-user', author: { role: 'user' }, create_time: 10, content: { content_type: 'text', parts: ['Please fix /mnt/data/stale.zip'] } } },
+            output: { message: { id: 'mid-output', author: { role: 'tool' }, create_time: 21, content: { content_type: 'execution_output', text: '' } } },
+        } });
+        expect(zipPath).toBe('/mnt/data/fresh.zip');
+        expect(candidateMids).toEqual(['mid-code', 'mid-output']);
     });
 });
 
@@ -168,6 +179,7 @@ describe('retrieveAllCodeArtifacts', () => {
     function multiPage() {
         const conversation = { mapping: {
             a: { message: { id: 'mid-code', content: { content_type: 'code', text: '/mnt/data/backend.zip /mnt/data/frontend.zip' } } },
+            b: { message: { id: 'mid-final', content: { content_type: 'text', parts: ['/mnt/data/backend.zip\n/mnt/data/frontend.zip'] } } },
         } };
         const binaryByPath = {
             '/mnt/data/backend.zip': BACKEND_ZIP_B64,

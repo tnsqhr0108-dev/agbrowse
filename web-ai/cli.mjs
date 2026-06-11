@@ -258,6 +258,12 @@ Failure envelope (when --json or AGBROWSE_JSON_ERRORS=1):
          watcher.session-missing | watcher.already-running |
          snapshot.unavailable | snapshot.ref-stale |
          context.over-budget | context.symlink-rejected |
+         code-mode.vendor-unsupported | code-mode.prompt-missing |
+         code-mode.output-conflict | code-mode.conversation-id-missing |
+         code-extract.conversation-id-missing |
+         code-extract.navigation-failed |
+         code-artifact:missing | code-artifact:download-failed |
+         code-artifact:plan-missing |
          grok.context-pack-not-allowed | internal.unhandled
 
 Capability boundary: web-ai query uses the existing local browser automation
@@ -322,8 +328,10 @@ Recommended model:
 
 Artifact options:
   --output-zip <path>   Save one generated zip to this path.
+                        Default: ./code-artifact-<conversation>.zip.
   --multi-zip           Retrieve several named /mnt/data/*.zip artifacts.
   --output-dir <dir>    Save multi-zip artifacts into this directory.
+                        Default: ./code-artifacts-<conversation>/.
 
 Optional inputs:
   --file <path>         Repeatable upload; may mix zip, image, PDF, docs, text.
@@ -372,8 +380,10 @@ Conversation selector:
 
 Artifact options:
   --output-zip <path>   Save one recovered zip to this path.
+                        Default: ./code-artifact-<conversation>.zip.
   --multi-zip           Recover every mentioned /mnt/data/*.zip artifact.
   --output-dir <dir>    Save multi-zip artifacts into this directory.
+                        Default: ./code-artifacts-<conversation>/.
 
 Requirements:
   The original conversation must still be accessible in the logged-in ChatGPT
@@ -652,6 +662,7 @@ async function runWebAiCliInner(argv = [], deps) {
         unsafeAllow: values['unsafe-allow'] || [],
     };
 
+    validateCodeModeCliInput(command, input);
     await enforceCliPolicy(command, input);
     await ensureHeadedBrowserForWebAi(deps, command, argv);
 
@@ -722,6 +733,52 @@ async function runWebAiCliInner(argv = [], deps) {
     else if (command === 'sessions') printSessionsHuman(result);
     else printHuman(command, result);
     return result;
+}
+
+/**
+ * Fail fast on code-mode flag combinations that can be rejected without opening
+ * or mutating provider tabs.
+ *
+ * @param {string} command
+ * @param {Record<string, any>} input
+ */
+function validateCodeModeCliInput(command, input) {
+    if (!['code', 'code-extract'].includes(command)) return;
+    let vendor = input.vendor || 'chatgpt';
+    if (command === 'code-extract' && input.session) {
+        const session = getSession(input.session);
+        vendor = session?.vendor || vendor;
+    }
+    if (vendor !== 'chatgpt') {
+        throw new WebAiError({
+            errorCode: 'code-mode.vendor-unsupported',
+            stage: command === 'code' ? 'code-mode' : 'code-extract',
+            vendor,
+            retryHint: 'use-chatgpt',
+            message: `web-ai ${command} is ChatGPT-only (container artifact contract)`,
+            mutationAllowed: false,
+        });
+    }
+    if (command === 'code' && !String(input.prompt || '').trim()) {
+        throw new WebAiError({
+            errorCode: 'code-mode.prompt-missing',
+            stage: 'code-mode',
+            vendor,
+            retryHint: 'add-prompt',
+            message: 'web-ai code requires --prompt <build-spec>',
+            mutationAllowed: false,
+        });
+    }
+    if (input.multiZip === true && input.outputZip) {
+        throw new WebAiError({
+            errorCode: 'code-mode.output-conflict',
+            stage: command === 'code' ? 'code-mode' : 'code-extract',
+            vendor,
+            retryHint: 'use-output-dir',
+            message: '--multi-zip cannot be combined with --output-zip; use --output-dir',
+            mutationAllowed: false,
+        });
+    }
 }
 
 /**
