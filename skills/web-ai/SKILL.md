@@ -391,6 +391,16 @@ conversation was created by agbrowse and the session is still recorded, use
 works. The extractor does not send a new prompt; it scans the saved conversation
 JSON for `/mnt/data/*.zip` paths and reuses the provider download API.
 
+Stale-snapshot guard: when one conversation rebuilds the same sandbox path (e.g.
+`/mnt/data/result.zip`) across several code runs, the provider download API
+serves the snapshot tied to the message id used to mint the URL. The extractor
+mints candidate message ids NEWEST-first, so the first successful mint is the
+latest sandbox state; older snapshots are only used when newer mints fail. The
+result reports `mintedMessageId` for auditing. Even so, ALWAYS verify retrieved
+zip contents against drop-specific symbols (grep for a file or identifier unique
+to the expected delivery) before applying — if the contents mismatch, retry with
+`--multi-zip` to recover every archive and identify the right one.
+
 Expected final ChatGPT answer shape for one zip:
 
 ```text
