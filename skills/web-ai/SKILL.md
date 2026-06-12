@@ -336,6 +336,13 @@ automatically uploads `skills/web-ai/modules/gpt-dev-agent-context.zip` as the
 first attachment; this saved skill module is a GPT/Linux-sandbox dev-agent guide
 built from the dev skills and AGENTS rules.
 
+The context zip is attached only on the FIRST turn of a conversation.
+Continuation turns (`--url`, `--conversation`, or `--session` targeting an
+existing conversation) skip it: the container `/mnt` persists across turns and
+the contract already lives in the conversation history. Pass `--context-refresh`
+to force a re-upload (e.g. after the context module changed, or when a long-idle
+conversation may have recycled its sandbox).
+
 Single zip:
 
 ```bash

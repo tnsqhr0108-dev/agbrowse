@@ -332,6 +332,12 @@ Artifact options:
   --multi-zip           Retrieve several named /mnt/data/*.zip artifacts.
   --output-dir <dir>    Save multi-zip artifacts into this directory.
                         Default: ./code-artifacts-<conversation>/.
+  --context-refresh     Re-upload the dev-agent context zip on a continuation
+                        turn. By default it is attached only on the FIRST turn
+                        of a conversation; continuation turns (--url /
+                        --conversation / --session) skip it because the
+                        container /mnt and conversation history already carry
+                        the contract.
 
 Optional inputs:
   --file <path>         Repeatable upload; may mix zip, image, PDF, docs, text.
@@ -528,6 +534,7 @@ async function runWebAiCliInner(argv = [], deps) {
             'output-zip': { type: 'string' },
             'output-dir': { type: 'string' },
             'multi-zip': { type: 'boolean', default: false },
+            'context-refresh': { type: 'boolean', default: false },
             conversation: { type: 'string' },
             research: { type: 'string' },
             archive: { type: 'string' },
@@ -616,6 +623,7 @@ async function runWebAiCliInner(argv = [], deps) {
         outputZip: values['output-zip'],
         outputDir: values['output-dir'],
         multiZip: values['multi-zip'] === true,
+        contextRefresh: values['context-refresh'] === true,
         conversation: values.conversation,
         research: values.research,
         archiveFlag: values.archive,

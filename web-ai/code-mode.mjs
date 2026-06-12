@@ -39,16 +39,25 @@ export async function codeWebAi(deps, input, services) {
     }
     const multiZip = input.multiZip === true;
     const contractPrompt = buildCodeModePrompt(input.prompt, { multiZip });
-    const contextZip = await ensureCodeDevContextZip();
+    // Continuation turns (existing conversation via --url/--conversation, or a
+    // resumed recorded session) reuse the same ChatGPT container: the dev-agent
+    // context zip from the first turn is already in /mnt/data and its contract
+    // already lives in the conversation history. Re-uploading it every turn is
+    // redundant — skip it unless the caller forces --context-refresh.
+    const continuation = Boolean(
+        extractConversationId(input.conversation || input.url) || input.session,
+    );
+    const attachContext = !continuation || input.contextRefresh === true;
+    const contextZip = attachContext ? await ensureCodeDevContextZip() : null;
     const callerFilePaths = Array.isArray(input.filePaths) && input.filePaths.length
         ? input.filePaths
         : (input.filePath ? [input.filePath] : []);
-    const filePaths = [contextZip.path, ...callerFilePaths];
+    const filePaths = [...(contextZip ? [contextZip.path] : []), ...callerFilePaths];
     const result = await services.queryWebAi(deps, {
         ...input,
         prompt: contractPrompt,
         inlineOnly: false,
-        attachmentPolicy: 'upload',
+        attachmentPolicy: filePaths.length ? 'upload' : 'inline-only',
         filePath: filePaths[0],
         filePaths,
     });
@@ -76,20 +85,20 @@ export async function codeWebAi(deps, input, services) {
         const outputDir = input.outputDir || `${process.cwd()}/code-artifacts-${conversationId.slice(0, 8)}`;
         const multi = await retrieveAllCodeArtifacts(page, { conversationId, outputDir, requirePlan: true });
         if (!multi.ok) {
-            return { ...result, ok: false, errorCode: multi.reason || 'code-mode.retrieval-failed', artifacts: multi.artifacts, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
+            return { ...result, ok: false, errorCode: multi.reason || 'code-mode.retrieval-failed', artifacts: multi.artifacts, codeContextZip: contextZip?.path ?? null, codeContextAttached: attachContext, warnings };
         }
         const failed = multi.artifacts.filter(a => !a.ok);
         if (failed.length) warnings.push(`code-mode:partial-retrieval(${failed.length} failed)`);
-        return { ...result, ok: true, artifacts: multi.artifacts, outputDir, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
+        return { ...result, ok: true, artifacts: multi.artifacts, outputDir, codeContextZip: contextZip?.path ?? null, codeContextAttached: attachContext, warnings };
     }
 
     const outputPath = input.outputZip
         || `${process.cwd()}/code-artifact-${conversationId.slice(0, 8)}.zip`;
     const artifact = await retrieveCodeArtifact(page, { conversationId, outputPath, requirePlan: true });
     if (!artifact.ok) {
-        return { ...result, ok: false, errorCode: artifact.reason || 'code-mode.retrieval-failed', artifact, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
+        return { ...result, ok: false, errorCode: artifact.reason || 'code-mode.retrieval-failed', artifact, codeContextZip: contextZip?.path ?? null, codeContextAttached: attachContext, warnings };
     }
-    return { ...result, ok: true, artifact, codeContextZip: contextZip.path, codeContextAttached: true, warnings };
+    return { ...result, ok: true, artifact, codeContextZip: contextZip?.path ?? null, codeContextAttached: attachContext, warnings };
 }
 
 /**

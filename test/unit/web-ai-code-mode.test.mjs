@@ -156,6 +156,74 @@ describe('codeWebAi', () => {
         expect(sentInput.filePaths.slice(1)).toEqual(['/tmp/user.png', '/tmp/spec.txt']);
     });
 
+    it('skips the context zip on a continuation turn (existing conversation url)', async () => {
+        const page = makePage('https://chatgpt.com/c/conv-abc');
+        const deps = { getPage: async () => page };
+        let sentInput = null;
+        const result = await codeWebAi(deps, {
+            vendor: 'chatgpt',
+            prompt: 'next drop',
+            url: 'https://chatgpt.com/c/conv-abc',
+            outputZip,
+            filePaths: ['/tmp/tree.zip'],
+        }, {
+            queryWebAi: async (_deps, input) => {
+                sentInput = input;
+                return { ok: true, sessionId: 's1', answerText: '/mnt/data/result.zip', warnings: [] };
+            },
+            getSession: () => ({ conversationUrl: 'https://chatgpt.com/c/conv-abc' }),
+        });
+        expect(result.ok).toBe(true);
+        expect(result.codeContextAttached).toBe(false);
+        expect(result.codeContextZip).toBeNull();
+        expect(sentInput.filePaths).toEqual(['/tmp/tree.zip']);
+        expect(sentInput.attachmentPolicy).toBe('upload');
+    });
+
+    it('skips the context zip when resuming a recorded session, with inline-only fallback when no files remain', async () => {
+        const page = makePage('https://chatgpt.com/c/conv-abc');
+        const deps = { getPage: async () => page };
+        let sentInput = null;
+        const result = await codeWebAi(deps, {
+            vendor: 'chatgpt',
+            prompt: 'follow-up question',
+            session: '01SESSION',
+            outputZip,
+        }, {
+            queryWebAi: async (_deps, input) => {
+                sentInput = input;
+                return { ok: true, sessionId: 's1', answerText: '/mnt/data/result.zip', warnings: [] };
+            },
+            getSession: () => ({ conversationUrl: 'https://chatgpt.com/c/conv-abc' }),
+        });
+        expect(result.ok).toBe(true);
+        expect(result.codeContextAttached).toBe(false);
+        expect(sentInput.filePaths).toEqual([]);
+        expect(sentInput.attachmentPolicy).toBe('inline-only');
+    });
+
+    it('re-attaches the context zip on continuation when contextRefresh is forced', async () => {
+        const page = makePage('https://chatgpt.com/c/conv-abc');
+        const deps = { getPage: async () => page };
+        let sentInput = null;
+        const result = await codeWebAi(deps, {
+            vendor: 'chatgpt',
+            prompt: 'next drop',
+            url: 'https://chatgpt.com/c/conv-abc',
+            contextRefresh: true,
+            outputZip,
+        }, {
+            queryWebAi: async (_deps, input) => {
+                sentInput = input;
+                return { ok: true, sessionId: 's1', answerText: '/mnt/data/result.zip', warnings: [] };
+            },
+            getSession: () => ({ conversationUrl: 'https://chatgpt.com/c/conv-abc' }),
+        });
+        expect(result.ok).toBe(true);
+        expect(result.codeContextAttached).toBe(true);
+        expect(sentInput.filePaths[0]).toMatch(/gpt-dev-agent-context\.zip$/);
+    });
+
     it('flags contract drift when the answer is chatty but still retrieves', async () => {
         const page = makePage('https://chatgpt.com/c/conv-abc');
         const deps = { getPage: async () => page };
