@@ -181,22 +181,26 @@ Prompt used:
 
 `AGBROWSE_DEEP_RESEARCH_POST_SUBMIT_UI_TEST. Briefly research what RFC 2119 keyword MUST means; keep the final answer short.`
 
-Observed within the first post-submit window:
+Observed across repeated post-submit windows:
 
 - ChatGPT created a conversation URL and rendered the user message.
 - A Deep Research plan card appeared above the composer.
-- Card title: `Define RFC 2119 MUST`
-- Plan rows:
+- The plan card content is rendered inside a Deep Research app iframe (`about:blank` child frame observed under the `connector_openai_deep_research.web-sandbox.oaiusercontent.com` app frame), not reliably in the main ChatGPT DOM.
+- Example card title: `Define RFC 2119 MUST`
+- Example plan rows:
   - `Open RFC 2119 official document from IETF website.`
   - `Extract the exact definition and examples of MUST from RFC 2119.`
   - `Cross-check definition with RFC 8174 updates for keyword interpretation.`
   - `Summarize the meaning concisely for non-expert readers.`
+- A more complex prompt produced card title `RFC keyword usage comparison` and five rows, with `Start` countdown values `46`, `41`, and `35` observed in successive screenshots.
+- Another fresh branch probe produced `Lockfile security policy comparison` with `Start 59`, so the live countdown window is approximately 60 seconds, not 15 seconds.
 - Buttons:
   - `Edit`
   - `Cancel`
-  - `Start` with a countdown indicator (`5` observed)
-- This card is time-sensitive; the `Start` choice appears in the first ~15 seconds. The pre-existing code only looked for `Start research` / `Confirm`, so it could miss the current `Start` button.
-- AX/browser observe and ordinary document query did not reliably expose this card, but the screenshot confirmed the visible UI. The repository runtime uses Playwright selectors, so the practical selector fix is to include `button:has-text("Start")` and Korean `button:has-text("시작")`.
+  - `Start` with countdown text (`Plan starts in NN seconds.` in iframe text)
+- Letting the countdown expire automatically transitions the card to `Researching...`; manual `Start` is an accelerator, not the only path forward.
+- Clicking a plan row's left circular glyph did not toggle/select that row. The only observed text/body change was the countdown decrement, and the row HTML stayed effectively unchanged. Treat those left circles as status/progress icons, not user-selectable checklist toggles.
+- AX/browser observe and ordinary main document query did not reliably expose this card; iframe scanning did. The repository runtime uses Playwright selectors, so the practical selector fix is to scan `page.frames()` and include `button:has-text("Start")` / Korean `button:has-text("시작")`.
 
 ## Current code judgment
 
@@ -210,13 +214,13 @@ Keep these constraints for PR #78 follow-up work:
 6. Deep Research `Specific sites` / `Manage sites` and `Apps` connector flows are explicit future surfaces, not default behavior.
 7. Plugin/app connector selections are potentially auth-sensitive and must stay gated behind explicit flags.
 
-## Follow-up patch applied from this probe
+## Follow-up patches applied from this probe
 
 - Removed `--auto-tools` plugin inference for GitHub/Supabase-style prompts.
 - Kept explicit `--plugin <name>` support unchanged.
 - Updated CLI help and bundled `skills/web-ai/SKILL.md` so `--auto-tools` is described as non-auth tool inference only.
 - Added/updated unit expectations that GitHub/Supabase prompts do not auto-select plugins.
-- Added post-submit Deep Research auto-confirm labels for `Start` / `시작`, widened the confirm window to 15 seconds, and reduced polling to 250ms.
+- Added post-submit Deep Research auto-confirm labels for `Start` / `시작`, then corrected the live behavior to scan Deep Research app iframes and wait up to 70 seconds for the observed ~60 second Start card.
 
 ## Verification already run for the branch before this live probe
 

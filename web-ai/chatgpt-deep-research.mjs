@@ -125,20 +125,34 @@ async function activateDeepResearchMode(page) {
 
 /**
  * Auto-confirm the research plan if a confirm button appears.
+ * ChatGPT renders the post-submit Deep Research plan card inside the
+ * Deep Research app iframe, so scan both the page and child frames.
  * @param {any} page
  * @param {number} timeoutMs
  * @returns {Promise<boolean>}
  */
-export async function autoConfirmPlan(page, timeoutMs = 15_000) {
+export async function autoConfirmPlan(page, timeoutMs = 70_000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
-        for (const sel of DEEP_RESEARCH_SELECTORS.confirmButton) {
-            const btn = page.locator(sel).first();
-            if (await btn.isVisible().catch(() => false)) {
-                await btn.click();
-                return true;
+        const contexts = [page];
+        if (typeof page.frames === 'function') {
+            contexts.push(...page.frames());
+        }
+
+        for (const context of contexts) {
+            for (const sel of DEEP_RESEARCH_SELECTORS.confirmButton) {
+                const locator = context.locator?.(sel);
+                const btn = typeof locator?.first === 'function' ? locator.first() : locator;
+                if (!btn || typeof btn.isVisible !== 'function' || typeof btn.click !== 'function') {
+                    continue;
+                }
+                if (await btn.isVisible().catch(() => false)) {
+                    await btn.click();
+                    return true;
+                }
             }
         }
+
         await page.waitForTimeout(250);
     }
     return false;
