@@ -57,14 +57,14 @@ describe('web-ai ChatGPT composer tool resolver', () => {
         });
     });
 
-    it('infers obvious tools and plugins from Korean and English prompts', () => {
+    it('infers obvious non-auth tools from Korean and English prompts', () => {
         expect(resolveChatGptComposerToolRequests({
             autoTools: true,
             prompt: '최신 GitHub repo 상태를 웹에서 확인해줘',
         })).toMatchObject({
             tools: ['web-search'],
-            plugins: ['github'],
-            reasons: ['auto:web-search-intent', 'auto:github-intent'],
+            plugins: [],
+            reasons: ['auto:web-search-intent'],
         });
 
         expect(resolveChatGptComposerToolRequests({
@@ -81,8 +81,17 @@ describe('web-ai ChatGPT composer tool resolver', () => {
             prompt: 'Supabase RLS migration을 심층 리서치해줘',
         })).toMatchObject({
             tools: ['deep-research'],
-            plugins: ['supabase'],
-            reasons: ['auto:deep-research-intent', 'auto:supabase-intent'],
+            plugins: [],
+            reasons: ['auto:deep-research-intent'],
+        });
+
+        expect(resolveChatGptComposerToolRequests({
+            autoTools: true,
+            prompt: 'GitHub repo와 Supabase RLS migration을 확인해줘',
+        })).toMatchObject({
+            tools: [],
+            plugins: [],
+            reasons: [],
         });
     });
 });

@@ -486,10 +486,9 @@ Use `--auto-tools` when you want agbrowse to infer obvious tools from the prompt
 - current/latest/news/price/official/source-sensitive prompt → web search
 - image/illustration/poster generation prompt → image
 - deep research / 심층 리서치 prompt → deep research
-- GitHub/repo/PR/branch prompt → GitHub plugin
-- Supabase/RLS/migration prompt → Supabase plugin
+- `--plugin <name>` remains explicit-only because connector/plugin choices may open account-linking or authorization UI.
 
-Live-verified 2026-06-15 on Korean ChatGPT UI: `파일 추가 및 기타`, `이미지 만들기`, `심층 리서치`, `웹 검색`, `더 보기`, and plugins including `GitHub`, `Supabase`, `Vercel`, `Gmail`, `Google 드라이브`, `Google Calendar`.
+Live-verified 2026-06-15 on Korean/English ChatGPT UI: `파일 추가 및 기타` / `Add files and more`, `이미지 만들기` / `Create image`, `심층 리서치` / `Deep research`, `웹 검색` / `Web search`, `더 보기` / `More`, the Deep research `Apps` and `Sites` submenus, and connector entries including `GitHub`, `Gmail`, `Google 드라이브`, and `Google Calendar`. Connector/plugin entries are explicit-only.
 
 ## Generated Images
 

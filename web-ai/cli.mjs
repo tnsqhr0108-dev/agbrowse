@@ -138,11 +138,11 @@ Attachments and context:
                                     google-drive, google-calendar, supabase,
                                     vercel, figma, canva, context7.
   --web-search                      Shortcut for --tool web-search.
-  --auto-tools                      Heuristically select ChatGPT tools/plugins
+  --auto-tools                      Heuristically select non-auth ChatGPT tools
                                     from the prompt (current/news → web search,
-                                    image intent → image, repo/GitHub → GitHub).
-                                    Composer menus are untouched unless one of
-                                    these tool/plugin flags requests selection.
+                                    image intent → image, deep research intent
+                                    → deep research). Plugins/connectors require
+                                    explicit --plugin because they may open auth.
   --output-image <path>             Save generated ChatGPT images. If several
                                     images are returned, siblings are written
                                     as out.png, out-2.png, out-3.png.

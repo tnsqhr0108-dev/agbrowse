@@ -88,14 +88,6 @@ export function resolveChatGptComposerToolRequests(input = {}) {
             tools.add('web-search');
             reasons.push('auto:web-search-intent');
         }
-        if (looksLikeGitHub(prompt)) {
-            plugins.add('github');
-            reasons.push('auto:github-intent');
-        }
-        if (looksLikeSupabase(prompt)) {
-            plugins.add('supabase');
-            reasons.push('auto:supabase-intent');
-        }
     }
     return { tools: [...tools], plugins: [...plugins], reasons };
 }
@@ -312,14 +304,4 @@ function looksLikeDeepResearch(prompt) {
 /** @param {string} prompt */
 function looksLikeWebSearch(prompt) {
     return /현재|최신|오늘|요즘|뉴스|가격|시세|공식|검색|웹\s*검색|find current|latest|today|news|price|official status|cite sources/i.test(prompt);
-}
-
-/** @param {string} prompt */
-function looksLikeGitHub(prompt) {
-    return /github|깃허브|repo|repository|레포|pull request|pr\b|issue\b|branch\b/i.test(prompt);
-}
-
-/** @param {string} prompt */
-function looksLikeSupabase(prompt) {
-    return /supabase|수파베이스|rls\b|edge function|migration|postgres/i.test(prompt);
 }
