@@ -33,6 +33,8 @@ const DEEP_RESEARCH_SELECTORS = {
     confirmButton: [
         'button[data-testid="deep-research-confirm"]',
         'button:has-text("Start research")',
+        'button:has-text("Start")',
+        'button:has-text("시작")',
         'button:has-text("Confirm")',
     ],
     blockIndicator: [
@@ -127,7 +129,7 @@ async function activateDeepResearchMode(page) {
  * @param {number} timeoutMs
  * @returns {Promise<boolean>}
  */
-async function autoConfirmPlan(page, timeoutMs = 10_000) {
+export async function autoConfirmPlan(page, timeoutMs = 15_000) {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
         for (const sel of DEEP_RESEARCH_SELECTORS.confirmButton) {
@@ -137,7 +139,7 @@ async function autoConfirmPlan(page, timeoutMs = 10_000) {
                 return true;
             }
         }
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(250);
     }
     return false;
 }

@@ -899,9 +899,10 @@ agbrowse web-ai query \
 ```
 
 Deep Research saves a report artifact when available, records
-`researchMode: "deep"` in the session, and skips auto archive. Account blocks
-or missing provider UI surfaces are reported explicitly; do not treat this as a
-ready cross-provider capability.
+`researchMode: "deep"` in the session, skips auto archive, and auto-confirms
+ChatGPT's post-submit Deep Research plan card when its time-limited `Start`
+button appears. Account blocks or missing provider UI surfaces are reported
+explicitly; do not treat this as a ready cross-provider capability.
 
 ## ChatGPT Project Sources
 

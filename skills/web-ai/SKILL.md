@@ -488,7 +488,7 @@ Use `--auto-tools` when you want agbrowse to infer obvious tools from the prompt
 - deep research / 심층 리서치 prompt → deep research
 - `--plugin <name>` remains explicit-only because connector/plugin choices may open account-linking or authorization UI.
 
-Live-verified 2026-06-15 on Korean/English ChatGPT UI: `파일 추가 및 기타` / `Add files and more`, `이미지 만들기` / `Create image`, `심층 리서치` / `Deep research`, `웹 검색` / `Web search`, `더 보기` / `More`, the Deep research `Apps` and `Sites` submenus, and connector entries including `GitHub`, `Gmail`, `Google 드라이브`, and `Google Calendar`. Connector/plugin entries are explicit-only.
+Live-verified 2026-06-15 on Korean/English ChatGPT UI: `파일 추가 및 기타` / `Add files and more`, `이미지 만들기` / `Create image`, `심층 리서치` / `Deep research`, `웹 검색` / `Web search`, `더 보기` / `More`, the Deep research `Apps` and `Sites` submenus, the post-submit Deep Research plan card with `Start`, and connector entries including `GitHub`, `Gmail`, `Google 드라이브`, and `Google Calendar`. Connector/plugin entries are explicit-only.
 
 ## Generated Images
 
@@ -558,8 +558,9 @@ agbrowse web-ai query \
   --prompt "Research the current official status and cite sources."
 ```
 
-Deep Research saves a report artifact when available and skips auto archive.
-Do not claim cross-provider Deep Research support.
+Deep Research saves a report artifact when available, skips auto archive, and
+auto-confirms ChatGPT's post-submit plan card when its time-limited `Start` /
+`시작` button appears. Do not claim cross-provider Deep Research support.
 
 ## ChatGPT Project Sources
 

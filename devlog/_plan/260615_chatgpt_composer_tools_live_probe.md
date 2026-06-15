@@ -173,6 +173,31 @@ Observed implication:
 - App/plugin connector choices can leave the composer and enter authorization/account-linking UX.
 - These choices must remain explicit-only and should not be part of `--auto-tools` unless the caller requested that connector and accepts auth-flow behavior.
 
+## Deep research post-submit plan card
+
+A later live submit smoke on 2026-06-15 confirmed an additional Deep Research UI after the prompt is submitted.
+
+Prompt used:
+
+`AGBROWSE_DEEP_RESEARCH_POST_SUBMIT_UI_TEST. Briefly research what RFC 2119 keyword MUST means; keep the final answer short.`
+
+Observed within the first post-submit window:
+
+- ChatGPT created a conversation URL and rendered the user message.
+- A Deep Research plan card appeared above the composer.
+- Card title: `Define RFC 2119 MUST`
+- Plan rows:
+  - `Open RFC 2119 official document from IETF website.`
+  - `Extract the exact definition and examples of MUST from RFC 2119.`
+  - `Cross-check definition with RFC 8174 updates for keyword interpretation.`
+  - `Summarize the meaning concisely for non-expert readers.`
+- Buttons:
+  - `Edit`
+  - `Cancel`
+  - `Start` with a countdown indicator (`5` observed)
+- This card is time-sensitive; the `Start` choice appears in the first ~15 seconds. The pre-existing code only looked for `Start research` / `Confirm`, so it could miss the current `Start` button.
+- AX/browser observe and ordinary document query did not reliably expose this card, but the screenshot confirmed the visible UI. The repository runtime uses Playwright selectors, so the practical selector fix is to include `button:has-text("Start")` and Korean `button:has-text("시작")`.
+
 ## Current code judgment
 
 Keep these constraints for PR #78 follow-up work:
@@ -191,6 +216,7 @@ Keep these constraints for PR #78 follow-up work:
 - Kept explicit `--plugin <name>` support unchanged.
 - Updated CLI help and bundled `skills/web-ai/SKILL.md` so `--auto-tools` is described as non-auth tool inference only.
 - Added/updated unit expectations that GitHub/Supabase prompts do not auto-select plugins.
+- Added post-submit Deep Research auto-confirm labels for `Start` / `시작`, widened the confirm window to 15 seconds, and reduced polling to 250ms.
 
 ## Verification already run for the branch before this live probe
 
