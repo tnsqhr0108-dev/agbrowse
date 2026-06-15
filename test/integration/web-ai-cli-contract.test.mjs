@@ -9,6 +9,9 @@ describe('web-ai CLI contract', () => {
         const result = await execBrowser(['web-ai', '--help']);
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('Usage:');
+        expect(result.stdout).toContain('Agent skill setup:');
+        expect(result.stdout).toContain('agbrowse skills get web-ai');
+        expect(result.stdout).toContain('agbrowse skills install --target <dir>');
         expect(result.stdout).toContain('Provider:');
         expect(result.stdout).toContain('--context-from-files');
         expect(result.stdout).toContain('--effort <alias>');
@@ -22,6 +25,8 @@ describe('web-ai CLI contract', () => {
         expect(result.stdout).toContain('--output-image <path>');
         expect(result.stdout).toContain('--follow-up <text>');
         expect(result.stdout).toContain('--research deep');
+        expect(result.stdout).toContain("Keeps Deep Research's default source state");
+        expect(result.stdout).toContain('Apps/Sites/connectors are not configured');
         expect(result.stdout).toContain('--max-upload-file-size <bytes>');
         expect(result.stdout).toContain('--max-context-file-size <bytes>');
         expect(result.stdout).toContain('out.png, out-2.png, out-3.png');

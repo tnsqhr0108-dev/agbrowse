@@ -480,6 +480,11 @@ Supported `--plugin` aliases under `더 보기`:
 - `supabase`, `vercel`, `figma`, `canva`, `context7`, `openai-platform`
 
 Composer menus are not opened on the default send/query path. They are touched only when `--tool`, `--plugin`, `--web-search`, `--auto-tools`, `--output-image`, or `--research deep` requests a composer selection.
+For Deep Research, `--tool deep-research` / `--research deep` selects the Deep
+Research mode and preserves ChatGPT's default source state (`Sites, search the
+web, no sites saved`). Do not configure the Deep Research `Apps`, `Sites`,
+`Specific sites`, `Manage sites`, or connector subflows unless a future explicit
+CLI flag requests that exact internal setting.
 
 Use `--auto-tools` when you want agbrowse to infer obvious tools from the prompt:
 
@@ -560,8 +565,9 @@ agbrowse web-ai query \
 
 Deep Research saves a report artifact when available, skips auto archive, and
 auto-confirms ChatGPT's iframe-rendered post-submit plan card when its
-time-limited `Start` / `시작` button appears. Do not claim cross-provider Deep
-Research support.
+time-limited `Start` / `시작` button appears. It does not configure the internal
+Apps/Sites/source settings beyond ChatGPT's default `Sites, search the web`
+state. Do not claim cross-provider Deep Research support.
 
 ## ChatGPT Project Sources
 

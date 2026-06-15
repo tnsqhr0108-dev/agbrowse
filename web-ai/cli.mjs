@@ -57,6 +57,14 @@ export const WEB_AI_USAGE = `
 Usage:
   agbrowse web-ai <command> --vendor <chatgpt|gemini|grok> [options]
 
+Agent skill setup:
+  agbrowse skills get web-ai
+                      Print the bundled web-ai SKILL.md; load it before
+                      agent-driven provider automation.
+  agbrowse skills install --target <dir>
+                      Install browser/web-ai skills into an explicit agent
+                      skill root. Skills are never installed implicitly.
+
 Commands:
   render              Render the prompt envelope without opening a browser
   status              Check active provider tab state
@@ -153,6 +161,9 @@ Attachments and context:
                                     compatible with --research deep.
   --research deep                   Experimental ChatGPT Deep Research mode.
                                     ChatGPT only; not compatible with follow-ups.
+                                    Keeps Deep Research's default source state;
+                                    Apps/Sites/connectors are not configured
+                                    unless a future explicit flag requests them.
   --max-upload-file-size <bytes>    Per-file live upload cap for --file.
   --max-context-file-size <bytes>   Preferred name for per-file context budget.
   --context-from-files <glob|path>  Add files to a context package; repeatable

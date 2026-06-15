@@ -23,6 +23,7 @@ describe.sequential('CLI help', () => {
         expect(result.stdout).toContain('Start here:');
         expect(result.stdout).toContain('Agent decision loop:');
         expect(result.stdout).toContain('skills get core --full');
+        expect(result.stdout).toContain('skills get web-ai');
         expect(result.stdout).toContain('skills path [skill]');
         expect(result.stdout).toContain('Common flags:');
         expect(result.stdout).toContain('Configuration model:');
@@ -37,6 +38,8 @@ describe.sequential('CLI help', () => {
         expect(result.stdout).toContain('leaseClosedTabs');
         expect(result.stdout).toContain('--effort <alias>');
         expect(result.stdout).toContain('AGBROWSE_WEB_AI_AUTO_START=0');
+        expect(result.stdout).toContain('Before agent-run Web AI automation:');
+        expect(result.stdout).toContain('skills install --target <agent-skill-root>');
         expect(result.stdout).toContain('AGBROWSE_MAX_TABS');
         expect(result.stdout).toContain('--reuse-tab');
         expect(result.stdout).toContain('runway selectors');

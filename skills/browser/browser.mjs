@@ -3151,6 +3151,7 @@ try {
   Start here:
     npm install -g agbrowse
     agbrowse skills get core --full
+    agbrowse skills get web-ai
     agbrowse skills install --target ~/.cli-jaw-3460/skills
     agbrowse start
     agbrowse navigate "https://example.com"
@@ -3301,6 +3302,11 @@ try {
      evaluate <js>          Execute JavaScript only with --unsafe-allow evaluate
 
 	  Web AI:
+      Before agent-run Web AI automation:
+        agbrowse skills get web-ai
+        agbrowse skills install --target <agent-skill-root>
+      Load/install the bundled web-ai skill; help shows flags, the skill gives
+      workflow policy. Skills are never installed implicitly.
 	    web-ai render          Render the provider prompt without a browser
 	    web-ai status          Check active provider tab state
 	    web-ai send            Send a prompt; returns a sessionId for later resume

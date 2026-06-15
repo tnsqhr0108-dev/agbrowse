@@ -222,6 +222,22 @@ Keep these constraints for PR #78 follow-up work:
 - Added/updated unit expectations that GitHub/Supabase prompts do not auto-select plugins.
 - Added post-submit Deep Research auto-confirm labels for `Start` / `시작`, then corrected the live behavior to scan Deep Research app iframes and wait up to 70 seconds for the observed ~60 second Start card.
 
+### Follow-up: help and skill alignment
+
+- User decision after the live probe: do not implement internal Deep Research
+  Apps/Sites/specific-sites configuration. Keep only the top-level Deep
+  Research selection and post-submit Start-card handling.
+- `agbrowse web-ai --help` should direct agents to load/install the bundled
+  `web-ai` skill, because help enumerates flags while the skill carries the
+  workflow policy and safety boundaries.
+- Top-level `agbrowse --help` should also mention `agbrowse skills get web-ai`
+  and `agbrowse skills install --target <agent-skill-root>` near the Web AI
+  section so agents do not discover provider flags without the matching skill.
+- Bundled `skills/web-ai/SKILL.md` should explicitly say that Deep Research
+  preserves ChatGPT's default source state (`Sites, search the web, no sites
+  saved`) and must not configure Apps/Sites/connectors unless a future explicit
+  flag requests that exact internal setting.
+
 ## Verification already run for the branch before this live probe
 
 - `node --check web-ai/chatgpt-tools.mjs`
