@@ -100,7 +100,7 @@ Provider:
   --vendor <name>     chatgpt | gemini | grok (default: chatgpt)
   --url <url>         Navigate or verify the provider URL before mutation
   --model <alias>     Provider model alias; aliases below
-                        ChatGPT: instant, thinking, pro  (default for chatgpt: pro)
+                        ChatGPT: instant, thinking, pro
                         Gemini  models: flash-lite, flash, pro
                         Gemini  tool:   deepthink
                         Grok:   auto, fast, expert, thinking, heavy
@@ -1490,21 +1490,15 @@ export async function ensureHeadedBrowserForWebAi(deps = {}, command, argv = [])
 }
 
 /**
- * Apply implicit defaults so the most common workflows do not require flags.
- * Currently: when targeting ChatGPT without --model, we pre-select Pro via DOM.
- * The reasoning-effort menu is intentionally NOT defaulted — it remains untouched
- * unless the user explicitly passes --effort/--reasoning-effort.
+ * Keep provider defaults non-mutating: send/query must not touch model or
+ * effort selectors unless the caller passes --model or --effort explicitly.
  *
  * @param {any} values
  * @param {string} command
  */
 function applyVendorDefaults(values, command) {
-    const commandsThatSelectModel = new Set(['send', 'query', 'render', 'context-render', 'context-dry-run']);
-    if (!commandsThatSelectModel.has(command)) return;
-    const vendor = values.vendor || 'chatgpt';
-    if (vendor === 'chatgpt' && !values.model) {
-        values.model = 'pro';
-    }
+    void values;
+    void command;
 }
 
 /**

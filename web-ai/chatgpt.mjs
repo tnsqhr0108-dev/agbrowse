@@ -176,7 +176,7 @@ export async function sendWebAi(deps, input = {}) {
             : renderQuestionEnvelope(envelope)
         : renderQuestionEnvelope(envelope);
     const selectedModel = await selectChatGptModel(page, input.model, { effort: input.reasoningEffort });
-    const selectedTools = await selectChatGptComposerTools(page, input);
+
     await waitForStableAssistantCount(page);
     const assistantCount = await countAssistantMessages(page);
     const baseline = saveBaseline({
@@ -221,6 +221,7 @@ export async function sendWebAi(deps, input = {}) {
     };
     const readinessAdapter = createChatGptEditorAdapter(page, editorOptions);
     await readinessAdapter.waitForReady();
+    const selectedTools = await selectChatGptComposerTools(page, input);
     const traceCtx = createTraceContext(session.sessionId);
     let tracePersisted = false;
     try {

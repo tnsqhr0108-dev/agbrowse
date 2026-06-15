@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { resolveChatGptComposerToolRequests, selectChatGptComposerTools } from '../../web-ai/chatgpt-tools.mjs';
+
+const chatgptSrc = readFileSync(join(process.cwd(), 'web-ai', 'chatgpt.mjs'), 'utf8');
 
 describe('web-ai ChatGPT composer tool resolver', () => {
     it('does not touch ChatGPT composer menus without explicit tool requests', async () => {
@@ -12,6 +16,14 @@ describe('web-ai ChatGPT composer tool resolver', () => {
 
         await expect(selectChatGptComposerTools(page)).resolves.toBeNull();
         await expect(selectChatGptComposerTools(page, { prompt: '최신 뉴스를 요약해줘' })).resolves.toBeNull();
+    });
+
+    it('selects composer tools only after the composer is ready', () => {
+        const readyIndex = chatgptSrc.indexOf('await readinessAdapter.waitForReady();');
+        const toolsIndex = chatgptSrc.indexOf('const selectedTools = await selectChatGptComposerTools(page, input);');
+
+        expect(readyIndex).toBeGreaterThan(-1);
+        expect(toolsIndex).toBeGreaterThan(readyIndex);
     });
 
     it('normalizes explicit tool and plugin aliases', () => {
