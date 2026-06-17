@@ -8,6 +8,7 @@ Branch: `dev-vision-upgrade`
 
 - `/Users/jun/Developer/new/700_projects/agbrowse`: `3392adc feat: harden vision coordinate fallback`
 - `/Users/jun/Developer/new/700_projects/agbrowse`: `2b03e74 fix: wire vision candidate reconciliation`
+- `/Users/jun/Developer/new/700_projects/agbrowse`: `f7e8cd0 refactor: split vision candidate helpers`
 
 ## Implemented Scope
 
@@ -21,6 +22,7 @@ Branch: `dev-vision-upgrade`
 - Added `url` and `targetId` to `screenshot --json` so freshness checks use the same basis as `observe-bundle`.
 - Updated docs for ref-first, coordinate-last browser control.
 - Added focused fixtures and unit tests.
+- Split vision candidate parsing/validation helpers into `skills/vision-click/vision-candidate.mjs` so touched vision-click modules remain under 500 lines.
 
 ## Commands Run
 
@@ -74,6 +76,16 @@ Result:
 
 ```text
 PASS
+```
+
+```bash
+wc -l skills/vision-click/vision-core.mjs skills/vision-click/vision-candidate.mjs skills/vision-click/vision-click.mjs web-ai/candidate-reconcile.mjs
+```
+
+Result:
+
+```text
+PASS: touched vision-click modules are <= 500 lines (`vision-core.mjs` 341, `vision-candidate.mjs` 249, `vision-click.mjs` 434, `candidate-reconcile.mjs` 74)
 ```
 
 ## Real Browser Smoke
