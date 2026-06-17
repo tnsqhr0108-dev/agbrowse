@@ -26,6 +26,7 @@ Modify only this repository on branch `dev-vision-upgrade`.
 
 Primary files:
 
+- `skills/browser/browser.mjs`
 - `skills/vision-click/vision-core.mjs`
 - `skills/vision-click/vision-click.mjs`
 - `skills/vision-click/SKILL.md`
@@ -112,6 +113,12 @@ Add:
 - `web-ai/candidate-reconcile.mjs`
 - `test/unit/candidate-reconcile.test.mjs`
 
+Modify:
+
+- `skills/browser/browser.mjs`
+- `skills/vision-click/vision-click.mjs`
+- `web-ai/observation-bundle.mjs`
+
 Function:
 
 - `reconcileVisionCandidate({ candidate, bundle, maxDistance = 32 })`
@@ -123,16 +130,18 @@ Behavior:
 - if multiple nearby refs compete, return ambiguous failure
 - otherwise return coordinate fallback with reason
 
-Modify:
-
-- `web-ai/observation-bundle.mjs`
-
-Changes:
+Observation-bundle changes:
 
 - add optional `observationId`
 - add optional `targetId`
 - keep existing output compatible
 - include `basis` summary with `url`, `viewport`, `dpr`, `capturedAt`
+
+Wiring requirement:
+
+- `browser.mjs` must expose or reuse the reconciliation path wherever an observation bundle with boxes is available.
+- `vision-click.mjs` must preserve candidate evidence and use `reconcileVisionCandidate` when a bundle is supplied or produced by the command path.
+- If no bundle is available, `vision-click.mjs` must explicitly record `reconciliation: "unavailable"` and continue only through the stricter bbox/confidence/verification gate.
 
 ### 4. Fixtures and Tests
 
@@ -147,6 +156,7 @@ Modify:
 
 - `test/unit/vision-core.test.mjs`
 - `test/unit/g06-observation-bundle.test.mjs`
+- `tsconfig.checkjs.json`
 
 Coverage:
 
@@ -158,6 +168,11 @@ Coverage:
 - ref candidate beats coordinate candidate
 - ambiguous nearby refs fail
 - observation basis carries URL/target/viewport/DPR evidence
+
+Typecheck coverage:
+
+- add `web-ai/observation-bundle.mjs` and `web-ai/candidate-reconcile.mjs` to `tsconfig.checkjs.json`, or replace the checkjs gate with a documented equivalent that actually covers those files.
+- Preferred path: update `tsconfig.checkjs.json` so `npm run typecheck:checkjs` validates the new browser-side contract module.
 
 ### 5. Docs
 
@@ -193,7 +208,7 @@ Run from `/Users/jun/Developer/new/700_projects/agbrowse`:
 
 ```bash
 git branch --show-current
-npm run test:unit -- test/unit/vision-core.test.mjs test/unit/candidate-reconcile.test.mjs test/unit/g06-observation-bundle.test.mjs
+npx vitest run test/unit/vision-core.test.mjs test/unit/candidate-reconcile.test.mjs test/unit/g06-observation-bundle.test.mjs
 npm run docs:drift
 npm run typecheck:checkjs
 git diff --check
@@ -208,4 +223,3 @@ feat: harden vision coordinate fallback
 ```
 
 Do not push.
-
