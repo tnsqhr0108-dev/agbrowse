@@ -66,7 +66,7 @@ jobs:
           set -euo pipefail
 
           npx --yes playwright-core --version
-          timeout 180s npx --yes playwright-core install chromium
+          timeout 420s npx --yes playwright-core install --only-shell chromium
 
       - name: Verify release ref and package version
         run: |
