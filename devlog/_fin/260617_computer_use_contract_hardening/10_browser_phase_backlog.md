@@ -104,7 +104,7 @@ Modify:
 
 Add:
 
-- `/Users/jun/Developer/new/700_projects/agbrowse/devlog/_plan/260617_computer_use_contract_hardening/20_verification_report.md`
+- `/Users/jun/Developer/new/700_projects/agbrowse/devlog/_fin/260617_computer_use_contract_hardening/20_verification_report.md`
 
 ### Smoke Cases
 
