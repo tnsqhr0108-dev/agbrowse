@@ -25,9 +25,9 @@ Hardcoded timeout table (no history-learning). instant ≈ 120s, thinking/standa
 ## Pressure-test (2026-06-20) — DOWNSCOPE ~80%
 `--timeout` escape hatch + action-button done-signal already exist. Real scope = 4-entry tier-default map + export `pro=3600` + 1 doc line + 1 test. Claims 2/3/4 dropped. See `20_pressure_test_verdict.md`.
 
-## Status
+## Status — CLOSED 2026-06-20 (implemented → _fin)
 - [x] Interview/requirements gathering
 - [x] Plan (`10_solution_plan.md`) — superseded for scope
 - [x] Pressure-test (`20_pressure_test_verdict.md`)
-- [ ] Implementation (MVV only, if approved)
-- [ ] Verification
+- [x] Implementation (MVV): commit `1d86985` — `TIER_DEFAULT_TIMEOUT_SEC`/`resolveTimeoutDefaultSec` in `session.mjs`, applied at `cli.mjs` input builder, `--help` updated
+- [x] Verification: vitest 837/837 unit + 14/14 affected + 6/6 integration, `npm run gate:all` 16/16
