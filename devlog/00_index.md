@@ -24,16 +24,18 @@ must be treated as historical  do not edit them after release.evidence
 | Topic | Folder | Status |
 | --- | --- | --- |
 | Post-MVP competitive gap closeout | `_plan/260506_post_mvp_gap_closeout/` | Deferred backlog; not fully shipped. |
-| Oracle ZIP browser bundle proposal | `_plan/260513_oracle_zip_bundle_proposal.md` | External upstream proposal draft; no local agbrowse implementation authority. |
+| Oracle ZIP browser bundle proposal | `_plan/260513_oracle_zip_bundle_proposal/` | External upstream proposal draft; no local agbrowse implementation authority. |
 | Adaptive Fetch v2 hardening | `_plan/260515_adaptive_fetch_v2_hardening/` | Follow-up planning after v2; not closed. |
 | Provider expansion | `_plan/260519_provider_expansion/` | Deferred provider roadmap for Claude, Perplexity, NotebookLM. |
+| Codebase audit backlog | `_plan/260603_codebase_audit/` | Historical audit + issue tracker; keep grouped until separately closed. |
 | K-BrowseComp search gap analysis | `_plan/260608_kbrowsecomp_search_gap/` | Research/spec complete; implementation deferred. |
-| Oracle stability gap analysis | `_plan/260608_oracle_stability_gap/` | Partial follow-up backlog; not all P0-P3 items are closed. |
-| Web-AI tab parallel stability | `_plan/260619_00_webai_stability_index.md`, `_plan/260619_tab_parallel_stability/` | Active: timeout/watch/skill-envelope closed; tab MVV remains open. |
+| Oracle stability gap analysis | `_plan/260608_oracle_stability_gap/` | Partial follow-up backlog; includes 2026-06-20 Oracle 0.15 delta follow-up. |
+| Web-AI tab parallel stability | `_plan/260619_webai_stability/00_index.md`, `_plan/260619_tab_parallel_stability/` | Active: timeout/watch/skill-envelope closed; tab MVV remains open. |
+| Legacy MVP phase plans | `_plan/legacy_mvp_phase_plans/` | Pre-closeout phase 8.1/9 planning references; grouped for audit hygiene. |
 | Strict migration | `_plan/strict-migration/` | Deferred migration planning and arbitration notes. |
 
-Other older planning files under `_plan/` remain until they receive a separate
-closeout audit.
+Other grouped planning folders under `_plan/` remain until they receive a
+separate closeout audit.
 
 ## Recent `_fin/` closeouts
 
