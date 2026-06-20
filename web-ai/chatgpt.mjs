@@ -351,8 +351,10 @@ export async function pollWebAi(deps, input = {}) {
         : null;
 
     const deadline = Date.now() + timeout * 1000;
+    const startedAt = Date.now();
     let stableText = '';
     let stableSince = 0;
+    let lastHeartbeat = 0;
     while (Date.now() <= deadline) {
         try {
         if (session?.targetId) {
@@ -384,6 +386,12 @@ export async function pollWebAi(deps, input = {}) {
         const newAnswers = answers.slice(baseline.assistantCount).filter(isFinalAnswer);
         const latest = newAnswers.at(-1) || '';
         const streaming = await isStreaming(page);
+        const now = Date.now();
+        if ((streaming || latest) && now - lastHeartbeat >= 30_000) {
+            const elapsed = Math.round((now - startedAt) / 1000);
+            process.stderr.write(`[poll] ${elapsed}s — ${streaming ? 'streaming' : 'stabilizing'}...\n`);
+            lastHeartbeat = now;
+        }
         const finished = !streaming && latest ? await isResponseFinished(page) : false;
         if (latest && !streaming) {
             if (latest === stableText) {
