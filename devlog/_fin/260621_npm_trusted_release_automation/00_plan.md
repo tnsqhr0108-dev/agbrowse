@@ -245,3 +245,30 @@ The workflow must create git tags only after a successful real npm publish:
 4. Create missing `v$RELEASE_VERSION` on `$GITHUB_SHA`.
 5. Push `refs/tags/v$RELEASE_VERSION`.
 6. Create or update GitHub Release for that tag.
+
+## Final Closeout Evidence
+
+Status: shipped.
+
+Implementation commits:
+
+- `c701b7a` converted release automation to GitHub Actions Trusted Publishing.
+- `93504b5` bumped the package to `0.1.15`.
+- `3eadd0d` removed the blocking Playwright browser install from release CI by
+  injecting runner Chrome into browser smoke tests.
+
+Verification evidence:
+
+- Local gates passed: `npm run typecheck`, `npm run test:release-gates`,
+  `npm run gate:all`, `actionlint .github/workflows/release.yml`,
+  `git diff --check`, and `npm pack --dry-run`.
+- GitHub Actions dry-run release succeeded:
+  <https://github.com/lidge-jun/agbrowse/actions/runs/27892063964>.
+- GitHub Actions real publish succeeded:
+  <https://github.com/lidge-jun/agbrowse/actions/runs/27892124575>.
+- npm registry verifies `agbrowse@0.1.15`.
+- npm dist-tags verify `latest: 0.1.15`.
+- GitHub Release verifies `v0.1.15` at
+  <https://github.com/lidge-jun/agbrowse/releases/tag/v0.1.15>.
+- Remote tag verifies `refs/tags/v0.1.15` points at
+  `3eadd0df6261aacbdf89d52b63a095fea017605a`.

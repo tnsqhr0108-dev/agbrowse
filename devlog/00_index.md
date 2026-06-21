@@ -32,7 +32,6 @@ must be treated as historical  do not edit them after release.evidence
 | Oracle stability gap analysis | `_plan/260608_oracle_stability_gap/` | Partial follow-up backlog; includes 2026-06-20 Oracle 0.15 delta and 31/32 PABCD follow-up plans. |
 | Legacy MVP phase plans | `_plan/legacy_mvp_phase_plans/` | Pre-closeout phase 8.1/9 planning references; grouped for audit hygiene. |
 | Strict migration | `_plan/strict-migration/` | Deferred migration planning and arbitration notes. |
-| npm Trusted release automation | `_plan/260621_npm_trusted_release_automation/` | Active PABCD: convert release scripts/workflow to GitHub Actions OIDC-only publish, then ship the next npm version. |
 
 Other grouped planning folders under `_plan/` remain until they receive a
 separate closeout audit.
@@ -61,6 +60,7 @@ separate closeout audit.
 | Web-AI stability and concurrency closeout | `_fin/260619_webai_stability/`, `_fin/260619_tab_parallel_stability/` | Timeout/watch/skill-envelope closed earlier; tab MVV closed by active lease cap + PID reaper + record-before-bind. |
 | MCP wait response recovery | `_fin/260621_mcp_wait_response_recovery/` | GitHub #79 PABCD: session-bound MCP wait/resume recovery and monotonic timeout handling. |
 | Tab stability MVV closeout | `_fin/260621_tab_stability_mvv_closeout/` | Final branch closeout plan for tab MVV, verification, push, and PR body `Closes #79`. |
+| npm Trusted release automation | `_fin/260621_npm_trusted_release_automation/` | GitHub Actions OIDC Trusted Publishing shipped; `agbrowse@0.1.15` published and tagged by release run `27892124575`. |
 
 ## `_fin/mvp/` topics
 
