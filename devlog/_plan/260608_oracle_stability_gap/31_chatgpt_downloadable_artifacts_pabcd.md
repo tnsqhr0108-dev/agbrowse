@@ -1,7 +1,7 @@
 # 31 — ChatGPT Downloadable Artifacts PABCD
 
 Date: 2026-06-20
-Status: PABCD plan
+Status: PABCD plan; 2026-06-24 current-code re-audit complete
 Parent: [30_oracle_0_15_delta_followup.md](30_oracle_0_15_delta_followup.md)
 
 ## Purpose
