@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
     normalizeChatGptFileDownloadUrl,
     normalizeChatGptSandboxUrl,
+    buildDownloadableFileDetectionExpression,
+    dedupeDownloadCandidates,
+    sanitizeDownloadFilename,
+    filenameFromContentDisposition,
+    resolveDownloadFilename,
+    readAssistantDownloadableFiles,
 } from '../../web-ai/chatgpt-files.mjs';
 
 describe('normalizeChatGptFileDownloadUrl — allowed endpoints', () => {
@@ -119,5 +125,147 @@ describe('normalizeChatGptSandboxUrl', () => {
         const direct = normalizeChatGptSandboxUrl('sandbox:/mnt/data/out.pdf');
         expect(viaMain).toBe(direct);
         expect(viaMain).not.toBeNull();
+    });
+});
+
+describe('buildDownloadableFileDetectionExpression', () => {
+    it('embeds the baseline assistant index', () => {
+        expect(buildDownloadableFileDetectionExpression(3)).toContain('MIN_ASSISTANT_INDEX = 3');
+    });
+
+    it('clamps NaN and negative baselines to 0', () => {
+        expect(buildDownloadableFileDetectionExpression(-5)).toContain('MIN_ASSISTANT_INDEX = 0');
+        // @ts-expect-error intentional wrong type
+        expect(buildDownloadableFileDetectionExpression('x')).toContain('MIN_ASSISTANT_INDEX = 0');
+        expect(buildDownloadableFileDetectionExpression()).toContain('MIN_ASSISTANT_INDEX = 0');
+    });
+
+    it('scans conversation/assistant turns and anchors', () => {
+        const expr = buildDownloadableFileDetectionExpression(0);
+        expect(expr).toContain('conversation-turn');
+        expect(expr).toContain('data-message-author-role');
+        expect(expr).toContain("querySelectorAll('a[href], a[download]')");
+    });
+});
+
+describe('dedupeDownloadCandidates', () => {
+    it('keeps one entry per normalized URL and preserves download/text', () => {
+        const out = dedupeDownloadCandidates([
+            { href: 'https://chatgpt.com/backend-api/files/file_a/download', download: 'a.csv', text: 'CSV' },
+            { href: '/backend-api/files/file_a/download', download: 'a.csv', text: 'dup' },
+            { href: 'https://chatgpt.com/backend-api/files/file_b/content', download: '', text: 'B' },
+        ]);
+        expect(out).toHaveLength(2);
+        expect(out[0]).toEqual({
+            sourceUrl: 'https://chatgpt.com/backend-api/files/file_a/download',
+            download: 'a.csv',
+            text: 'CSV',
+        });
+        expect(out[1].sourceUrl).toBe('https://chatgpt.com/backend-api/files/file_b/content');
+    });
+
+    it('drops disallowed hrefs', () => {
+        const out = dedupeDownloadCandidates([
+            { href: 'https://evil.com/backend-api/files/file_a/download' },
+            { href: 'blob:https://chatgpt.com/abc' },
+            { href: '#' },
+        ]);
+        expect(out).toEqual([]);
+    });
+
+    it('tolerates non-array input', () => {
+        // @ts-expect-error intentional wrong type
+        expect(dedupeDownloadCandidates(null)).toEqual([]);
+    });
+});
+
+describe('sanitizeDownloadFilename', () => {
+    it('strips directories and traversal', () => {
+        expect(sanitizeDownloadFilename('a/b/c.csv')).toBe('c.csv');
+        expect(sanitizeDownloadFilename('a\\b\\c.csv')).toBe('c.csv');
+        expect(sanitizeDownloadFilename('../../etc/passwd')).toBe('passwd');
+    });
+
+    it('removes leading dots, reserved chars, and null bytes', () => {
+        expect(sanitizeDownloadFilename('...hidden.txt')).toBe('hidden.txt');
+        expect(sanitizeDownloadFilename('a<b>c.txt')).toBe('a_b_c.txt');
+        expect(sanitizeDownloadFilename('x\0y.txt')).toBe('xy.txt');
+    });
+
+    it('returns empty for unusable names', () => {
+        expect(sanitizeDownloadFilename('')).toBe('');
+        expect(sanitizeDownloadFilename('.')).toBe('');
+        // @ts-expect-error intentional wrong type
+        expect(sanitizeDownloadFilename(null)).toBe('');
+    });
+});
+
+describe('filenameFromContentDisposition', () => {
+    it('parses a plain filename', () => {
+        expect(filenameFromContentDisposition('attachment; filename="report.pdf"')).toBe('report.pdf');
+    });
+
+    it('prefers RFC 5987 filename* and decodes it', () => {
+        expect(filenameFromContentDisposition("attachment; filename*=UTF-8''r%C3%A9sum%C3%A9.pdf")).toBe('résumé.pdf');
+    });
+
+    it('strips any path in the header filename', () => {
+        expect(filenameFromContentDisposition('attachment; filename="../../etc/passwd"')).toBe('passwd');
+    });
+
+    it('returns null when no filename present', () => {
+        expect(filenameFromContentDisposition('attachment')).toBeNull();
+        expect(filenameFromContentDisposition('')).toBeNull();
+        // @ts-expect-error intentional wrong type
+        expect(filenameFromContentDisposition(null)).toBeNull();
+    });
+});
+
+describe('resolveDownloadFilename', () => {
+    it('prefers Content-Disposition over everything', () => {
+        expect(resolveDownloadFilename({
+            contentDisposition: 'attachment; filename="cd.csv"',
+            downloadAttr: 'attr.csv',
+            sourceUrl: 'https://chatgpt.com/backend-api/sandbox/download?path=/mnt/data/url.csv',
+            index: 0,
+        })).toBe('cd.csv');
+    });
+
+    it('falls back to the DOM download attribute', () => {
+        expect(resolveDownloadFilename({ downloadAttr: 'attr.csv', sourceUrl: 'https://chatgpt.com/backend-api/files/file_a/download' })).toBe('attr.csv');
+    });
+
+    it('falls back to the sandbox path basename', () => {
+        expect(resolveDownloadFilename({ sourceUrl: 'https://chatgpt.com/backend-api/sandbox/download?path=/mnt/data/data.zip' })).toBe('data.zip');
+    });
+
+    it('uses a generated name when nothing else is available', () => {
+        expect(resolveDownloadFilename({ sourceUrl: 'https://chatgpt.com/backend-api/files/file_a/download', index: 2 })).toBe('chatgpt-file-3');
+    });
+});
+
+describe('readAssistantDownloadableFiles', () => {
+    const fakeCdp = (value) => ({ send: async () => ({ result: { value } }) });
+
+    it('normalizes + dedupes returnByValue array results', async () => {
+        const cdp = fakeCdp([
+            { href: 'https://chatgpt.com/backend-api/files/file_a/download', download: 'a.csv', text: 'A' },
+            { href: '/backend-api/files/file_a/download', download: 'a.csv', text: 'dup' },
+            { href: 'https://evil.com/x', download: '', text: 'bad' },
+        ]);
+        const out = await readAssistantDownloadableFiles(cdp, { baselineAssistantCount: 0 });
+        expect(out).toHaveLength(1);
+        expect(out[0].sourceUrl).toBe('https://chatgpt.com/backend-api/files/file_a/download');
+    });
+
+    it('parses a JSON-string value', async () => {
+        const cdp = fakeCdp(JSON.stringify([{ href: 'https://chatgpt.com/backend-api/estuary/content?id=file_z' }]));
+        const out = await readAssistantDownloadableFiles(cdp);
+        expect(out).toHaveLength(1);
+    });
+
+    it('returns [] on malformed value', async () => {
+        expect(await readAssistantDownloadableFiles(fakeCdp('not json'))).toEqual([]);
+        expect(await readAssistantDownloadableFiles(fakeCdp(undefined))).toEqual([]);
     });
 });
