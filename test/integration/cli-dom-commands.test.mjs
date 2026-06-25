@@ -5,6 +5,13 @@ import { startFixtureServer } from '../helpers/fixture-server.mjs';
 import { createTempBrowserEnv, getAvailablePort } from '../helpers/temp-env.mjs';
 import { extractRef, extractRefs } from '../helpers/snapshot-utils.mjs';
 
+function expectCommandSuccess(result, label) {
+    expect(
+        result.code,
+        `${label} failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    ).toBe(0);
+}
+
 describe.sequential('browser DOM commands', () => {
     const temp = createTempBrowserEnv('agbrowse-dom-');
     const env = temp.env;
@@ -15,9 +22,14 @@ describe.sequential('browser DOM commands', () => {
     beforeAll(async () => {
         port = await getAvailablePort();
         server = await startFixtureServer();
-        await execBrowser(['start', '--headless', '--port', port], { env });
-        await execBrowser(['navigate', server.url], { env });
+        const start = await execBrowser(['start', '--headless', '--port', port], { env });
+        expectCommandSuccess(start, 'start fixture browser');
+        const navigate = await execBrowser(['navigate', server.url], { env });
+        expectCommandSuccess(navigate, 'navigate fixture page');
+        const ready = await execBrowser(['wait-for-selector', 'button[aria-label="Probe Button"]', '--timeout', '5000'], { env });
+        expectCommandSuccess(ready, 'wait for fixture controls');
         const snap = await execBrowser(['snapshot', '--interactive'], { env });
+        expectCommandSuccess(snap, 'snapshot fixture page');
         snapshot = snap.stdout;
     });
 
