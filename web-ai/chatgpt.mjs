@@ -24,6 +24,7 @@ import {
 import { WebAiError } from './errors.mjs';
 import { finalizeProviderTab } from './tab-finalizer.mjs';
 import { saveAssistantDownloadableFiles } from './chatgpt-files.mjs';
+import { observeAssistantResponse, recoverAssistantResponse } from './chatgpt-response-observer.mjs';
 import { recordActiveLease } from './tab-lease-store.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
@@ -357,6 +358,14 @@ export async function pollWebAi(deps, input = {}) {
     let stableText = '';
     let stableSince = 0;
     let lastHeartbeat = 0;
+    // 33 short-circuit: a MutationObserver wakes the loop as soon as the response
+    // settles (bounded so it self-disconnects). The poller stays AUTHORITATIVE —
+    // it still reads + verifies every tick; this only reduces wait latency, so the
+    // worst case (observer never fires / errors) is identical 500ms polling.
+    const observerBudgetMs = Math.min(Math.max(0, deadline - Date.now()), 120_000);
+    let observerWake = observerBudgetMs > 1_000
+        ? observeAssistantResponse(page, { baselineAssistantCount: baseline.assistantCount, timeoutMs: observerBudgetMs })
+        : null;
     while (Date.now() <= deadline) {
         try {
         if (session?.targetId) {
@@ -510,7 +519,16 @@ export async function pollWebAi(deps, input = {}) {
             stableText = '';
             stableSince = 0;
         }
-        await page.waitForTimeout(500);
+        if (observerWake) {
+            // Wake early when the observer signals settle; else cap at 500ms.
+            // Once it resolves, stop racing it (plain polling thereafter).
+            await Promise.race([
+                page.waitForTimeout(500),
+                observerWake.then(() => { observerWake = null; }, () => { observerWake = null; }),
+            ]);
+        } else {
+            await page.waitForTimeout(500);
+        }
         } catch (pollErr) {
             if (isPageDeathError(pollErr)) {
                 if (session) updateSession(session.sessionId, { status: 'crashed' });
@@ -524,6 +542,34 @@ export async function pollWebAi(deps, input = {}) {
                 };
             }
             throw pollErr;
+        }
+    }
+
+    // 33 3rd-tier recovery: the poller hit the deadline. Re-read the latest
+    // assistant turn once — recovers a final answer the loop missed (e.g. a late
+    // DOM settle). Session polls only (recovery persists to the session).
+    if (session) {
+        const recovered = await recoverAssistantResponse(page, {
+            baselineAssistantCount: baseline.assistantCount,
+            isFinalAnswer,
+        });
+        if (recovered?.text) {
+            const answerText = recovered.text;
+            if (!input.skipFinalize) {
+                await finalizeProviderTab(deps, { vendor, session: /** @type {any} */ (session), page, answerText, archiveFlag: input.archiveFlag });
+            }
+            return withAnswerArtifact({
+                ok: true,
+                vendor,
+                status: 'complete',
+                url: page.url(),
+                sessionId: session.sessionId,
+                answerText,
+                baseline,
+                usedFallbacks: ['recovery'],
+                warnings: ['response-recovered-after-timeout'],
+                responseStableMs: 0,
+            });
         }
     }
 
