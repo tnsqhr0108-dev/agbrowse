@@ -7,6 +7,7 @@
 import { pollWebAi } from './chatgpt.mjs';
 import { geminiPollWebAi } from './gemini-live.mjs';
 import { grokPollWebAi } from './grok-live.mjs';
+import { resumeDeepResearch } from './chatgpt-deep-research.mjs';
 import { WebAiError } from './errors.mjs';
 import { getSession, listSessions, pruneSessionsOlderThan, updateSession } from './session.mjs';
 import { resolveSessionPage, withSessionPage, openConversationInNewTab } from './tab-recovery.mjs';
@@ -93,6 +94,20 @@ export async function runSessionsCommand(args, values, deps, input) {
         if (!id) throw new WebAiError({ errorCode: 'internal.unhandled', stage: 'internal', retryHint: 'report', message: 'sessions resume <id> requires a sessionId (positional or --session)' });
         const session = getSession(id);
         if (!session) throw new WebAiError({ errorCode: 'internal.unhandled', stage: 'internal', retryHint: 'report', message: `no session record for ${id}`, evidence: { sessionId: id } });
+        // 35.2: a Deep Research session resumes via the DR capture path (no new
+        // prompt), not the generic poller.
+        if (session.researchMode === 'deep' && session.vendor === 'chatgpt') {
+            const drResult = await withSessionCommandLock(id, () => withSessionPage(deps, id, async ({ page, targetId, session: refreshed }) => {
+                const sessionDeps = {
+                    ...deps,
+                    getPage: async () => page,
+                    getTargetId: async () => targetId,
+                    getCdpSession: async () => /** @type {any} */ (page).context?.().newCDPSession?.(page),
+                };
+                return resumeDeepResearch(page, sessionDeps, { session: refreshed });
+            }));
+            return { ...drResult, status: drResult.status || 'resumed' };
+        }
         const pollInput = {
             ...input,
             vendor: session.vendor,

@@ -2,6 +2,7 @@
 import { updateSession } from './session.mjs';
 import { trySaveReport, appendArtifactRecord } from './session-artifacts.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
+import { chooseDeepResearchReportRead } from './chatgpt-deep-research-report.mjs';
 
 /**
  * @typedef {Object} DeepResearchResult
@@ -158,74 +159,9 @@ export async function autoConfirmPlan(page, timeoutMs = 70_000) {
     return false;
 }
 
-/* ── Report selection (32.1) ─────────────────────────────────────────── */
-
-// First-line markers of a planning card / progress / status update — NOT a
-// completed Deep Research report. Matched against the normalized first line.
-const DR_INCOMPLETE_MARKERS = [
-    /^(researching|reading|searching|browsing|analy[sz]ing|gathering)\b/i,
-    /^(thinking|working on it|in progress|please wait)\b/i,
-    /^starting (deep )?research/i,
-    /^i'?ll (research|look into|start|begin|investigate)/i,
-    /^let me (research|look|dig|investigate)/i,
-    /^here'?s my (research )?plan/i,
-    /^research plan\b/i,
-    /^(planning|plan:)\b/i,
-    /^researched \d+ sources?$/i,
-];
-
-const DR_MIN_REPORT_CHARS = 120;
-
-/**
- * Normalize Deep Research report text: CRLF→LF, collapse 3+ blank lines, trim.
- * @param {unknown} text
- * @returns {string}
- */
-export function normalizeDeepResearchReportText(text) {
-    if (typeof text !== 'string') return '';
-    return text.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
-/**
- * True if the text is an incomplete Deep Research artifact — a planning card,
- * progress/status line, or too short to be a final report. A completed report
- * is long-form and does not lead with a status marker.
- * @param {unknown} text
- * @returns {boolean}
- */
-export function isIncompleteDeepResearchText(text) {
-    const norm = normalizeDeepResearchReportText(text);
-    if (norm.length < DR_MIN_REPORT_CHARS) return true;
-    const firstLine = norm.split('\n', 1)[0].trim();
-    return DR_INCOMPLETE_MARKERS.some((re) => re.test(firstLine));
-}
-
-/**
- * Choose the authoritative Deep Research report between a page-scoped target
- * read and a legacy frame read. Prefers a COMPLETED target over a frame; falls
- * back to a completed frame; if neither is complete, returns the longer
- * non-empty read flagged `completed:false`, or `null` when both are empty.
- * @param {{ text?: string, sources?: string[], from?: string }|null} targetRead
- * @param {{ text?: string, sources?: string[], from?: string }|null} frameRead
- * @returns {{ text: string, sources: string[], from: string, completed: boolean }|null}
- */
-export function chooseDeepResearchReportRead(targetRead, frameRead) {
-    const shape = (read, fallbackFrom) => ({
-        text: normalizeDeepResearchReportText(read?.text),
-        sources: Array.isArray(read?.sources) ? read.sources : [],
-        from: read?.from || fallbackFrom,
-    });
-    const target = targetRead ? shape(targetRead, 'target') : null;
-    const frame = frameRead ? shape(frameRead, 'frame') : null;
-
-    if (target?.text && !isIncompleteDeepResearchText(target.text)) return { ...target, completed: true };
-    if (frame?.text && !isIncompleteDeepResearchText(frame.text)) return { ...frame, completed: true };
-
-    const candidates = [target, frame].filter((r) => r && r.text);
-    if (!candidates.length) return null;
-    const best = candidates.sort((a, b) => b.text.length - a.text.length)[0];
-    return { ...best, completed: false };
-}
+// Report-selection helpers (32.1) live in ./chatgpt-deep-research-report.mjs
+// (normalizeDeepResearchReportText / isIncompleteDeepResearchText /
+// chooseDeepResearchReportRead) — extracted to keep this module under 500 lines.
 
 /**
  * Extract the Deep Research report, scoped to the active page. Prefers a
@@ -449,6 +385,80 @@ export async function sendDeepResearch(page, deps, { prompt, session, timeoutMs 
         reportText: finalText,
         sources: finalReport?.sources || [],
         warnings: [...warnings, 'deep-research-timeout'],
+        status: 'timeout',
+    };
+}
+
+/**
+ * Resume an existing Deep Research session (35.2): re-bind to the saved page and
+ * collect the report WITHOUT sending a new prompt. Reuses the 32.1 capture core
+ * (extractResearchReport). Called by `sessions resume` when researchMode==='deep'.
+ * A resumed DR session implies research already ran, so there is no
+ * not-started check; incomplete text keeps waiting, only completed reports save.
+ * @param {any} page
+ * @param {any} deps
+ * @param {{ session: any, timeoutMs?: number, stableMs?: number }} opts
+ * @returns {Promise<DeepResearchResult>}
+ */
+export async function resumeDeepResearch(page, deps, { session, timeoutMs = 1_200_000, stableMs = 5_000 }) {
+    const warnings = ['deep-research-resumed'];
+    const deadline = Date.now() + timeoutMs;
+    let stableText = '';
+    let stableSince = 0;
+
+    while (Date.now() < deadline) {
+        await page.waitForTimeout(2000);
+        if (await isStreaming(page) || await hasProgressIndicator(page)) {
+            stableText = '';
+            stableSince = 0;
+            continue;
+        }
+        const latest = (await readLatestAssistant(page)).trim();
+        if (!latest) continue;
+        if (latest !== stableText) {
+            stableText = latest;
+            stableSince = Date.now();
+            continue;
+        }
+        if (Date.now() - stableSince < stableMs) continue;
+
+        const report = await extractResearchReport(page, deps);
+        if (!report || !report.completed) {
+            stableText = '';
+            stableSince = 0;
+            continue;
+        }
+        if (report.from === 'frame') warnings.push('report-extracted-from-iframe');
+        updateSession(session.sessionId, { status: 'complete', answer: report.text, conversationUrl: page.url() });
+        const saved = trySaveReport(session.sessionId, { text: report.text, sources: report.sources });
+        if (saved.ok) appendArtifactRecord(session.sessionId, saved.descriptor);
+        else warnings.push(`artifact-save-failed:${saved.stage}:${saved.error}`);
+        return {
+            ok: true,
+            sessionId: session.sessionId,
+            conversationUrl: page.url(),
+            reportText: report.text,
+            sources: report.sources,
+            warnings,
+            status: 'complete',
+        };
+    }
+
+    const finalReport = await extractResearchReport(page, deps);
+    const finalText = finalReport?.completed ? finalReport.text : null;
+    updateSession(session.sessionId, { status: 'timeout', answer: finalText });
+    if (finalText) {
+        const saved = trySaveReport(session.sessionId, { text: finalText, sources: finalReport.sources });
+        if (saved.ok) appendArtifactRecord(session.sessionId, saved.descriptor);
+        else warnings.push(`artifact-save-failed:${saved.stage}:${saved.error}`);
+    }
+    return {
+        ok: false,
+        sessionId: session.sessionId,
+        conversationUrl: page.url(),
+        reportText: finalText,
+        sources: finalReport?.sources || [],
+        warnings: [...warnings, 'deep-research-resume-timeout'],
         status: 'timeout',
     };
 }

@@ -3,7 +3,7 @@ import {
     normalizeDeepResearchReportText,
     isIncompleteDeepResearchText,
     chooseDeepResearchReportRead,
-} from '../../web-ai/chatgpt-deep-research.mjs';
+} from '../../web-ai/chatgpt-deep-research-report.mjs';
 
 const REAL_REPORT = [
     '# Market Analysis: Electric Vehicles 2026',
