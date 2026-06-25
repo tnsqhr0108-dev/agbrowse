@@ -1,8 +1,19 @@
 # 33 — Response Capture Dual-Path PABCD
 
 Date: 2026-06-24 (agbrowse v0.1.15)
-Status: PABCD plan — **impl-ready** (코드-진실 확인 완료, 바로 구현 착수 가능)
+Status: ✅ **IMPLEMENTED 2026-06-25** (90accb2 + 105b613) — conservative wiring (아래 노트)
 Parent: [03_response_capture.md](03_response_capture.md) · Sibling: [31](31_chatgpt_downloadable_artifacts_pabcd.md) / [32](32_deep_research_session_followup_pabcd.md)
+
+## 구현 노트 (2026-06-25, 계획 대비 조정)
+
+잠금 결정("observer = short-circuit only, poller authoritative")과 load-bearing `pollWebAi` 무회귀 원칙에 따라, 본문의 `Promise.race(observerP, pollerLoop)` + `chooseCaptureResult` 설계 대신 **보수적 wiring**으로 구현:
+
+- **`chooseCaptureResult` 생략** — poller가 권위를 가지므로 observer는 경쟁 결과가 아니라 **wake 신호**다. 결과 선택 불필요(= dead code 회피).
+- **observer = one-shot early-wake**: 루프의 고정 500ms 대기를 `race(500ms, observerWake)`로 교체. observer가 settle 신호를 주면 즉시 깨어 poller가 읽고 검증; 이후 일반 폴링. 최악(observer 미발화/에러)이어도 **기존 500ms 폴링과 동일** → 무회귀.
+- **3차 복구**: deadline 시 `recoverAssistantResponse`로 마지막 assistant turn 1회 재읽기(placeholder는 `isFinalAnswer`로 거부) → 성공 시 `usedFallbacks:['recovery']` 완료 반환.
+- 이유: 본문 설계는 in-loop finalize 경로를 복제/추출해야 해서 최-load-bearing 함수에 회귀 위험. 위 방식은 poller 권위·finalize 무변경으로 short-circuit 이득만 취함.
+
+검증: 전체 스위트 948/948(무회귀), observer 모듈 11/11.
 
 ## 2026-06-24 재감사 (v0.1.15)
 
