@@ -224,6 +224,29 @@ export function isPageDeathError(err) {
 /** @typedef {ResolveSessionPageOk | ResolveSessionPageMismatch} ResolveSessionPageResult */
 
 /**
+ * Fail-closed guard for ChatGPT later-session / new-tab recovery targets
+ * (32.3). A safe target is an HTTPS ChatGPT URL that references a CONCRETE
+ * conversation (`/c/<id>`, incl. under a GPT prefix) — never the provider root,
+ * a foreign host, or a traversal/smuggling string. Used by 35.1's new-tab
+ * recovery and any later-session send to avoid landing on the wrong thread.
+ * @param {string|null|undefined} url
+ * @returns {boolean}
+ */
+export function isSafeChatGptConversationUrl(url) {
+    if (typeof url !== 'string' || url === '') return false;
+    if (url.includes('..') || url.includes('\\') || url.includes('\0')) return false;
+    let u;
+    try {
+        u = new URL(url);
+    } catch {
+        return false;
+    }
+    if (u.protocol !== 'https:') return false;
+    if (u.hostname !== 'chatgpt.com' && u.hostname !== 'chat.openai.com') return false;
+    return /\/c\/[A-Za-z0-9_-]+/.test(u.pathname);
+}
+
+/**
  * @param {string|null|undefined} storedUrl
  * @param {string|null|undefined} liveUrl
  */
@@ -344,6 +367,22 @@ export async function resolveSessionPage(deps, sessionId, options = {}) {
                 };
             }
         } else {
+            // 32.3 fail-closed: never navigate a ChatGPT session to a non-concrete
+            // target (provider root / foreign host / non-/c/ path) — that would
+            // open a new chat or the wrong thread instead of recovering this one.
+            if (current.vendor === 'chatgpt' && !isSafeChatGptConversationUrl(current.conversationUrl)) {
+                return {
+                    mismatch: true,
+                    page: null,
+                    targetId: /** @type {string} */ (current.targetId),
+                    session: current,
+                    recovered: false,
+                    strategy: 'existing-tab',
+                    warnings: [`refusing to navigate to unsafe ChatGPT target ${current.conversationUrl}; not a concrete /c/<id> conversation`],
+                    url: liveUrl,
+                    conversationUrl: current.conversationUrl,
+                };
+            }
             await page.goto(current.conversationUrl, { waitUntil: 'load', timeout: 30_000 });
             const finalUrl = page.url();
             await waitForConversationReady(page, finalUrl);
