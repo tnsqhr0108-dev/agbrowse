@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     normalizeChatGptFileDownloadUrl,
     normalizeChatGptSandboxUrl,
@@ -267,5 +267,108 @@ describe('readAssistantDownloadableFiles', () => {
     it('returns [] on malformed value', async () => {
         expect(await readAssistantDownloadableFiles(fakeCdp('not json'))).toEqual([]);
         expect(await readAssistantDownloadableFiles(fakeCdp(undefined))).toEqual([]);
+    });
+});
+
+describe('saveAssistantDownloadableFiles', () => {
+    let tmpHome;
+    const ORIGINAL_HOME = process.env.BROWSER_AGENT_HOME;
+
+    beforeEach(async () => {
+        const { mkdtempSync } = await import('node:fs');
+        const { tmpdir } = await import('node:os');
+        const { join } = await import('node:path');
+        tmpHome = mkdtempSync(join(tmpdir(), 'agbrowse-files-'));
+        process.env.BROWSER_AGENT_HOME = tmpHome;
+        vi.resetModules();
+    });
+
+    afterEach(async () => {
+        const { rmSync } = await import('node:fs');
+        if (ORIGINAL_HOME === undefined) delete process.env.BROWSER_AGENT_HOME;
+        else process.env.BROWSER_AGENT_HOME = ORIGINAL_HOME;
+        rmSync(tmpHome, { recursive: true, force: true });
+        vi.unstubAllGlobals();
+        vi.resetModules();
+    });
+
+    /** Fake CDP session: candidates from Runtime.evaluate, cookies from Network.getCookies. */
+    const fakeCdp = (candidates) => ({
+        send: async (method) => {
+            if (method === 'Network.getCookies') return { cookies: [{ name: 's', value: '1' }] };
+            return { result: { value: candidates } };
+        },
+    });
+
+    const okResponse = (body, headers = {}) => ({
+        ok: true,
+        headers: { get: (k) => headers[String(k).toLowerCase()] ?? null },
+        arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+    });
+
+    it('downloads sequentially and saves file artifacts', async () => {
+        const { createSession, getSession } = await import('../../web-ai/session.mjs');
+        const { saveAssistantDownloadableFiles } = await import('../../web-ai/chatgpt-files.mjs');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'p', attachmentPolicy: 'inline-only' });
+
+        vi.stubGlobal('fetch', vi.fn(async (url) => {
+            if (String(url).includes('files/file_a')) return okResponse('a,b\n1,2', { 'content-disposition': 'attachment; filename="report.csv"', 'content-type': 'text/csv' });
+            return okResponse('PKzip', { 'content-type': 'application/zip' });
+        }));
+
+        const cdp = fakeCdp([
+            { href: 'https://chatgpt.com/backend-api/files/file_a/download', download: '', text: 'csv' },
+            { href: 'https://chatgpt.com/backend-api/sandbox/download?path=/mnt/data/data.zip', download: '', text: 'zip' },
+        ]);
+        const out = await saveAssistantDownloadableFiles(cdp, {}, { sessionId: session.sessionId, baselineAssistantCount: 0 });
+        expect(out.ok).toBe(true);
+        expect(out.files.map((f) => f.path)).toEqual(['report.csv', 'data.zip']);
+        expect(getSession(session.sessionId).artifacts).toHaveLength(2);
+    });
+
+    it('stops attribution after a timeout (late completions not attached to next file)', async () => {
+        const { createSession } = await import('../../web-ai/session.mjs');
+        const { saveAssistantDownloadableFiles } = await import('../../web-ai/chatgpt-files.mjs');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'p', attachmentPolicy: 'inline-only' });
+
+        vi.stubGlobal('fetch', vi.fn((url, opts) => {
+            if (String(url).includes('file_a')) return Promise.resolve(okResponse('ok', { 'content-type': 'text/plain' }));
+            // file_b hangs until aborted by the per-download timeout
+            return new Promise((_, reject) => {
+                opts.signal.addEventListener('abort', () => {
+                    const e = new Error('aborted'); e.name = 'AbortError'; reject(e);
+                });
+            });
+        }));
+
+        const cdp = fakeCdp([
+            { href: 'https://chatgpt.com/backend-api/files/file_a/download', download: 'a.txt', text: '' },
+            { href: 'https://chatgpt.com/backend-api/files/file_b/download', download: 'b.txt', text: '' },
+            { href: 'https://chatgpt.com/backend-api/files/file_c/download', download: 'c.txt', text: '' },
+        ]);
+        const out = await saveAssistantDownloadableFiles(cdp, {}, { sessionId: session.sessionId, perDownloadTimeoutMs: 20 });
+        expect(out.files.map((f) => f.path)).toEqual(['a.txt']);
+        expect(out.warnings.some((w) => w.startsWith('file-artifact-timeout:'))).toBe(true);
+        expect(out.warnings.some((w) => w.startsWith('file-artifact-skipped-after-timeout:'))).toBe(true);
+    });
+
+    it('warns and saves nothing without a sessionId', async () => {
+        const { saveAssistantDownloadableFiles } = await import('../../web-ai/chatgpt-files.mjs');
+        vi.stubGlobal('fetch', vi.fn(async () => okResponse('x')));
+        const cdp = fakeCdp([{ href: 'https://chatgpt.com/backend-api/files/file_a/download' }]);
+        const out = await saveAssistantDownloadableFiles(cdp, {}, { sessionId: null });
+        expect(out.files).toEqual([]);
+        expect(out.warnings).toContain('file-artifact-no-session');
+    });
+
+    it('warns on a non-ok fetch and skips that file', async () => {
+        const { createSession } = await import('../../web-ai/session.mjs');
+        const { saveAssistantDownloadableFiles } = await import('../../web-ai/chatgpt-files.mjs');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'p', attachmentPolicy: 'inline-only' });
+        vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, headers: { get: () => null }, arrayBuffer: async () => new ArrayBuffer(0) })));
+        const cdp = fakeCdp([{ href: 'https://chatgpt.com/backend-api/files/file_a/download' }]);
+        const out = await saveAssistantDownloadableFiles(cdp, {}, { sessionId: session.sessionId });
+        expect(out.files).toEqual([]);
+        expect(out.warnings.some((w) => w.startsWith('file-artifact-fetch-failed:'))).toBe(true);
     });
 });

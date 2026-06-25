@@ -1,4 +1,6 @@
 // @ts-check
+import { trySaveFileArtifact, appendArtifactRecord } from './session-artifacts.mjs';
+
 /**
  * Generic ChatGPT downloadable-file artifact capture.
  *
@@ -310,4 +312,118 @@ export async function readAssistantDownloadableFiles(cdpSession, { baselineAssis
         return [];
     }
     return dedupeDownloadCandidates(Array.isArray(raw) ? raw : []);
+}
+
+/* ── Sequential download + save ──────────────────────────────────────── */
+
+const DOWNLOAD_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
+const DEFAULT_PER_DOWNLOAD_TIMEOUT_MS = 30_000;
+
+/**
+ * Read the ChatGPT cookie header for authenticated downloads via CDP.
+ * @param {{ send: Function }} cdpSession
+ * @returns {Promise<string>}
+ */
+async function getChatGptCookieHeader(cdpSession) {
+    try {
+        const { cookies } = await cdpSession.send('Network.getCookies', { urls: ['https://chatgpt.com/'] });
+        return (/** @type {{ name: string, value: string }[]} */ (cookies || []))
+            .map((c) => `${c.name}=${c.value}`)
+            .join('; ');
+    } catch {
+        return '';
+    }
+}
+
+/**
+ * Fetch one download with a hard timeout. Distinguishes a timeout (so the caller
+ * can stop attributing later completions) from an ordinary fetch failure.
+ * @param {string} url
+ * @param {string} cookieHeader
+ * @param {number} timeoutMs
+ * @returns {Promise<{ buffer: Buffer, mimeType: string, contentDisposition: string|null } | { timedOut: true } | { failed: true }>}
+ */
+async function fetchDownload(url, cookieHeader, timeoutMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const resp = await fetch(url, {
+            headers: { Cookie: cookieHeader, 'User-Agent': DOWNLOAD_USER_AGENT },
+            redirect: 'follow',
+            signal: controller.signal,
+        });
+        if (!resp.ok) return { failed: true };
+        const contentDisposition = resp.headers.get('content-disposition');
+        const mimeType = (resp.headers.get('content-type') || 'application/octet-stream').split(';')[0].trim();
+        const buffer = Buffer.from(await resp.arrayBuffer());
+        return { buffer, mimeType, contentDisposition };
+    } catch (err) {
+        if (/** @type {any} */ (err)?.name === 'AbortError') return { timedOut: true };
+        return { failed: true };
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
+ * Capture generic downloadable files from the current assistant turn and persist
+ * them as `kind:'file'` session artifacts. Downloads run sequentially; once one
+ * times out, attribution stops so a late completion is never attached to the
+ * next candidate.
+ * @param {{ send: Function }} cdpSession
+ * @param {object} _deps  reserved for parity with sibling capture modules
+ * @param {{ sessionId?: string|null, baselineAssistantCount?: number, perDownloadTimeoutMs?: number }} [opts]
+ * @returns {Promise<{ ok: boolean, files: import('./session-artifacts.mjs').ArtifactDescriptor[], warnings: string[] }>}
+ */
+export async function saveAssistantDownloadableFiles(cdpSession, _deps, {
+    sessionId = null,
+    baselineAssistantCount = 0,
+    perDownloadTimeoutMs = DEFAULT_PER_DOWNLOAD_TIMEOUT_MS,
+} = {}) {
+    const candidates = await readAssistantDownloadableFiles(cdpSession, { baselineAssistantCount });
+    if (!candidates.length) return { ok: true, files: [], warnings: [] };
+    if (!sessionId) return { ok: true, files: [], warnings: ['file-artifact-no-session'] };
+
+    const cookieHeader = await getChatGptCookieHeader(cdpSession);
+    /** @type {import('./session-artifacts.mjs').ArtifactDescriptor[]} */
+    const files = [];
+    const warnings = [];
+    let attributionStopped = false;
+
+    for (let i = 0; i < candidates.length; i += 1) {
+        const c = candidates[i];
+        if (attributionStopped) {
+            warnings.push(`file-artifact-skipped-after-timeout:${c.sourceUrl}`);
+            continue;
+        }
+        const got = await fetchDownload(c.sourceUrl, cookieHeader, perDownloadTimeoutMs);
+        if ('timedOut' in got) {
+            attributionStopped = true;
+            warnings.push(`file-artifact-timeout:${c.sourceUrl}`);
+            continue;
+        }
+        if ('failed' in got) {
+            warnings.push(`file-artifact-fetch-failed:${c.sourceUrl}`);
+            continue;
+        }
+        const filename = resolveDownloadFilename({
+            contentDisposition: got.contentDisposition,
+            downloadAttr: c.download,
+            sourceUrl: c.sourceUrl,
+            index: i,
+        });
+        const res = trySaveFileArtifact(sessionId, {
+            filename,
+            buffer: got.buffer,
+            mimeType: got.mimeType,
+            sourceUrl: c.sourceUrl,
+        });
+        if (!res.ok) {
+            warnings.push(`file-artifact-save-failed:${res.stage}`);
+            continue;
+        }
+        appendArtifactRecord(sessionId, res.descriptor);
+        files.push(res.descriptor);
+    }
+    return { ok: true, files, warnings };
 }
