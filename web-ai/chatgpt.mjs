@@ -25,6 +25,7 @@ import { WebAiError } from './errors.mjs';
 import { finalizeProviderTab } from './tab-finalizer.mjs';
 import { saveAssistantDownloadableFiles } from './chatgpt-files.mjs';
 import { observeAssistantResponse, recoverAssistantResponse } from './chatgpt-response-observer.mjs';
+import { diagnosticsEnabled, captureFailureDiagnostics } from './failure-diagnostics.mjs';
 import { recordActiveLease } from './tab-lease-store.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
@@ -571,6 +572,12 @@ export async function pollWebAi(deps, input = {}) {
                 responseStableMs: 0,
             });
         }
+    }
+
+    // 34 diagnostics: on the timeout path (recovery already failed), capture a
+    // DOM snapshot + screenshot when gated. Fire-and-forget; never throws.
+    if (session && diagnosticsEnabled(input)) {
+        await captureFailureDiagnostics(deps, { sessionId: session.sessionId, context: 'response-timeout', page });
     }
 
     if (input.allowCopyMarkdownFallback === true && stableText) {
