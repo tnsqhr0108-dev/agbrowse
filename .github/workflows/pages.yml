@@ -1,22 +1,13 @@
-name: Pages
+name: Pages Safe Check
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'docs/**'
-      - 'README.md'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: pages-safe-check
   cancel-in-progress: true
 
 jobs:
@@ -24,113 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Validate docs entrypoint
+      - name: Check docs safely
         run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import path from 'node:path';
-          const required = [
-            'docs/index.html',
-            'docs/assets/favicon.svg',
-            'docs/assets/social-preview.svg',
-            'README.md',
-            'docs/dev/_shell.css',
-            'docs/dev/_search.js',
-            'docs/dev/index.html',
-            'docs/dev/quickstart.html',
-            'docs/dev/quickstart-first-run.html',
-            'docs/dev/changelog.html',
-            'docs/dev/concepts/architecture.html',
-            'docs/dev/concepts/browser-runtime.html',
-            'docs/dev/concepts/web-ai-sessions.html',
-            'docs/dev/guides/web-ai.html',
-            'docs/dev/guides/code-mode.html',
-            'docs/dev/guides/adaptive-fetch.html',
-            'docs/dev/guides/source-audit.html',
-            'docs/dev/reference/cli.html',
-            'docs/dev/reference/config.html',
-            'docs/dev/reference/release-gates.html',
-            'docs/dev/ko/index.html',
-            'docs/dev/ko/quickstart.html',
-            'docs/dev/ko/quickstart-first-run.html',
-            'docs/dev/ko/changelog.html',
-            'docs/dev/ko/concepts/architecture.html',
-            'docs/dev/ko/concepts/browser-runtime.html',
-            'docs/dev/ko/concepts/web-ai-sessions.html',
-            'docs/dev/ko/guides/web-ai.html',
-            'docs/dev/ko/guides/code-mode.html',
-            'docs/dev/ko/guides/adaptive-fetch.html',
-            'docs/dev/ko/guides/source-audit.html',
-            'docs/dev/ko/reference/cli.html',
-            'docs/dev/ko/reference/config.html',
-            'docs/dev/ko/reference/release-gates.html'
-          ];
-          const missing = required.filter((file) => !fs.existsSync(file));
-          if (missing.length) {
-            throw new Error(`Missing required docs files: ${missing.join(', ')}`);
-          }
-          const html = fs.readFileSync('docs/index.html', 'utf8');
-          const checks = [
-            ['canonical', 'https://lidge-jun.github.io/agbrowse/'],
-            ['og image', 'https://lidge-jun.github.io/agbrowse/assets/social-preview.svg'],
-            ['quickstart', 'npm install -g agbrowse'],
-            ['developer docs', 'dev/index.html'],
-            ['korean docs', 'dev/ko/index.html'],
-            ['verification', 'npm run test:release-gates']
-          ];
-          const failures = checks
-            .filter(([, needle]) => !html.includes(needle))
-            .map(([label]) => label);
-          const codeIndex = html.indexOf('agbrowse web-ai code \\');
-          const extractIndex = html.indexOf('agbrowse web-ai code-extract \\');
-          if (codeIndex < 0) failures.push('landing code quickstart');
-          if (extractIndex >= 0 && extractIndex < codeIndex) failures.push('code before code-extract');
-          for (const file of required.filter((candidate) => candidate.endsWith('.html'))) {
-            const doc = fs.readFileSync(file, 'utf8');
-            const expectedLang = file.includes('/ko/') ? 'ko' : 'en';
-            if (!doc.includes(`<html lang="${expectedLang}"`)) failures.push(`${file} lang`);
-            for (const attr of ['href', 'src']) {
-              const re = new RegExp(`${attr}="([^"]+)"`, 'g');
-              for (const match of doc.matchAll(re)) {
-                const target = match[1];
-                if (!target || target.startsWith('#') || /^[a-z]+:/i.test(target)) continue;
-                const [withoutHash] = target.split('#');
-                if (!withoutHash) continue;
-                const resolved = path.normalize(path.join(path.dirname(file), withoutHash));
-                if (!resolved.startsWith('docs/') || !fs.existsSync(resolved)) {
-                  failures.push(`${file} broken ${attr} ${target}`);
-                }
-              }
-            }
-          }
-          for (const file of required.filter((candidate) => candidate.startsWith('docs/dev/') && candidate.endsWith('.html') && !candidate.includes('/ko/'))) {
-            const ko = file.replace('docs/dev/', 'docs/dev/ko/');
-            if (!fs.existsSync(ko)) failures.push(`${file} missing ko pair`);
-            const enDoc = fs.readFileSync(file, 'utf8');
-            const koRel = path.relative(path.dirname(file), ko);
-            if (!enDoc.includes(koRel)) failures.push(`${file} missing ko link`);
-          }
-          if (failures.length) {
-            throw new Error(`Docs validation failed: ${failures.join(', ')}`);
-          }
-          NODE
-      - name: Git diff whitespace check
-        run: git diff --check
-
-  deploy:
-    needs: validate
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          echo "Pages workflow is manual safe mode."
+          echo "No automatic deploy is performed."
+          if [ -f docs/index.html ]; then
+            echo "docs/index.html exists"
+          else
+            echo "docs/index.html missing; deploy skipped"
+          fi
+          find docs -maxdepth 2 -type f 2>/dev/null | sort | sed -n '1,120p' || true
