@@ -6,3 +6,27 @@ node_modules/
 .browser-agent/
 playwright-report/
 coverage/
+
+# BEGIN MASTERBOOK SECRET GUARD
+.env
+.env.*
+!.env.example
+.browser-agent/
+.codex/
+.codex-log/
+.config/gh/
+*.key
+*.pem
+*.token
+*.secret
+secrets/
+credentials/
+cookies/
+browser-profile/
+chrome-profile/
+node_modules/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.log
+# END MASTERBOOK SECRET GUARD
