@@ -1,6 +1,24 @@
 # 03 — Response Capture Dual-Path
 
-Severity: **P1**
+Severity: **P1** — 🟡 **OPEN** (핵심 gap 유효; 2026-06-24 재감사로 2개 표현 정정)
+
+## 2026-06-24 Re-audit (v0.1.15)
+
+핵심 gap(이중 경로 race + 3차 복구)은 **여전히 유효(OPEN)**. 단일 poller 확인:
+`grep MutationObserver web-ai/` → **0 hits**, `recoverAssistantResponse`/`pollAssistantCompletion` → 0 hits.
+`pollWebAi` 단일 루프(`chatgpt.mjs:359`)가 `stableText`/`stableSince` 안정화로 대기.
+
+단, 아래 원본의 2개 표현은 코드와 어긋나 정정한다:
+
+- **Placeholder 필터링은 "부분적"이 아니라 전용 필터**: `chatgpt.mjs:63-65`
+  `PLACEHOLDER_PATTERNS = [/^answer now$/i, /^pro thinking/i]`, `:947`에서 `isFinalAnswer` 경유 적용.
+  (원본은 위치를 `answer-artifact.mjs`로 잘못 기재 — 실제는 `chatgpt.mjs`.)
+- **Stop button re-wait는 구현됨(✅)**: `isStreaming()`(`chatgpt.mjs:578-584`)이 stop 버튼 가시성으로 게이트,
+  생성 중이면 루프가 계속 대기(`chatgpt.mjs:396`). Gap Summary의 "부분적"은 ✅로 본다.
+
+남은 구현 대상(여전히 OPEN, jawdev 후보): MutationObserver 빠른 경로 + poller race, `recoverAssistantResponse` 3차 복구.
+
+> 아래 원본 분석(2026-06-08, v0.1.7 기준)은 역사적 기록으로 보존한다.
 
 ## Problem
 

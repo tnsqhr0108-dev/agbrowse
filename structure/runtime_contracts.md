@@ -22,6 +22,7 @@ aliases: [agbrowse runtime contracts, agbrowse 런타임 계약, provider contra
 | CDP port | `CDP_PORT`, 기본 `9222` |
 | Browser state | `browser-state.json`에 port, pid, target 상태 저장 |
 | Snapshots | latest snapshot과 per-target snapshot을 `BROWSER_AGENT_HOME` 아래 저장 |
+| Update notice | npm latest-version check cache는 `BROWSER_AGENT_HOME/update-check.json`에 저장한다. 구버전 notice는 stderr-only이며 JSON, MCP stdio, CI, help 출력에서는 skip한다. 자동 업데이트는 실행하지 않는다 |
 | Ref safety | navigation, reload, tab switch 이후 snapshot ref는 재관찰해야 한다 |
 | Evaluation | `evaluate`는 기본 허용된다. custom policy에서 `allowEvaluate: false`로 끌 수 있고, `--unsafe-allow evaluate`는 explicit-deny 우회용 legacy opt-in으로 남긴다 |
 

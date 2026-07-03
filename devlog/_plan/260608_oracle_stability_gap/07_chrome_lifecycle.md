@@ -1,6 +1,16 @@
 # 07 — Chrome Process Lifecycle
 
-Severity: **P2**
+Severity: **P2** — 🟡 **PARTIAL** (모델 오해 정정; signal/WSEndpoint/window-hide만 OPEN; 2026-06-24 재감사)
+
+## 2026-06-24 Re-audit (v0.1.15)
+
+본문의 "agbrowse는 기본 start/stop이며 `agbrowse stop`이 브라우저를 종료"라는 전제가 부정확하다:
+
+- **`stop`은 Chrome kill이 아님**: web-ai의 `stop`은 진행 중 응답(생성) 중단 명령(`cli.mjs:46`, send/poll/query와 동급)이지 브라우저 종료가 아니다. 브라우저 기동/해제는 최상위 `agbrowse start`(Chrome 별도 spawn, `README.md:382`)이며, web-ai는 CDP(기본 9222)로 **연결만** 한다.
+- **In-flight Chrome 보존(표 P1행)**: connect-over-CDP 모델 + `sessions resume`/`reattach`로 사실상 완화됨(04 참조). "❌"는 과함 → 🟡 partial.
+- 여전히 **OPEN(P3)**: `grep process.on(SIG → 0 hits` (signal handler 없음), WSEndpoint 원격 연결 없음, macOS window hiding 없음, stale profile cleanup 없음.
+
+> 아래 원본 분석(2026-06-08, v0.1.7 기준)은 역사적 기록으로 보존한다.
 
 ## Problem
 

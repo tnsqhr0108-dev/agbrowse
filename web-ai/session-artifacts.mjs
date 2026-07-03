@@ -8,12 +8,13 @@ const BROWSER_AGENT_HOME = process.env.BROWSER_AGENT_HOME || join(homedir(), '.b
 
 /**
  * @typedef {Object} ArtifactDescriptor
- * @property {'transcript'|'report'|'image'} kind
+ * @property {'transcript'|'report'|'image'|'file'|'diagnostics'} kind
  * @property {string} label
  * @property {string} path
  * @property {string} [mimeType]
  * @property {number} [sizeBytes]
  * @property {string} [sourceUrl]
+ * @property {string} [screenshotPath]
  * @property {string} savedAt
  */
 
@@ -172,6 +173,114 @@ export function trySaveImageArtifact(sessionId, image) {
         return {
             ok: false,
             stage: 'artifact-image',
+            error: /** @type {Error} */ (err)?.message || String(err),
+        };
+    }
+}
+
+/**
+ * Build a safe artifact basename for a generic file: strip any directory,
+ * preserve the resolved filename's extension when present, else fall back to the
+ * MIME subtype. The stem is path-traversal sanitized.
+ * @param {string} filename
+ * @param {string} mimeType
+ * @returns {string}
+ */
+function safeFileArtifactName(filename, mimeType) {
+    const base = basename(String(filename || ''));
+    const dot = base.lastIndexOf('.');
+    const stem = sanitizeSegment(dot > 0 ? base.slice(0, dot) : base);
+    const rawExt = dot > 0 ? base.slice(dot + 1) : '';
+    const ext = sanitizeSegment(rawExt || (mimeType ? (mimeType.split('/')[1] || '').split(';')[0] : ''));
+    return ext && ext !== 'unknown' ? `${stem}.${ext}` : stem;
+}
+
+/**
+ * Save a generic downloadable-file artifact (CSV/PDF/ZIP/...), separate from
+ * image artifacts. Preserves the resolved filename's extension.
+ * @param {string} sessionId
+ * @param {{ filename: string, buffer: Buffer, mimeType: string, sourceUrl?: string }} file
+ * @returns {ArtifactDescriptor}
+ */
+export function saveFileArtifact(sessionId, { filename, buffer, mimeType, sourceUrl }) {
+    const dir = resolveArtifactsDir(sessionId);
+    ensureDir(dir);
+    const safeName = safeFileArtifactName(filename, mimeType);
+    const fullPath = join(dir, safeName);
+    writeFileSync(fullPath, buffer);
+    return {
+        kind: 'file',
+        label: filename,
+        path: safeName,
+        mimeType,
+        sizeBytes: buffer.length,
+        sourceUrl: sourceUrl || undefined,
+        savedAt: new Date().toISOString(),
+    };
+}
+
+/**
+ * Save a file artifact and convert failures into a result.
+ * @param {string} sessionId
+ * @param {{ filename: string, buffer: Buffer, mimeType: string, sourceUrl?: string }} file
+ * @returns {ArtifactSaveResult}
+ */
+export function trySaveFileArtifact(sessionId, file) {
+    try {
+        return { ok: true, descriptor: saveFileArtifact(sessionId, file) };
+    } catch (err) {
+        return {
+            ok: false,
+            stage: 'artifact-file',
+            error: /** @type {Error} */ (err)?.message || String(err),
+        };
+    }
+}
+
+/**
+ * Save a failure-diagnostics artifact (DOM snapshot JSON + optional screenshot
+ * PNG) under the session artifacts dir. Same-context captures overwrite (latest
+ * failure wins). Returns a `kind:'diagnostics'` descriptor (with screenshotPath
+ * when a screenshot was provided).
+ * @param {string} sessionId
+ * @param {{ context?: string, domJson?: unknown, screenshotBuffer?: Buffer|null }} diag
+ * @returns {ArtifactDescriptor}
+ */
+export function saveDiagnosticsArtifact(sessionId, { context, domJson, screenshotBuffer }) {
+    const dir = resolveArtifactsDir(sessionId);
+    ensureDir(dir);
+    const stem = `diagnostics-${sanitizeSegment(context || 'failure')}`;
+    const jsonPath = `${stem}.json`;
+    writeFileSync(join(dir, jsonPath), JSON.stringify(domJson ?? {}, null, 2));
+    /** @type {ArtifactDescriptor} */
+    const descriptor = {
+        kind: 'diagnostics',
+        label: context || 'failure',
+        path: jsonPath,
+        mimeType: 'application/json',
+        savedAt: new Date().toISOString(),
+    };
+    if (screenshotBuffer) {
+        const pngPath = `${stem}.png`;
+        writeFileSync(join(dir, pngPath), screenshotBuffer);
+        descriptor.screenshotPath = pngPath;
+    }
+    return descriptor;
+}
+
+/**
+ * Save a diagnostics artifact and convert failures into a result.
+ * @param {string} sessionId
+ * @param {{ context?: string, domJson?: unknown, screenshotBuffer?: Buffer|null }} diag
+ * @returns {ArtifactSaveResult}
+ */
+export function trySaveDiagnosticsArtifact(sessionId, diag) {
+    try {
+        return { ok: true, descriptor: saveDiagnosticsArtifact(sessionId, diag) };
+    } catch (err) {
+        return {
+            ok: false,
+            stage: 'artifact-diagnostics',
             error: /** @type {Error} */ (err)?.message || String(err),
         };
     }

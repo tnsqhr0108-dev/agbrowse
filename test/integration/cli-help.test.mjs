@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { execBrowser } from '../helpers/exec-browser.mjs';
 import { execVisionClick } from '../helpers/exec-vision-click.mjs';
+import { createTempBrowserEnv, getAvailablePort } from '../helpers/temp-env.mjs';
 
 describe.sequential('CLI help', () => {
     it('shows browser help with new PLAN_2 commands', async () => {
@@ -86,6 +87,45 @@ describe.sequential('CLI help', () => {
         const result = await execBrowser(['tab-cleanup', '--include-untracked']);
         expect(result.code).not.toBe(0);
         expect(result.stderr).toContain('tab-cleanup --include-untracked requires --force');
+    });
+
+    it('emits update notices on ordinary non-json CLI runs only', async () => {
+        const temp = createTempBrowserEnv('agbrowse-update-notice-');
+        try {
+            const result = await execBrowser(['status'], {
+                env: {
+                    ...temp.env,
+                    AGBROWSE_UPDATE_CHECK: '1',
+                    AGBROWSE_UPDATE_CHECK_LATEST: '9.9.9',
+                },
+            });
+            expect(result.code).toBe(0);
+            expect(result.stdout).toContain('running:');
+            expect(result.stderr).toContain('[agbrowse] new version is available:');
+            expect(result.stderr).toContain('npm install -g agbrowse@latest to update');
+        } finally {
+            temp.cleanup();
+        }
+    });
+
+    it('does not emit update notices for json CLI runs', async () => {
+        const temp = createTempBrowserEnv('agbrowse-update-json-');
+        const closedPort = await getAvailablePort();
+        try {
+            const result = await execBrowser(['tabs', '--json'], {
+                env: {
+                    ...temp.env,
+                    CDP_PORT: closedPort,
+                    AGBROWSE_UPDATE_CHECK: '1',
+                    AGBROWSE_UPDATE_CHECK_LATEST: '9.9.9',
+                },
+            });
+            expect(result.code).toBe(0);
+            expect(JSON.parse(result.stdout)).toEqual([]);
+            expect(result.stderr).not.toContain('new version is available');
+        } finally {
+            temp.cleanup();
+        }
     });
 
     it('shows vision-click help when no target is given', async () => {

@@ -1,26 +1,36 @@
 # 30 — Oracle 0.15 Delta Follow-up
 
-Date: 2026-06-20
-Status: plan
+Date: 2026-06-20 (원안) · 재감사 2026-06-24 (agbrowse v0.1.15)
+Status: plan — Oracle 0.15 여전히 최신 release
+
+## 2026-06-24 재감사 (v0.1.15)
+
+- **Oracle 0.15.0가 여전히 최신 published release** (2026-06-19, `gh release list` Latest 확인). Live `main` head는 `2fa6b5a`(2026-06-23)로 이동. `v0.15.0..HEAD` 6개 커밋 중 **1개는 실제 브라우저 fix** — `3147fb1 fix(browser): wait for model/effort composer pill before failing selection (#271)` (미출시 `0.15.1` 사이클; `MODEL_BUTTON_WAIT_MS`로 model/effort picker pill 마운트까지 최대 8s 대기, 콜드 프로필 대응) — 나머지(`2fa6b5a`,`d5c5e95`,`96b3600` deps / `c5839ef`,`4d56c64` docs·changelog)는 deps/docs. 즉 **새 published release는 없으나 "dep-bump뿐"은 아니며**, 이 model-picker fix는 본 폴더 `32`의 'P1 — model picker/current-pill audit'를 강화한다(Oracle 자신도 같은 영역을 계속 하드닝 중). release 수준 0.15 델타는 현행 유효.
+- 주의: GitHub `tags` API에 `v1.0.7`~`v1.3.0`이 보이나 이는 **published release가 아닌** lightweight 태그(릴리스 없음)이므로 본 감사 범위 밖.
+- **agbrowse는 현재 v0.1.15.** 동일 폴더 stability 문서(01/02/10) 재감사 결과 다수 gap이 이미 CLOSED — `00_index.md`의 "2026-06-24 Re-audit Status" 표 참조.
+- 아래 "agbrowse current coverage"의 covered/missing 주장은 v0.1.15 코드 대조에서 **정확함**으로 재확인됨(별도 코드-진실 감사).
 
 ## Reference Pull
 
-Oracle reference repo: `/tmp/agbrowse-oracle-reference`
+Oracle reference repo: `/tmp/agbrowse-oracle-reference` (ephemeral). 2026-06-24 재감사 시 부재 → `git clone --depth 1 https://github.com/steipete/oracle /tmp/agbrowse-oracle-reference` 로 재생성, `git fetch --unshallow --tags` 로 태그/히스토리 확보.
 
-Update command result:
+Current Oracle head (2026-06-24 확인):
 
 ```text
-git fetch --prune origin
-git pull --ff-only
-Already up to date.
+2fa6b5a6ed927d467587d487af9d09e78653c42b
+2026-06-23 20:19:43 +0100
+chore(deps): update dependencies
 ```
 
-Current Oracle head:
+`v0.15.0..HEAD` (6 commits — 미출시 `0.15.1` 사이클):
 
 ```text
-d5c5e954ecec856159d7eac62037ba19040c30e0
-2026-06-20 02:48:00 +0200
-build(deps): bump the dependencies group with 7 updates (#270)
+2fa6b5a chore(deps): update dependencies
+c5839ef docs: credit browser model picker fix
+3147fb1 fix(browser): wait for model/effort composer pill before failing selection (#271)
+d5c5e95 build(deps): bump the dependencies group with 7 updates (#270)
+96b3600 build(deps): bump actions/checkout from 6 to 7 (#269)
+4d56c64 docs(changelog): open 0.15.1
 ```
 
 Prior local Oracle review anchors:
@@ -87,6 +97,10 @@ v0.11.1
 - Bounded retries for explicit model selection.
 - Sequential generated-file downloads with browser-provided filenames and timeout attribution.
 - Deep Research planning/status captures are rejected when ChatGPT returns a normal non-research answer.
+
+### 0.15.1 (Unreleased, 2026-06-24 기준)
+
+- Browser: model/effort composer pill이 마운트될 때까지 최대 8s 대기 후에만 명시 선택을 실패 처리 (`option-not-found`은 즉시 실패 유지) — `#271`. 콜드 프로필/cookie-sync throwaway Chrome에서 picker가 1–4s 늦게 mount되는 케이스 대응. → `32` model-picker audit의 'current pill wait' 항목과 직접 연결.
 
 ## agbrowse current coverage
 

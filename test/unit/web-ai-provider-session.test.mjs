@@ -250,9 +250,15 @@ describe('web-ai cli session flags', () => {
         expect(cliSrc).toMatch(/listLeases\(\)/);
         expect(cliSrc).toMatch(/!isPinned\(tab\.targetId\)/);
         expect(cliSrc).toMatch(/isReusableByLease\(tab\.targetId, leaseByTargetId\)/);
+        expect(cliSrc).toMatch(/!shouldNavigateToRequestedProviderUrl\(tab\.url, targetUrl\)/);
         expect(cliSrc).toMatch(/input\.forceNewTab !== true/);
         expect(cliSrc).toMatch(/const reusable = await findReusableProviderTab/);
+        expect(cliSrc).toMatch(/pooled && !shouldNavigateToRequestedProviderUrl\(pooled\.url, vendorUrl\)/);
+        expect(cliSrc).toMatch(/bindReusableProviderPage\(deps, port, pooled, vendorUrl\)/);
+        expect(cliSrc).toMatch(/isProviderPageDriveable\(page, vendorUrl\)/);
+        expect(cliSrc).toMatch(/createTab\(port, vendorUrl, \{ activate: false, reuseBlank: false \}\)/);
         expect(cliSrc).toMatch(/prepareProviderPage: async \(\) =>/);
+        expect(cliSrc).toMatch(/shouldNavigateToRequestedProviderUrl\(currentUrl, vendorUrl\)/);
         expect(cliSrc).toMatch(/page\.goto\(vendorUrl/);
         expect(cliSrc).toMatch(/if \(input\.forceNewTab !== true\) \{\s*\/\/ Phase 9\.2: try tab pool first/s);
     });

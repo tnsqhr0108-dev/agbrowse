@@ -7,9 +7,10 @@
 import { pollWebAi } from './chatgpt.mjs';
 import { geminiPollWebAi } from './gemini-live.mjs';
 import { grokPollWebAi } from './grok-live.mjs';
+import { resumeDeepResearch } from './chatgpt-deep-research.mjs';
 import { WebAiError } from './errors.mjs';
-import { getSession, listSessions, pruneSessionsOlderThan } from './session.mjs';
-import { resolveSessionPage, withSessionPage } from './tab-recovery.mjs';
+import { getSession, listSessions, pruneSessionsOlderThan, updateSession } from './session.mjs';
+import { resolveSessionPage, withSessionPage, openConversationInNewTab } from './tab-recovery.mjs';
 import { withSessionCommandLock } from './session-store.mjs';
 import { buildSessionDoctorReport } from './session-doctor.mjs';
 
@@ -93,6 +94,20 @@ export async function runSessionsCommand(args, values, deps, input) {
         if (!id) throw new WebAiError({ errorCode: 'internal.unhandled', stage: 'internal', retryHint: 'report', message: 'sessions resume <id> requires a sessionId (positional or --session)' });
         const session = getSession(id);
         if (!session) throw new WebAiError({ errorCode: 'internal.unhandled', stage: 'internal', retryHint: 'report', message: `no session record for ${id}`, evidence: { sessionId: id } });
+        // 35.2: a Deep Research session resumes via the DR capture path (no new
+        // prompt), not the generic poller.
+        if (session.researchMode === 'deep' && session.vendor === 'chatgpt') {
+            const drResult = await withSessionCommandLock(id, () => withSessionPage(deps, id, async ({ page, targetId, session: refreshed }) => {
+                const sessionDeps = {
+                    ...deps,
+                    getPage: async () => page,
+                    getTargetId: async () => targetId,
+                    getCdpSession: async () => /** @type {any} */ (page).context?.().newCDPSession?.(page),
+                };
+                return resumeDeepResearch(page, sessionDeps, { session: refreshed });
+            }));
+            return { ...drResult, status: drResult.status || 'resumed' };
+        }
         const pollInput = {
             ...input,
             vendor: session.vendor,
@@ -122,6 +137,33 @@ export async function runSessionsCommand(args, values, deps, input) {
         }
         const resolved = await resolveSessionPage(deps, id, { allowNavigate: input.navigate === true });
         if (resolved.mismatch) {
+            // 35.1 new-tab recovery: when navigation is authorized, open the saved
+            // ChatGPT conversation in a fresh tab (32.3-guarded) instead of failing.
+            if (input.navigate === true && session.vendor === 'chatgpt') {
+                const reopened = await openConversationInNewTab(deps, { conversationUrl: session.conversationUrl });
+                if (reopened.opened) {
+                    updateSession(id, { targetId: reopened.targetId });
+                    return {
+                        ok: true,
+                        status: 'reattached',
+                        sessionId: id,
+                        targetId: reopened.targetId,
+                        url: /** @type {any} */ (reopened.page).url?.() || reopened.conversationUrl,
+                        recovered: true,
+                        strategy: 'new-tab',
+                        warnings: ['recovered-via-new-tab'],
+                    };
+                }
+                return {
+                    ok: false,
+                    status: 'reattach-mismatch',
+                    sessionId: id,
+                    targetId: resolved.targetId,
+                    url: resolved.url,
+                    conversationUrl: resolved.conversationUrl,
+                    warnings: [...(resolved.warnings || []), `new-tab-recovery-failed:${reopened.reason}`],
+                };
+            }
             return {
                 ok: false,
                 status: 'reattach-mismatch',

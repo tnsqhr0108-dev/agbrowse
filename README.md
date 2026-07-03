@@ -207,6 +207,17 @@ From npm:
 npm install -g agbrowse
 ```
 
+Older global installs may print a short stderr-only update notice when npm has a
+newer `agbrowse` version. Agents should tell the user before changing the global
+CLI install:
+
+```bash
+npm install -g agbrowse@latest
+```
+
+Set `AGBROWSE_UPDATE_CHECK=0` to hide the notice. The check is skipped for JSON
+output, MCP stdio, CI, and help commands.
+
 From this repository:
 
 ```bash
@@ -1041,6 +1052,9 @@ the target host before mutation.
 | `BROWSER_AGENT_HOME` | `~/.browser-agent` | profile, screenshots, state, **`web-ai-sessions.json`** session store |
 | `CDP_PORT` | `9222` | default DevTools port |
 | `AGBROWSE_JSON_ERRORS` | unset | set `1` to force JSON failure envelopes regardless of `--json` |
+| `AGBROWSE_UPDATE_CHECK` | enabled outside CI | set `0` to hide update notices, `1` to force the check |
+| `AGBROWSE_UPDATE_CHECK_TTL` | `24h` | cache TTL for npm latest-version checks |
+| `AGBROWSE_UPDATE_CHECK_LATEST` | unset | override latest version for tests/diagnosis |
 | `CHROME_HEADLESS` | unset | set `1` for headless startup |
 | `CHROME_NO_SANDBOX` | unset | set `1` only in Docker/CI if needed |
 | `CHROME_BINARY_PATH` | auto-detect | custom Chrome executable |

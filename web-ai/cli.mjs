@@ -34,6 +34,7 @@ import { loadPolicy } from './policy/schema.mjs';
 import { applyProviderDefaults } from './policy/default-policy.mjs';
 import { activeCommandTargetIds, withActiveCommand } from './active-command-store.mjs';
 import { auditSources } from './source-audit.mjs';
+import { isProviderPageDriveable, shouldNavigateToRequestedProviderUrl, waitForPageUrl } from './navigation-ready.mjs';
 export { parseDurationToMs };
 
 const VENDOR_DEFAULT_URLS = {
@@ -552,6 +553,7 @@ async function runWebAiCliInner(argv = [], deps) {
             deadline: { type: 'string' },
             session: { type: 'string' },
             navigate: { type: 'boolean', default: false },
+            diagnostics: { type: 'boolean', default: false },
             'inline-only': { type: 'boolean', default: false },
             'allow-copy-markdown-fallback': { type: 'boolean', default: false },
             'allow-grok-context-pack': { type: 'boolean', default: false },
@@ -655,6 +657,7 @@ async function runWebAiCliInner(argv = [], deps) {
         deadline: values.deadline,
         session: values.session,
         navigate: values.navigate === true,
+        diagnostics: values.diagnostics === true,
         attachmentPolicy: filePaths.length ? 'upload' : 'inline-only',
         filePath: filePaths[0],
         filePaths,
@@ -998,20 +1001,20 @@ async function ensureProviderTab(deps, input) {
             url: vendorUrl,
             port: port,
         }));
-        if (pooled) {
-            const page = await waitForPageByTargetId(port, pooled.targetId);
-            return bindProviderPage(deps, page, pooled.targetId, vendorUrl);
+        if (pooled && !shouldNavigateToRequestedProviderUrl(pooled.url, vendorUrl)) {
+            const bound = await bindReusableProviderPage(deps, port, pooled, vendorUrl);
+            if (bound) return bound;
         }
 
         const reusable = await findReusableProviderTab(port, input.vendor || 'chatgpt', vendorUrl);
         if (reusable) {
-            const page = await waitForPageByTargetId(port, reusable.targetId);
-            return bindProviderPage(deps, page, reusable.targetId, vendorUrl);
+            const bound = await bindReusableProviderPage(deps, port, reusable, vendorUrl);
+            if (bound) return bound;
         }
     }
 
     // Phase 9.1 fix: create tab WITHOUT activate (avoids focus race)
-    const tab = await createTab(port, vendorUrl, { activate: false });
+    const tab = await createTab(port, vendorUrl, { activate: false, reuseBlank: false });
     const page = await waitForPageByTargetId(port, tab.targetId);
     return {
         ...deps,
@@ -1040,7 +1043,8 @@ function bindProviderPage(deps, page, targetId, vendorUrl) {
         getTargetId: async () => targetId,
         getCdpSession: async () => (/** @type {any} */ (page)).context().newCDPSession(page),
         prepareProviderPage: async () => {
-            if (page.url() !== vendorUrl) {
+            const currentUrl = await waitForPageUrl(page);
+            if (shouldNavigateToRequestedProviderUrl(currentUrl, vendorUrl)) {
                 await page.goto(vendorUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
                 // SPA providers render the composer asynchronously after DOMContentLoaded
                 await page.locator('#prompt-textarea, .ProseMirror, [contenteditable="true"]').first()
@@ -1049,6 +1053,20 @@ function bindProviderPage(deps, page, targetId, vendorUrl) {
             }
         },
     };
+}
+
+/**
+ * @param {any} deps
+ * @param {number} port
+ * @param {{ targetId?: string }} tab
+ * @param {string} vendorUrl
+ */
+async function bindReusableProviderPage(deps, port, tab, vendorUrl) {
+    if (!tab?.targetId) return null;
+    const page = await waitForPageByTargetId(port, tab.targetId).catch(() => null);
+    if (!page) return null;
+    if (!await isProviderPageDriveable(page, vendorUrl)) return null;
+    return bindProviderPage(deps, page, tab.targetId, vendorUrl);
 }
 
 /**
@@ -1071,6 +1089,7 @@ async function findReusableProviderTab(port, vendor, targetUrl) {
         .filter(tab => !isPinned(tab.targetId))
         .filter(tab => isReusableByLease(tab.targetId, leaseByTargetId))
         .filter(tab => providerOriginFromUrl(tab.url) === origin)
+        .filter(tab => !shouldNavigateToRequestedProviderUrl(tab.url, targetUrl))
         .sort((a, b) => (Number(b.lastActiveAt) || 0) - (Number(a.lastActiveAt) || 0))[0] || null;
 }
 

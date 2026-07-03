@@ -16,21 +16,15 @@ must be treated as historical  do not edit them after release.evidence
 | `_fin/` | Completed non-MVP closeouts, research outcomes, and shipped implementation plans. |
 | `_fin/mvp/` | Shipped MVP phases, grouped by topic (read-only history). |
 | `_plan/` | Active or deferred plans not yet shipped. |
-| `_legacy/` | Pre-rewrite changelogs / plans / research dumps. |
+| `_fin/_legacy/` | Pre-rewrite changelogs / plans / research dumps, closed as historical records. |
 | `context/` | Verbatim Pro / Grok peer reviews and gap audits. |
 
 ## `_plan/` active or deferred work
 
 | Topic | Folder | Status |
 | --- | --- | --- |
-| Post-MVP competitive gap closeout | `_plan/260506_post_mvp_gap_closeout/` | Deferred backlog; not fully shipped. |
-| Oracle ZIP browser bundle proposal | `_plan/260513_oracle_zip_bundle_proposal/` | External upstream proposal draft; no local agbrowse implementation authority. |
-| Adaptive Fetch v2 hardening | `_plan/260515_adaptive_fetch_v2_hardening/` | Follow-up planning after v2; not closed. |
-| Provider expansion | `_plan/260519_provider_expansion/` | Deferred provider roadmap for Claude, Perplexity, NotebookLM. |
-| Codebase audit backlog | `_plan/260603_codebase_audit/` | Historical audit + issue tracker; keep grouped until separately closed. |
-| K-BrowseComp search gap analysis | `_plan/260608_kbrowsecomp_search_gap/` | Research/spec complete; implementation deferred. |
 | Oracle stability gap analysis | `_plan/260608_oracle_stability_gap/` | Partial follow-up backlog; includes 2026-06-20 Oracle 0.15 delta and 31/32 PABCD follow-up plans. |
-| Legacy MVP phase plans | `_plan/legacy_mvp_phase_plans/` | Pre-closeout phase 8.1/9 planning references; grouped for audit hygiene. |
+| cli-jaw web-ai parity mirror | `_plan/260621_cli_jaw_webai_parity/` | External cli-jaw mirror plan; verify closeout in cli-jaw before moving from agbrowse `_plan`. |
 | Strict migration | `_plan/strict-migration/` | Deferred migration planning and arbitration notes. |
 
 Other grouped planning folders under `_plan/` remain until they receive a
@@ -40,14 +34,21 @@ separate closeout audit.
 
 | Topic | Folder | Closeout signal |
 | --- | --- | --- |
+| Post-MVP competitive gap closeout | `_fin/260506_post_mvp_gap_closeout/` | Historical competitive-gap plan set closed; any unshipped capabilities must be re-opened as fresh focused plans. |
 | UX blocker fixes | `_fin/260507_ux-blockers-p0p1/` | README maps fixes to implemented commits `ccb7051`, `1a4743b`, and `f7b0e97`. |
 | Oracle parity feature batch | `_fin/260508_oracle_parity/` | Implemented by `fe359a9` and follow-up commits. |
 | web-ai session rebinding hardening | `_fin/260510_webai_session_rebind_diff_plan.md` | Implemented by `276aeac`. |
+| Oracle ZIP browser bundle proposal | `_fin/260513_oracle_zip_bundle_proposal/` | External upstream proposal draft closed as reference material; no local agbrowse implementation authority. |
 | Oracle follow-up guardrails | `_fin/260513_oracle_followup_guardrails_diff_plan.md` | Implemented by `085cc83`. |
 | Adaptive Fetch v1 / Insane Search mirror | `_fin/260514_insane_search_adaptive_fetch/` | README status `implemented-v1`; shipped by `39708a3` and follow-ups. |
 | Adaptive Fetch v2 | `_fin/260515_adaptive_fetch_v2/` | Index status `implemented`; hardening follow-up remains in `_plan/`. |
+| Adaptive Fetch v2 hardening | `_fin/260515_adaptive_fetch_v2_hardening/` | Follow-up hardening research/patch matrix closed as planning evidence. |
+| Competitor skill trigger research | `_fin/260519_competitor_skill_trigger_research/` | Competitive, media, MCP, Runway, and skill-trigger research corpus closed; future work should fork focused implementation plans. |
+| Provider expansion | `_fin/260519_provider_expansion/` | Claude, Perplexity, and Gemini alias expansion plans closed as roadmap/reference material. |
 | Shared web-ai target lock | `_fin/260525_shared_web_ai_target_lock/` | Implemented by `602a700` and `e28f66e`. |
 | Runway MCP parity expansion | `_fin/260528_runway_mcp_parity_expansion/` | Implemented by `7458f64` and Runway continuity follow-ups. |
+| Codebase audit backlog | `_fin/260603_codebase_audit/` | Historical audit and issue tracker closed; current priorities now live in focused plan folders. |
+| K-BrowseComp search gap analysis | `_fin/260608_kbrowsecomp_search_gap/` | Research/spec and staged search-skill implementation plans closed as reference material. |
 | Defuddle reader candidate | `_fin/260610_defuddle_reader/` | Implementation result recorded; shipped by `631615d`. |
 | Background runtime hook research | `_fin/260611_background_runtime_hook/` | Research complete; cli-jaw implementation planning relocated. |
 | web-ai GPT Code Mode | `_fin/260611_webai_gpt_code_mode/` | ChatGPT-only beta implemented: single zip, multi-zip, JS-only retrieval. |
@@ -61,6 +62,10 @@ separate closeout audit.
 | MCP wait response recovery | `_fin/260621_mcp_wait_response_recovery/` | GitHub #79 PABCD: session-bound MCP wait/resume recovery and monotonic timeout handling. |
 | Tab stability MVV closeout | `_fin/260621_tab_stability_mvv_closeout/` | Final branch closeout plan for tab MVV, verification, push, and PR body `Closes #79`. |
 | npm Trusted release automation | `_fin/260621_npm_trusted_release_automation/` | GitHub Actions OIDC Trusted Publishing shipped; `agbrowse@0.1.15` published and tagged by release run `27892124575`. |
+| Poll stderr heartbeat | `_fin/260621_poll_stderr_heartbeat/` | Implemented by `8c7b0a3`: `web-ai/chatgpt.mjs` emits stderr `[poll]` progress lines during long streaming/stabilizing polls. |
+| Agent-safe update notice | `_fin/260622_update_notice/` | Stderr-only npm latest-version advisory shipped with JSON/MCP/CI/help skip policy and cached `BROWSER_AGENT_HOME/update-check.json`. |
+| Historical legacy docs | `_fin/_legacy/` | Pre-rewrite changelog/plan/research dumps relocated out of active root layout. |
+| Legacy MVP phase plans | `_fin/legacy_mvp_phase_plans/` | Pre-closeout phase 8.1/9 planning references relocated as historical closeout material. |
 
 ## `_fin/mvp/` topics
 

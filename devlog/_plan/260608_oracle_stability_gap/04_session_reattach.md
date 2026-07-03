@@ -1,6 +1,22 @@
 # 04 — Session Reattach / Resume
 
-Severity: **P1**
+Severity: **P1** — 🟡 **PARTIAL** (reattach/resume 구현됨; sidebar·DR-reattach만 OPEN; 2026-06-24 재감사)
+
+## 2026-06-24 Re-audit (v0.1.15)
+
+이 문서의 2026-06-08 분석은 "CDP 재연결/진행 중 응답 캡처 미지원"이라 했으나 둘 다 구현됨.
+
+| 항목 (2026-06-08, v0.1.7) | 현재 상태 (v0.1.15) | 증거 |
+| --- | --- | --- |
+| CDP 재연결 (기존 탭) | ✅ 해소 | `agbrowse web-ai sessions reattach <id>` → `resolveSessionPage`로 영속 탭 복원, `status: 'reattached'`/`'reattach-mismatch'` (`cli-sessions.mjs:114`) |
+| 진행 중 응답 캡처 | ✅ 해소 | `agbrowse web-ai sessions resume <id>` → 저장 세션에 `pollWebAi` 재실행 (`cli-sessions.mjs:91`) |
+| SIGINT 시 Chrome 유지 | 🟢 대체로 무의미 | web-ai는 Chrome을 소유하지 않고 CDP(기본 9222)로 **이미 실행 중인** Chrome에 연결. 따라서 web-ai 프로세스 종료가 Chrome을 죽이지 않음. `grep process.on(SIG → 0 hits`이지만 connect-over-CDP 모델 + `resume`/`reattach`로 in-flight 보호가 사실상 제공됨. |
+| Sidebar 대화 검색 복구 | ❌ **OPEN** | `openConversationFromSidebar` → 0 hits |
+| Deep Research reattach | ❌ **OPEN** | `chatgpt-deep-research.mjs`에 resume/reattach 경로 없음 (`researchMode:'deep'`만 영속) |
+
+남은 구현 대상(OPEN, jawdev 후보): sidebar conversationId 검색-열기, Deep Research 세션 reattach.
+
+> 아래 원본 분석(2026-06-08, v0.1.7 기준)은 역사적 기록으로 보존한다.
 
 ## Problem
 

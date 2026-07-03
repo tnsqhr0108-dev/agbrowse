@@ -84,6 +84,7 @@ import { createTab, closeTab, switchToTab, listManagedTabs } from './tab-manager
 import { cleanupIdleTabs, planCleanupIdleTabs, pickCleanupCandidates, isPinned, parseDuration, DEFAULT_MAX_TABS } from './tab-lifecycle.mjs';
 import { runAdaptiveFetchCli } from './adaptive-fetch/index.mjs';
 import { runRunwayCli } from './runway.mjs';
+import { maybeEmitUpdateNotice } from './update-check.mjs';
 import { planKoreanResearch } from './search-research/search-strategy.mjs';
 import { normalizeSearchResults } from './search-research/normalizer.mjs';
 import { enrichSearchResultsWithFetch } from './search-research/fetch-enrichment.mjs';
@@ -2271,6 +2272,11 @@ function formatBrowseEscalation(browsePlan) {
 }
 
 try {
+    await maybeEmitUpdateNotice({
+        argv: process.argv.slice(2),
+        dataDir: DATA_DIR,
+        packageRoot: PACKAGE_ROOT,
+    });
     switch (sub) {
         case 'research': {
             const result = await runResearchCli(process.argv.slice(3));
@@ -2663,7 +2669,11 @@ try {
                 break;
             }
 
-            const tabs = (await listManagedTabs(getPort())).map(tab => {
+            const managedTabs = await listManagedTabs(getPort()).catch(error => {
+                if (json) return [];
+                throw error;
+            });
+            const tabs = managedTabs.map(tab => {
                 const displayed = tabDisplayState(tab);
                 const activeCommand = activeCommandSummary(activeByTargetId.get(displayed.targetId));
                 return activeCommand ? { ...displayed, activeCommand } : displayed;
@@ -3429,6 +3439,14 @@ try {
     AGBROWSE_WEB_AI_AUTO_START=0
                            Disable web-ai headed auto-start
     AGBROWSE_JSON_ERRORS=1 Force JSON failure envelopes regardless of --json
+    AGBROWSE_UPDATE_CHECK=0
+                           Hide npm latest-version update notices
+    AGBROWSE_UPDATE_CHECK=1
+                           Force update notices outside JSON/MCP/help surfaces
+    AGBROWSE_UPDATE_CHECK_TTL=24h
+                           Cache TTL for update notices
+    AGBROWSE_UPDATE_CHECK_LATEST=0.1.16
+                           Override latest version for tests/diagnosis
     AGBROWSE_HEAVY_SITE_COMPAT=1
                            Relax COEP/COOP + hide automation hint at launch
                            (or pass: agbrowse start --heavy-site-compat)

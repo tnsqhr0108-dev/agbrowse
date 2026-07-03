@@ -1,7 +1,22 @@
 # 10 — P0 Patch Plan: Send Button Timeout + Selector Hardening
 
 Date: 2026-06-08
-Status: plan
+Status: ✅ **DONE** — 6개 변경 전부 agbrowse v0.1.15에 반영됨 (2026-06-24 재감사)
+
+## 2026-06-24 재감사 (v0.1.15)
+
+이 계획의 6개 변경이 모두 코드에 존재한다. 아래 "Re-assessment"의 중간값(5s/15s,
+"line 173/207")은 역사적 기록이며, 최종값 **20s(텍스트) / 45s(첨부)** 가 반영되었다.
+
+| 계획 변경 | 현재 상태 | 증거 |
+| --- | --- | --- |
+| Change 1/2 — timeout 파라미터화 | ✅ | `clickEnabledSendButton(page, timeoutMs = 8_000)` (`chatgpt-composer.mjs:355`), caller가 `options.sendButtonTimeoutMs` 전달 |
+| Change 3 — 셀렉터 확장 | ✅ | `form button[type="submit"]` (`:67`), `'button[aria-label*="Send" i]'` (`:69`) |
+| Change 4 — typedef `sendButtonTimeoutMs` | ✅ | `chatgpt-composer.mjs` ComposerOptions |
+| Change 5 — timeout 값 상향 5/15s → 20/45s | ✅ | `return ... ? 45_000 : 20_000` (`chatgpt-attachments.mjs:240`) |
+| Change 6 — submitPrompt에 timeout 전달 | ✅ | `submitTimeoutMs = sendButtonTimeoutMs(uploadPaths)` (`chatgpt.mjs:274`) |
+
+회귀 검증: `test/unit/stability-benchmarks.test.mjs` 22/22 통과.
 
 ## Re-assessment
 

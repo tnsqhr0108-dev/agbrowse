@@ -78,6 +78,7 @@ aliases: [agbrowse release gates, agbrowse 릴리즈 게이트, production readi
 | `npm run check:strict-baseline` (`node scripts/check-strict-baseline.mjs`) | strict-migration JSDoc opt-in baseline 회귀 차단 | 이미 strict로 옮긴 파일이 다시 untyped로 돌아가지 않게 한다 |
 | `npm run check:module-graph` | `scripts/check-module-graph.mjs` 모듈 의존성 그래프 회귀 검사 | leaf/utility layer 경계 보존 |
 | `npm run smoke:bins` | published bin entrypoint smoke (`agbrowse`, `agbrowse-vision-click`) | 패키징 후 bin shim이 부팅하는지 확인 |
+| update notice tests | `test/unit/browser-update-check.test.mjs`, `test/integration/cli-help.test.mjs` | 구버전 안내가 stderr-only이고 JSON/MCP/CI/help 표면을 오염하지 않는지 확인 |
 | `npm run typecheck` / `typecheck:checkjs` / `typecheck:checkjs-dom` | `tsc --noEmit` (root, JSDoc opt-in, DOM-aware JSDoc opt-in) | strict-migration 진행 표면이 깨지지 않는지 확인 |
 | `npm run pack:dry` | `npm pack --dry-run --json` | 패키징 manifest 회귀 확인 |
 | `npm run benchmark:trajectory` | offline trajectory bundle writer | score가 아니라 sanitized trajectory artifact 생성만 허용 |

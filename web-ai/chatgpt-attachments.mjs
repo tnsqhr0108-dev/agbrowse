@@ -2,9 +2,16 @@
 /// <reference types="playwright-core" />
 import { basename } from 'node:path';
 import { statSync } from 'node:fs';
+import {
+    IMAGE_ATTACHMENT_EXTENSIONS,
+    UPLOAD_BUTTON_SELECTORS,
+    findFirstFileInput,
+    isImageAttachmentPath,
+    scoreFileInputCandidate,
+    setFilesViaUploadSurface,
+} from './chatgpt-upload-surface.mjs';
 
 /** @typedef {import('playwright-core').Page} Page */
-/** @typedef {import('playwright-core').Locator} Locator */
 
 /**
  * @typedef {Object} AttachmentFile
@@ -73,17 +80,9 @@ const SOFT_SPREADSHEET_BYTES = 50 * 1024 * 1024;
 /** @type {Set<string>} */
 const UNSUPPORTED_EXTENSIONS = new Set(['.gdoc', '.gsheet', '.gslides']);
 /** @type {Set<string>} */
-const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.heic']);
-/** @type {Set<string>} */
 const SPREADSHEET_EXTENSIONS = new Set(['.csv', '.tsv', '.xls', '.xlsx']);
 
-export const UPLOAD_BUTTON_SELECTORS = [
-    'button[aria-label*="Upload" i]',
-    'button[aria-label*="Attach" i]',
-    'button[aria-label*="Add" i]',
-    'button[data-testid*="plus" i]',
-    'button:has-text("Upload")',
-];
+export { UPLOAD_BUTTON_SELECTORS, isImageAttachmentPath, scoreFileInputCandidate };
 
 /**
  * @param {string[]} fileNames
@@ -131,13 +130,6 @@ export function buildAttachmentReadyExpression(fileNames = []) {
         };
     })()`;
 }
-
-const FILE_INPUT_SELECTORS = [
-    'main input[type="file"]',
-    'form input[type="file"]',
-    'input[type="file"][multiple]',
-    'input[type="file"]',
-];
 
 const ATTACHMENT_CHIP_SELECTORS = [
     '[role="group"][aria-label$=".txt" i]',
@@ -187,7 +179,7 @@ export function preflightAttachment(file, options = {}) {
     if (file.sizeBytes > maxUploadBytes) {
         return { ok: false, rejectedReason: `file exceeds upload cap (${file.sizeBytes} bytes, cap ${maxUploadBytes})`, softWarnings, basename: file.basename, sizeBytes: file.sizeBytes, extension };
     }
-    if (IMAGE_EXTENSIONS.has(extension) && file.sizeBytes > maxImageBytes) {
+    if (IMAGE_ATTACHMENT_EXTENSIONS.has(extension) && file.sizeBytes > maxImageBytes) {
         return { ok: false, rejectedReason: `image exceeds upload cap (${file.sizeBytes} bytes, cap ${maxImageBytes})`, softWarnings, basename: file.basename, sizeBytes: file.sizeBytes, extension };
     }
     if (SPREADSHEET_EXTENSIONS.has(extension) && file.sizeBytes > SOFT_SPREADSHEET_BYTES) {
@@ -205,31 +197,6 @@ export function resolveUploadFileSizeCap(value, fallback = HARD_LIMIT_BYTES) {
     if (value === undefined || value === null || value === '') return fallback;
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-/**
- * @param {string} filePath
- * @returns {boolean}
- */
-export function isImageAttachmentPath(filePath) {
-    return IMAGE_EXTENSIONS.has(extractExtension(basename(filePath)));
-}
-
-/**
- * @param {{ selector?: string, accept?: string|null, multiple?: boolean, visible?: boolean, inComposer?: boolean }} inputMetadata
- * @param {{ isImageAttachment?: boolean }} options
- * @returns {number}
- */
-export function scoreFileInputCandidate(inputMetadata = {}, options = {}) {
-    const accept = String(inputMetadata.accept || '').toLowerCase();
-    const acceptsOnlyImages = accept && accept.split(',').every(part => part.trim().startsWith('image/'));
-    if (acceptsOnlyImages && options.isImageAttachment !== true) return Number.NEGATIVE_INFINITY;
-    let score = 0;
-    if (inputMetadata.inComposer) score += 20;
-    if (inputMetadata.visible) score += 10;
-    if (inputMetadata.multiple) score += 5;
-    if (acceptsOnlyImages && options.isImageAttachment === true) score += 3;
-    return score;
 }
 
 /**
@@ -255,23 +222,23 @@ export async function attachLocalFileLive(page, file, options = {}) {
         maxUploadBytes: options.maxUploadBytes,
         maxImageBytes: options.maxImageBytes,
     });
-    if (!preflight.ok) {
+    if (preflight.ok !== true) {
         return { ok: false, stage: 'attachment-preflight', error: preflight.rejectedReason || 'preflight rejected', usedFallbacks };
     }
     warnings.push(...preflight.softWarnings);
 
-    let inputSel = await findFirstFileInput(page, file);
-    if (!inputSel) {
-        await openUploadSurface(page, usedFallbacks, options.uploadTarget);
-        inputSel = await findFirstFileInput(page, file);
-    }
-    if (!inputSel) {
-        return { ok: false, stage: 'attachment-upload', error: 'composer file input not found', usedFallbacks };
-    }
-    try {
-        await page.locator(inputSel).first().setInputFiles(file.path, { timeout: 10_000 });
-    } catch (e) {
-        return { ok: false, stage: 'attachment-upload', error: `setInputFiles failed: ${/** @type {{message?: string}} */ (e)?.message}`, usedFallbacks };
+    const inputSel = await findFirstFileInput(page, file);
+    if (inputSel) {
+        try {
+            await page.locator(inputSel).first().setInputFiles(file.path, { timeout: 10_000 });
+        } catch (e) {
+            return { ok: false, stage: 'attachment-upload', error: `setInputFiles failed: ${/** @type {{message?: string}} */ (e)?.message}`, usedFallbacks };
+        }
+    } else {
+        const surfaceUpload = await setFilesViaUploadSurface(page, file.path, file, usedFallbacks, options.uploadTarget);
+        if (surfaceUpload.ok !== true) {
+            return { ok: false, stage: 'attachment-upload', error: surfaceUpload.error, usedFallbacks };
+        }
     }
     const accepted = await waitForAttachmentAcceptedLive(page, { timeoutMs: 45_000, fileNames: [file.basename] });
     if (!accepted.ok) return accepted;
@@ -313,7 +280,7 @@ export async function attachLocalFilesLive(page, files, options = {}) {
             maxUploadBytes: options.maxUploadBytes,
             maxImageBytes: options.maxImageBytes,
         });
-        if (!preflight.ok) {
+        if (preflight.ok !== true) {
             return { ok: false, stage: 'attachment-preflight', error: `${file.basename}: ${preflight.rejectedReason || 'preflight rejected'}`, usedFallbacks };
         }
         warnings.push(...preflight.softWarnings);
@@ -324,18 +291,18 @@ export async function attachLocalFilesLive(page, files, options = {}) {
     const batchIsImage = files.every(file => isImageAttachmentPath(file.basename || file.path || ''));
     const probeFile = { ...files[0], basename: batchIsImage ? files[0].basename : 'batch.bin' };
 
-    let inputSel = await findFirstFileInput(page, probeFile);
-    if (!inputSel) {
-        await openUploadSurface(page, usedFallbacks, options.uploadTarget);
-        inputSel = await findFirstFileInput(page, probeFile);
-    }
-    if (!inputSel) {
-        return { ok: false, stage: 'attachment-upload', error: 'composer file input not found', usedFallbacks };
-    }
-    try {
-        await page.locator(inputSel).first().setInputFiles(files.map(file => file.path), { timeout: 15_000 });
-    } catch (e) {
-        return { ok: false, stage: 'attachment-upload', error: `setInputFiles failed: ${/** @type {{message?: string}} */ (e)?.message}`, usedFallbacks };
+    const inputSel = await findFirstFileInput(page, probeFile);
+    if (inputSel) {
+        try {
+            await page.locator(inputSel).first().setInputFiles(files.map(file => file.path), { timeout: 15_000 });
+        } catch (e) {
+            return { ok: false, stage: 'attachment-upload', error: `setInputFiles failed: ${/** @type {{message?: string}} */ (e)?.message}`, usedFallbacks };
+        }
+    } else {
+        const surfaceUpload = await setFilesViaUploadSurface(page, files.map(file => file.path), probeFile, usedFallbacks, options.uploadTarget);
+        if (surfaceUpload.ok !== true) {
+            return { ok: false, stage: 'attachment-upload', error: surfaceUpload.error, usedFallbacks };
+        }
     }
     const accepted = await waitForAttachmentAcceptedLive(page, { timeoutMs: 60_000, fileNames: files.map(file => file.basename) });
     if (!accepted.ok) return accepted;
@@ -408,88 +375,6 @@ export async function verifySentTurnAttachmentLive(page, expectedFile = null) {
         return { ok: false, stage: 'attachment-upload', error: 'sent turn has no attachment evidence', usedFallbacks: [] };
     }
     return { ok: true, stage: 'attachment-verified', chipVisible: true, fileCount: evidence, usedFallbacks: [], warnings: [] };
-}
-
-/**
- * @param {Page} page
- * @param {string[]} usedFallbacks
- * @param {AttachmentTarget|null} [uploadTarget]
- * @returns {Promise<void>}
- */
-async function openUploadSurface(page, usedFallbacks, uploadTarget = null) {
-    if (uploadTarget?.selector) {
-        const clicked = await clickUploadButton(page, uploadTarget.selector);
-        if (clicked) {
-            await page.waitForTimeout(500);
-            return;
-        }
-    }
-    for (const sel of UPLOAD_BUTTON_SELECTORS) {
-        const loc = page.locator(sel).first();
-        if (!(await loc.isVisible().catch(() => false))) continue;
-        try {
-            await loc.click({ timeout: 3_000 });
-            await page.waitForTimeout(500);
-            return;
-        } catch (e) {
-            usedFallbacks.push(`upload-button-click-failed:${sel}:${/** @type {{message?: string}} */ (e)?.message}`);
-        }
-    }
-}
-
-/**
- * @param {Page} page
- * @param {string} selector
- * @returns {Promise<boolean>}
- */
-async function clickUploadButton(page, selector) {
-    const loc = page.locator(selector).first();
-    const visible = await loc.isVisible().catch(() => false);
-    const enabled = typeof loc.isEnabled === 'function'
-        ? await loc.isEnabled().catch(() => false)
-        : true;
-    if (!visible || !enabled) return false;
-    try {
-        await loc.click({ timeout: 3_000 });
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-/**
- * @param {Page} page
- * @param {AttachmentFile} file
- * @returns {Promise<string|null>}
- */
-async function findFirstFileInput(page, file) {
-    let best = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-    for (const sel of FILE_INPUT_SELECTORS) {
-        const loc = page.locator(sel).first();
-        if ((await page.locator(sel).count().catch(() => 0)) === 0) continue;
-        const accept = typeof loc.getAttribute === 'function'
-            ? await loc.getAttribute('accept').catch(() => null)
-            : null;
-        const multipleAttr = typeof loc.getAttribute === 'function'
-            ? await loc.getAttribute('multiple').catch(() => null)
-            : null;
-        const visible = typeof loc.isVisible === 'function'
-            ? await loc.isVisible().catch(() => false)
-            : false;
-        const score = scoreFileInputCandidate({
-            selector: sel,
-            accept,
-            multiple: multipleAttr !== null || sel.includes('multiple'),
-            visible,
-            inComposer: sel.startsWith('main') || sel.startsWith('form'),
-        }, { isImageAttachment: isImageAttachmentPath(file?.basename || file?.path || '') });
-        if (score > bestScore) {
-            best = sel;
-            bestScore = score;
-        }
-    }
-    return bestScore === Number.NEGATIVE_INFINITY ? null : best;
 }
 
 /**

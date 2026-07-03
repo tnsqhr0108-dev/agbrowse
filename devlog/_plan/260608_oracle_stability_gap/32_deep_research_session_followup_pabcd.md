@@ -1,8 +1,17 @@
 # 32 — Deep Research and Session Follow-up PABCD
 
-Date: 2026-06-20
-Status: PABCD plan
+Date: 2026-06-20 · 재감사 2026-06-24 (agbrowse v0.1.15)
+Status: PABCD plan — **impl-ready** (32.1/32.3 코드 부재 확인, 32.2 감사 완료)
 Parent: [30_oracle_0_15_delta_followup.md](30_oracle_0_15_delta_followup.md)
+
+## 2026-06-24 재감사 (v0.1.15)
+
+코드-진실 대조로 이 계획의 미구현 항목이 모두 확인됨 — 바로 구현 착수 가능:
+
+- **32.1 Deep Research target-scope**: `chatgpt-deep-research.mjs`의 `extractResearchReport`(`:168-198`)가 최신 assistant 텍스트 후 무조건 `page.frames()` 스캔. 제안 helper `isIncompleteDeepResearchText`/`chooseDeepResearchReportRead`/`normalizeDeepResearchReportText` **전부 부재**, incomplete-report 거부·`deep-research-not-started`·baseline 스코핑 **부재**. 현재 export는 `autoConfirmPlan`/`sendDeepResearch`뿐.
+- **32.2 Model picker**: 감사 완료(아래 표). 확정 gap = current-pill wait + bounded model-selection retry **2건**.
+- **32.3 Later-session guard**: `isSafeChatGptConversationUrl` **부재**; `withSessionPage`→`resolveSessionPage`가 `allowNavigate: true` 무조건(`tab-recovery.mjs:392`)이라 provider-root/external-URL fail-closed 가드 **부재**.
+- **32.4 Profile-copy**: 코드 전무 — 의도적 보류(결정 기록만).
 
 ## Purpose
 
@@ -117,24 +126,25 @@ Current agbrowse already has:
 - legacy Pro row rejection via `isLegacyProModelLabel(text)`
 - split-pill guardrails for standalone Heavy effort labels
 
-Audit against Oracle 0.14.1/0.15.0 before patching:
+#### Audit result (2026-06-24, v0.1.15) — 감사 완료, 확정 gap 2건
 
-- current Intelligence pill wait before defaulting
-- bounded retries for explicit model selection
-- Instant row support in simplified picker layouts
-- wrapper-row rejection in Intelligence dialog
-- failure envelope when requested effort cannot be verified
+| Oracle 0.14.1/0.15.0 항목 | agbrowse 현황 | 판정 |
+| --- | --- | --- |
+| current Intelligence pill wait/settle | **부재** — `selectChatGptModel`이 pill을 1회만 읽음(`chatgpt-model.mjs:223`), settle 루프 없음 | ❌ **patch 필요** |
+| bounded retries for explicit model selection | **부재** — 옵션 클릭 1회 + 고정 750ms + 재독 1회(`:234-238`); `for(i<3)` 루프는 `openModelMenu`/`closeModelMenu` 한정(`:348,:362`) | ❌ **patch 필요** |
+| Instant row support | **존재** — testId `model-switcher-gpt-5-5`/`gpt-5-3`, 라벨 `['Instant','즉시']`(`:53,:683,:918,:937`) | ✅ no-op |
+| wrapper-row rejection | **부분** — effort-row 거부(`isModelMenuOpen`, `:900`)는 있으나 명명된 "wrapper-row" 가드는 없음 | 🟡 선택적 |
+| failure envelope (effort 미검증) | **존재** — `selectChatGptEffort`가 `provider.model-mismatch` throw(`:539`) | ✅ no-op |
 
-Patch only if the audit finds a gap.
+이미 존재(no-op): simplified Intelligence menu(`:79,:481,:969`), Pro/Thinking effort 검증(`:539`), `isLegacyProModelLabel`(`:1042`), split-pill/Heavy 가드(`:826-858`), `readCheckedModelEvidence`(`:801`).
 
-#### IF PATCH NEEDED: MODIFY `web-ai/chatgpt-model.mjs`
+#### CONFIRMED PATCH: MODIFY `web-ai/chatgpt-model.mjs`
 
-Expected patch direction:
+확정된 2건만 패치한다 (다른 가드는 건드리지 않음):
 
-- Add bounded retry around `readCheckedModelEvidence()` after clicking.
-- Add helper to wait for current Intelligence pill text to settle.
-- Keep model-selection failures fail-closed when explicit model/effort was
-  requested.
+- `selectChatGptModel`(`:187` 부근)의 옵션 클릭 후 `readCheckedModelEvidence()`(`:237`) 호출을 **bounded retry**로 감싼다 (예: 최대 3회, 각 회 사이 재독).
+- current Intelligence pill 텍스트가 **settle**할 때까지 대기하는 helper 추가 후 default 선택 전에 호출.
+- 명시적 model/effort 요청 시 model-selection 실패는 **fail-closed** 유지 (기존 `:539` 동작 보존).
 
 #### TESTS
 

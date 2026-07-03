@@ -23,6 +23,9 @@ import {
 } from './session.mjs';
 import { WebAiError } from './errors.mjs';
 import { finalizeProviderTab } from './tab-finalizer.mjs';
+import { saveAssistantDownloadableFiles } from './chatgpt-files.mjs';
+import { observeAssistantResponse, recoverAssistantResponse } from './chatgpt-response-observer.mjs';
+import { diagnosticsEnabled, captureFailureDiagnostics } from './failure-diagnostics.mjs';
 import { recordActiveLease } from './tab-lease-store.mjs';
 import { createChatGptEditorAdapter } from './vendor-editor-contract.mjs';
 import {
@@ -30,6 +33,7 @@ import {
     attachLocalFilesLive,
     fileInfoFromPath,
     sendButtonTimeoutMs,
+    UPLOAD_BUTTON_SELECTORS as CHATGPT_UPLOAD_SELECTORS,
     verifySentTurnAttachmentLive,
 } from './chatgpt-attachments.mjs';
 import { selectChatGptModel, chatGptModelCapabilityProbe } from './chatgpt-model.mjs';
@@ -40,7 +44,7 @@ import { resolveTargetForIntent } from './target-resolver.mjs';
 import { createTraceContext, getSessionTrace, recordTraceStep, summarizeTraceSteps } from './action-trace.mjs';
 import { appendTraceToSession } from './trace-persistence.mjs';
 import { isPageDeathError } from './tab-recovery.mjs';
-import { waitForConversationReady, isProviderUrl } from './navigation-ready.mjs';
+import { waitForConversationReady, isProviderUrl, shouldNavigateToRequestedProviderUrl, waitForPageUrl } from './navigation-ready.mjs';
 import { collectImages, isImageOnlyGeneratedImageChromeText } from './chatgpt-images.mjs';
 import { resolveArtifactsDir } from './session-artifacts.mjs';
 import { sendDeepResearch } from './chatgpt-deep-research.mjs';
@@ -99,11 +103,6 @@ export async function renderWebAi(input = {}) {
     };
 }
 
-const CHATGPT_UPLOAD_SELECTORS = [
-    'button[aria-label*="Upload" i]',
-    'button[aria-label*="Attach" i]',
-    'button[data-testid*="plus" i]',
-];
 const CHATGPT_STOP_SELECTORS = [
     'button[data-testid="stop-button"]',
     'button[aria-label*="Stop" i]',
@@ -162,7 +161,10 @@ export async function sendWebAi(deps, input = {}) {
     const envelope = normalizeEnvelope(input);
     if (input.url) {
         const page = await deps.getPage();
-        await page.goto(input.url, { waitUntil: 'load', timeout: 30_000 });
+        const currentUrl = await waitForPageUrl(page, { state: 'load' });
+        if (shouldNavigateToRequestedProviderUrl(currentUrl, input.url)) {
+            await page.goto(input.url, { waitUntil: 'load', timeout: 30_000 });
+        }
         const redirectedUrl = page.url();
         await waitForConversationReady(page, redirectedUrl);
         if (redirectedUrl !== input.url && isProviderUrl(redirectedUrl)) {
@@ -356,6 +358,14 @@ export async function pollWebAi(deps, input = {}) {
     let stableText = '';
     let stableSince = 0;
     let lastHeartbeat = 0;
+    // 33 short-circuit: a MutationObserver wakes the loop as soon as the response
+    // settles (bounded so it self-disconnects). The poller stays AUTHORITATIVE —
+    // it still reads + verifies every tick; this only reduces wait latency, so the
+    // worst case (observer never fires / errors) is identical 500ms polling.
+    const observerBudgetMs = Math.min(Math.max(0, deadline - Date.now()), 120_000);
+    let observerWake = observerBudgetMs > 1_000
+        ? observeAssistantResponse(page, { baselineAssistantCount: baseline.assistantCount, timeoutMs: observerBudgetMs })
+        : null;
     while (Date.now() <= deadline) {
         try {
         if (session?.targetId) {
@@ -465,6 +475,26 @@ export async function pollWebAi(deps, input = {}) {
                         }
                     }
                     if (session && !input.skipFinalize) {
+                        // Capture generic assistant-turn downloadable files (CSV/PDF/ZIP/...)
+                        // before archive. Separate from code-mode ZIP (code-artifact.mjs,
+                        // not on this path) and generated images (handled above). Never
+                        // throws past its boundary; only adds warnings.
+                        try {
+                            const fileCdp = await deps.getCdpSession?.();
+                            if (fileCdp) {
+                                try {
+                                    const fileResult = await saveAssistantDownloadableFiles(fileCdp, deps, {
+                                        sessionId: session.sessionId,
+                                        baselineAssistantCount: baseline?.assistantCount || 0,
+                                    });
+                                    if (fileResult.warnings?.length) warnings.push(...fileResult.warnings);
+                                } finally {
+                                    await fileCdp.detach?.().catch(() => undefined);
+                                }
+                            }
+                        } catch (err) {
+                            warnings.push(`file-artifact-capture-failed:${/** @type {any} */ (err)?.message || 'unknown'}`);
+                        }
                         await finalizeProviderTab(deps, { vendor, session: /** @type {any} */ (session), page, answerText, warnings, archiveFlag: input.archiveFlag });
                     }
                     return withAnswerArtifact({
@@ -489,7 +519,16 @@ export async function pollWebAi(deps, input = {}) {
             stableText = '';
             stableSince = 0;
         }
-        await page.waitForTimeout(500);
+        if (observerWake) {
+            // Wake early when the observer signals settle; else cap at 500ms.
+            // Once it resolves, stop racing it (plain polling thereafter).
+            await Promise.race([
+                page.waitForTimeout(500),
+                observerWake.then(() => { observerWake = null; }, () => { observerWake = null; }),
+            ]);
+        } else {
+            await page.waitForTimeout(500);
+        }
         } catch (pollErr) {
             if (isPageDeathError(pollErr)) {
                 if (session) updateSession(session.sessionId, { status: 'crashed' });
@@ -504,6 +543,40 @@ export async function pollWebAi(deps, input = {}) {
             }
             throw pollErr;
         }
+    }
+
+    // 33 3rd-tier recovery: the poller hit the deadline. Re-read the latest
+    // assistant turn once — recovers a final answer the loop missed (e.g. a late
+    // DOM settle). Session polls only (recovery persists to the session).
+    if (session) {
+        const recovered = await recoverAssistantResponse(page, {
+            baselineAssistantCount: baseline.assistantCount,
+            isFinalAnswer,
+        });
+        if (recovered?.text) {
+            const answerText = recovered.text;
+            if (!input.skipFinalize) {
+                await finalizeProviderTab(deps, { vendor, session: /** @type {any} */ (session), page, answerText, archiveFlag: input.archiveFlag });
+            }
+            return withAnswerArtifact({
+                ok: true,
+                vendor,
+                status: 'complete',
+                url: page.url(),
+                sessionId: session.sessionId,
+                answerText,
+                baseline,
+                usedFallbacks: ['recovery'],
+                warnings: ['response-recovered-after-timeout'],
+                responseStableMs: 0,
+            });
+        }
+    }
+
+    // 34 diagnostics: on the timeout path (recovery already failed), capture a
+    // DOM snapshot + screenshot when gated. Fire-and-forget; never throws.
+    if (session && diagnosticsEnabled(input)) {
+        await captureFailureDiagnostics(deps, { sessionId: session.sessionId, context: 'response-timeout', page });
     }
 
     if (input.allowCopyMarkdownFallback === true && stableText) {

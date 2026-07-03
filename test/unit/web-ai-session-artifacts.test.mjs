@@ -50,3 +50,72 @@ describe('web-ai session artifacts', () => {
         expect(saved.error).toMatch(/ENOTDIR|not a directory/i);
     });
 });
+
+describe('web-ai file artifacts (kind:file)', () => {
+    it('saves a generic file artifact preserving the extension', async () => {
+        const { createSession, getSession } = await import('../../web-ai/session.mjs');
+        const { trySaveFileArtifact, appendArtifactRecord, resolveArtifactsDir } = await import('../../web-ai/session-artifacts.mjs');
+        const { existsSync, readFileSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'hi', attachmentPolicy: 'inline-only' });
+
+        const res = trySaveFileArtifact(session.sessionId, {
+            filename: 'result.csv',
+            buffer: Buffer.from('a,b\n1,2\n'),
+            mimeType: 'text/csv',
+            sourceUrl: 'https://chatgpt.com/backend-api/files/file_a/download',
+        });
+        if (!res.ok) throw new Error('expected save to succeed: ' + res.error);
+        expect(res.descriptor).toMatchObject({ kind: 'file', label: 'result.csv', path: 'result.csv', mimeType: 'text/csv' });
+        const full = join(resolveArtifactsDir(session.sessionId), res.descriptor.path);
+        expect(existsSync(full)).toBe(true);
+        expect(readFileSync(full, 'utf8')).toContain('a,b');
+
+        appendArtifactRecord(session.sessionId, res.descriptor);
+        expect(getSession(session.sessionId).artifacts).toHaveLength(1);
+    });
+
+    it('falls back to the MIME subtype when the filename has no extension', async () => {
+        const { createSession } = await import('../../web-ai/session.mjs');
+        const { trySaveFileArtifact } = await import('../../web-ai/session-artifacts.mjs');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'hi', attachmentPolicy: 'inline-only' });
+        const res = trySaveFileArtifact(session.sessionId, {
+            filename: 'chatgpt-file-1',
+            buffer: Buffer.from('PK'),
+            mimeType: 'application/zip',
+        });
+        if (!res.ok) throw new Error('expected save to succeed: ' + res.error);
+        expect(res.descriptor.path).toBe('chatgpt-file-1.zip');
+    });
+
+    it('returns an artifact-file failure result on write error', async () => {
+        const { createSession } = await import('../../web-ai/session.mjs');
+        const { trySaveFileArtifact } = await import('../../web-ai/session-artifacts.mjs');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'hi', attachmentPolicy: 'inline-only' });
+        const res = trySaveFileArtifact(session.sessionId, {
+            filename: 'x.bin',
+            // @ts-expect-error force a write failure
+            buffer: undefined,
+            mimeType: 'application/octet-stream',
+        });
+        expect(res.ok).toBe(false);
+        if (res.ok) throw new Error('expected failure');
+        expect(res.stage).toBe('artifact-file');
+    });
+
+    it('dedupes file artifacts separately from image artifacts at the same path', async () => {
+        const { createSession, getSession } = await import('../../web-ai/session.mjs');
+        const { appendArtifactRecord } = await import('../../web-ai/session-artifacts.mjs');
+        const session = createSession({ vendor: 'chatgpt', prompt: 'hi', attachmentPolicy: 'inline-only' });
+        const at = new Date().toISOString();
+        appendArtifactRecord(session.sessionId, { kind: 'file', label: 's', path: 'shared.dat', mimeType: 'application/octet-stream', sizeBytes: 1, savedAt: at });
+        appendArtifactRecord(session.sessionId, { kind: 'image', label: 's', path: 'shared.dat', mimeType: 'image/png', sizeBytes: 2, savedAt: at });
+        expect(getSession(session.sessionId).artifacts).toHaveLength(2);
+
+        appendArtifactRecord(session.sessionId, { kind: 'file', label: 's', path: 'shared.dat', mimeType: 'application/octet-stream', sizeBytes: 99, savedAt: at });
+        const arts = getSession(session.sessionId).artifacts;
+        expect(arts).toHaveLength(2);
+        expect(arts.find((a) => a.kind === 'file').sizeBytes).toBe(99);
+        expect(arts.find((a) => a.kind === 'image').sizeBytes).toBe(2);
+    });
+});

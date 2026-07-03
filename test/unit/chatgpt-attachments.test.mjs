@@ -9,9 +9,14 @@ import {
     preflightAttachment,
     scoreFileInputCandidate,
     sendButtonTimeoutMs,
+    UPLOAD_BUTTON_SELECTORS,
 } from '../../web-ai/chatgpt-attachments.mjs';
 
 describe('ChatGPT attachment upload surface', () => {
+    it('tracks the current ChatGPT plus button label for upload capability probes', () => {
+        expect(UPLOAD_BUTTON_SELECTORS).toContain('button[aria-label="Add files and more"]');
+    });
+
     it('prefers a resolver-selected upload target before scanning legacy selectors', async () => {
         const page = createUploadPage();
         const result = await attachLocalFileLive(page, {
@@ -30,6 +35,25 @@ describe('ChatGPT attachment upload surface', () => {
         expect(result.fileCount).toBeGreaterThan(0);
         expect(page.clickedUploadSelector).toBe('button[aria-label*="Attach" i]');
         expect(page.filePath).toBe('/tmp/example.txt');
+    });
+
+    it('opens the new ChatGPT plus menu and handles Add photos & files file chooser', async () => {
+        const page = createUploadPage({ twoStepUploadMenu: true, menuItemFileChooser: true });
+        const result = await attachLocalFileLive(page, {
+            path: '/tmp/context.txt',
+            basename: 'context.txt',
+            sizeBytes: 12,
+        });
+
+        expect(result).toMatchObject({
+            ok: true,
+            stage: 'attachment-uploaded',
+            chipVisible: true,
+        });
+        expect(page.clickedUploadSelector).toBe('[data-testid="composer-plus-btn"]');
+        expect(page.clickedMenuItem).toBe('Add photos & files');
+        expect(page.waitedForFileChooser).toBe(true);
+        expect(page.filePath).toBe('/tmp/context.txt');
     });
 
     it('uploads several mixed-type files through one setInputFiles array', async () => {
@@ -103,24 +127,42 @@ describe('ChatGPT attachment upload surface', () => {
     });
 });
 
-function createUploadPage() {
+function createUploadPage(options = {}) {
     const page = {
+        ...options,
         clickedUploadSelector: null,
+        clickedMenuItem: null,
         fileInputAvailable: false,
         filePath: null,
         chipVisible: false,
+        menuOpen: false,
+        waitedForFileChooser: false,
+        pendingFileChooser: null,
         waitForTimeout: async () => undefined,
+        keyboard: { press: async () => { page.menuOpen = false; } },
+        mouse: { click: async () => undefined },
+        waitForEvent: options.menuItemFileChooser
+            ? async eventName => {
+                if (eventName !== 'filechooser') return null;
+                page.waitedForFileChooser = true;
+                return new Promise(resolve => {
+                    page.pendingFileChooser = resolve;
+                });
+            }
+            : undefined,
         locator: selector => createUploadLocator(page, selector),
     };
     return page;
 }
 
 function createUploadLocator(page, selector) {
-    const isUploadButton = selector.includes('Attach') || selector.includes('Upload') || selector.includes('plus');
+    const isUploadButton = selector.includes('Attach') || selector.includes('Upload') || selector.includes('plus') || selector.includes('Add files');
     const isFileInput = selector.includes('input[type="file"]');
     const isChip = selector.includes('attachment') || selector.includes('file') || selector.includes('.txt');
+    const isMenuCandidateQuery = selector.includes('[role="menuitem"]') || selector.includes('[role="option"]');
     return {
         first: () => createUploadLocator(page, selector),
+        all: async () => (isMenuCandidateQuery && page.menuOpen ? [createUploadMenuItemLocator(page)] : []),
         count: async () => {
             if (isFileInput) return page.fileInputAvailable ? 1 : 0;
             if (isChip) return page.chipVisible ? 1 : 0;
@@ -132,12 +174,35 @@ function createUploadLocator(page, selector) {
         click: async () => {
             if (!isUploadButton) return;
             page.clickedUploadSelector = selector;
-            page.fileInputAvailable = true;
+            if (page.twoStepUploadMenu && selector.includes('plus')) page.menuOpen = true;
+            else page.fileInputAvailable = true;
         },
         setInputFiles: async filePath => {
             if (!isFileInput) throw new Error('not a file input');
             page.filePath = filePath;
             page.chipVisible = true;
+        },
+    };
+}
+
+function createUploadMenuItemLocator(page) {
+    return {
+        isVisible: async () => true,
+        innerText: async () => 'Add photos & files',
+        click: async () => {
+            page.clickedMenuItem = 'Add photos & files';
+            page.menuOpen = false;
+            if (page.menuItemFileChooser && page.pendingFileChooser) {
+                page.pendingFileChooser({
+                    setFiles: async filePath => {
+                        page.filePath = filePath;
+                        page.chipVisible = true;
+                    },
+                });
+                page.pendingFileChooser = null;
+                return;
+            }
+            page.fileInputAvailable = true;
         },
     };
 }

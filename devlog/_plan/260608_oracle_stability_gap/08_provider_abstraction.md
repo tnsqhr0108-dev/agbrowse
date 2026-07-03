@@ -1,6 +1,20 @@
 # 08 — Multi-Provider Architecture
 
-Severity: **P3**
+Severity: **P3** — 🟡 **PARTIAL** (명시적 ChatGPT EditorAdapter 추가됨; cross-provider만 OPEN; 2026-06-24 재감사)
+
+## 2026-06-24 Re-audit (v0.1.15)
+
+본문의 "프로바이더 인터페이스가 암묵적 모듈 계약뿐"이라는 표현은 일부 낡았다.
+v0.1.7 이후 명시적 `EditorAdapter` typedef + `createChatGptEditorAdapter()`가 추가됨
+(`vendor-editor-contract.mjs:24,57`: `waitForReady`/`getCommitBaseline`/`insertPrompt`/`submitPrompt`/`verifyPromptCommitted`),
+`chatgpt.mjs:223/230`, `chatgpt-multi-turn.mjs:78`, `chatgpt-deep-research.mjs:243`에서 소비됨.
+
+단 이 어댑터는 `vendor: 'chatgpt'` 하드코딩(ChatGPT 전용)이라, oracle식 **cross-provider** `ProviderDomAdapter` gap은 여전히 OPEN(P3, 장기).
+self-heal(`self-heal.mjs:99`), `semanticTargetsForVendor`, action-cache, ref-registry는 그대로 agbrowse 고유 강점.
+
+남은 구현 대상(OPEN, 장기): `EditorAdapter`를 vendor 일반화(현재 ChatGPT-scoped) + 공통 `runProviderFlow()`.
+
+> 아래 원본 분석(2026-06-08, v0.1.7 기준)은 역사적 기록으로 보존한다.
 
 ## Problem
 

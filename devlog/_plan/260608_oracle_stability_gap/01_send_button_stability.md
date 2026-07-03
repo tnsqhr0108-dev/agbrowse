@@ -1,6 +1,23 @@
 # 01 — Send Button Stability
 
-Severity: **P0**
+Severity: **P0** — ✅ **RESOLVED** (2026-06-24 re-audit, agbrowse v0.1.15)
+
+## 2026-06-24 Re-audit (v0.1.15)
+
+이 문서의 2026-06-08 분석은 agbrowse v0.1.7 기준이며 더 이상 코드와 일치하지 않는다.
+모든 gap이 `web-ai/chatgpt-composer.mjs` + `web-ai/chatgpt-attachments.mjs`에 구현 완료됨.
+
+| Gap (2026-06-08, v0.1.7) | 현재 상태 (v0.1.15) | 증거 |
+| --- | --- | --- |
+| Send timeout 8s 고정 | ✅ 해소 | `clickEnabledSendButton(page, timeoutMs = 8_000)` 파라미터화 (`chatgpt-composer.mjs:355`). 실제 호출은 `sendButtonTimeoutMs(uploadPaths)` → 텍스트 20s / 첨부 45s (`chatgpt-attachments.mjs:240`, `chatgpt.mjs:274`). 8s는 기본값일 뿐 실 경로에서 항상 덮어씀. |
+| Enter key fallback 없음 | ✅ 해소 | `await page.keyboard.press('Enter'); return { method: 'enter' }` (`chatgpt-composer.mjs:174-175`) |
+| `form button[type="submit"]` 누락 | ✅ 해소 | `SEND_BUTTON_SELECTORS`에 추가됨 (`chatgpt-composer.mjs:67`) |
+| Broad aria-label 누락 | ✅ 해소 | `'button[aria-label*="Send" i]'` (`chatgpt-composer.mjs:69`) — 좁은 "Send prompt"/"Send message" 셀렉터는 제거됨 |
+| Commit 검증 약함 | ✅ 해소 | turns + composer-cleared + stop-button + assistant-role 복합 검증 |
+
+회귀 검증: `test/unit/stability-benchmarks.test.mjs` B1.* (22/22 통과). 구현 근거는 동일 폴더 `10_p0_patch_plan.md`의 6개 변경 전부 반영.
+
+> 아래 원본 분석(2026-06-08, v0.1.7 기준)은 역사적 기록으로 보존한다.
 
 ## Problem
 

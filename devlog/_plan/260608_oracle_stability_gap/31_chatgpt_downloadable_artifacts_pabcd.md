@@ -1,7 +1,7 @@
 # 31 — ChatGPT Downloadable Artifacts PABCD
 
 Date: 2026-06-20
-Status: PABCD plan
+Status: PABCD plan; 2026-06-24 current-code re-audit complete
 Parent: [30_oracle_0_15_delta_followup.md](30_oracle_0_15_delta_followup.md)
 
 ## Purpose
@@ -16,6 +16,25 @@ has two narrower paths:
 This plan keeps code-mode ZIP strictness intact and adds a separate generic
 file artifact lane for normal ChatGPT answers that expose downloadable files.
 
+## 2026-06-24 Current-Code Re-audit
+
+The old "ZIP gap" wording is too broad. agbrowse already has several ZIP and
+artifact surfaces; the remaining Oracle delta is narrower: generic downloadable
+files from normal ChatGPT answers are not yet persisted as session artifacts.
+
+| Surface | Current agbrowse evidence | Status | Decision |
+| --- | --- | --- | --- |
+| Code-mode single ZIP retrieval | `web-ai/code-artifact.mjs`, `web-ai/cli.mjs` `code`/`code-extract`, `test/unit/web-ai-code-artifact.test.mjs` | Implemented | Do not widen this path; it is stricter than generic files because it validates ZIP structure and requires `PLAN.md`/`00_plan.md` for new code-mode artifacts. |
+| Code-mode multi-ZIP retrieval | `scanConversationForAllZips()`, `retrieveAllCodeArtifacts()`, `--multi-zip`, `--output-dir` | Implemented | Keep as code-mode only; generic file capture must not reuse stale tool-message assumptions from code mode. |
+| Generated images | `web-ai/chatgpt-images.mjs`, `session-artifacts.mjs` `kind: 'image'` | Implemented | Keep independent from generic downloadable files. |
+| Session artifacts | `web-ai/session-artifacts.mjs` supports `transcript`, `report`, `image` | Partial | Add `kind: 'file'` only when generic downloads are implemented. |
+| Context-package upload ZIP | `web-ai/context-pack/builder.mjs`, `web-ai/context-pack/file-selector.mjs`; `test/unit/web-ai-context-pack.test.mjs` covers text-source packaging/dry-run behavior | Text-only package implemented | Do not describe this as byte-preserving archive upload. Binary/archive/office inputs are excluded as `binary-or-non-text`; add focused test coverage before making that exclusion a release claim. |
+| User `--file` uploads | `web-ai/chatgpt.mjs`, `web-ai/chatgpt-attachments.mjs` | Implemented for direct local uploads | Out of scope for this download-side feature unless upload verification fails in a separate audit. |
+
+Implication: 31.1-31.3 should implement only the missing generic download lane.
+31.4 should stay an audit/decision item, not a hidden requirement for the P0
+download work.
+
 ## Priority Map
 
 | ID | Priority | Outcome |
@@ -23,7 +42,7 @@ file artifact lane for normal ChatGPT answers that expose downloadable files.
 | 31.1 | P0 | Generic assistant-turn downloadable file detection and safe URL/path allowlist |
 | 31.2 | P0 | Sequential browser/download attribution and session artifact records |
 | 31.3 | P1 | CLI/session visibility for saved generic file artifacts |
-| 31.4 | P2 | Byte-preserving upload-side ZIP/context-pack audit |
+| 31.4 | P2 | Upload-side context-pack/direct-file audit and explicit byte-preservation decision |
 
 ## P — Plan
 
@@ -40,6 +59,12 @@ separate because it has a stricter container-contract requirement.
 #### NEW `web-ai/chatgpt-files.mjs`
 
 Create a new module instead of widening `web-ai/code-artifact.mjs`.
+
+Do not import from `web-ai/code-artifact.mjs`. That module is conversation-JSON
+and code-mode ZIP oriented: it scans `/mnt/data/*.zip`, tries tool message ids
+newest-first, verifies ZIP central-directory structure, and enforces the
+code-agent plan-file contract. Generic downloadable files need DOM/current-turn
+scoping and browser filename attribution instead.
 
 Exports:
 
@@ -113,6 +138,8 @@ Rules:
 - Preserve the extension from the resolved filename when present.
 - Return `stage: 'artifact-file'` on save failure.
 - Keep `appendArtifactRecord()` dedupe by `(kind, path)`.
+- Keep `transcript`, `report`, and `image` descriptor behavior byte-for-byte
+  compatible.
 
 #### MODIFY `web-ai/chatgpt.mjs`
 
@@ -141,6 +168,8 @@ Rules:
 - Run after a final assistant answer is detected and before archive.
 - Do not run in `web-ai code` retrieval; code-mode continues to use
   `web-ai/code-artifact.mjs`.
+- Do not run in `web-ai code-extract`; that path intentionally recovers code
+  artifacts from an existing saved conversation.
 - Add warnings such as `file-artifact-save-failed:<reason>` without hiding the
   answer.
 - Append descriptors to the existing `session.artifacts` array.
@@ -248,16 +277,34 @@ Audit targets:
 
 - `web-ai/context-pack/`
 - `web-ai/chatgpt-attachments.mjs`
-- `web-ai/code-dev-context.mjs`
+- `skills/web-ai/modules/gpt-dev-agent-context.zip`
+
+Current known state:
+
+- `prepareContextForBrowser()` creates
+  `web-ai-context-package-<uuid>.zip` for upload transport.
+- `zipContextFiles()` writes `CONTEXT_PACKAGE.md` plus selected source files as
+  UTF-8 text entries through `archiver('zip', { zlib: { level: 6 } })`.
+- `readContextFile()` rejects binary-like inputs with `binary-or-non-text`;
+  therefore archive/office/media byte preservation is not a current claim.
+- `--file` upload is the direct path for user-provided archives and binary-ish
+  files; context packaging is a text-source transport.
 
 Questions:
 
-- Does the current context-pack writer preserve bytes for raw/archive/office
-  media files?
-- Are ZIP entries stored or deflated, and does that matter for ChatGPT upload
-  parsing?
-- Are source filenames, extensions, and relative paths preserved?
-- Does any text-bundle path still transform binary-ish input?
+- Should context-package remain explicitly text-only, with archives/office/media
+  routed through repeatable `--file` uploads?
+- If byte-preserving package mode is needed later, should it be a new transport
+  such as `--context-transport archive` rather than changing current upload
+  semantics?
+- Do deflated ZIP entries matter for ChatGPT upload parsing, or is the current
+  `archiver` output sufficient for text-source context?
+- Are source filenames, extensions, and relative paths preserved well enough for
+  text-source context packages?
 
 If a patch is needed, create a separate `33_...` implementation plan rather
 than mixing upload behavior into this P0 file-download slice.
+
+Recommended default: keep context-package upload text-only and document the
+byte-preserving path as repeatable `--file`. Revisit only if a real workflow
+requires bundling binary/archive/office files into a generated context package.

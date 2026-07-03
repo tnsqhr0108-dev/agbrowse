@@ -1,8 +1,23 @@
 # 20 — Stability Benchmark Suite (oracle-derived)
 
-Date: 2026-06-08
-Status: active
+Date: 2026-06-08 · 재감사 2026-06-24 (agbrowse v0.1.15)
+Status: active — ✅ **B1–B3 offline CLOSED** / 🟡 B4–B5 live 미검증
 Derived from: oracle vs agbrowse gap analysis (docs 01–08)
+
+## 2026-06-24 Re-audit (v0.1.15)
+
+오프라인 벤치(B1–B3)는 v0.1.15에서도 전부 통과. live 컴포넌트(B4–B5 및 B1–B3 일부)는 라이브 브라우저가 필요하여 미검증 상태.
+
+| Benchmark | 상태 (v0.1.15) | 증거 |
+| --- | --- | --- |
+| B1 send / B2 attach / B3 error (offline) | ✅ 통과 | `npx vitest run test/unit/stability-benchmarks.test.mjs` → **22 passed (22)** (2026-06-24 실행) |
+| B3 error code count (목표 ≥12) | ✅ 37/42 | `grep -rhoE "errorCode: ['\"][^'\"]+['\"]" web-ai/ \| sort -u \| wc -l` = 37 리터럴; 직접대입+`\|\|`폴백 포함 throwable 42 — 목표(≥12) 대비 3배+ |
+| B4 session resilience (live-only) | 🟡 미검증 | 라이브 브라우저 + Chrome 재시작 필요 |
+| B5 response capture (live-only) | 🟡 미검증 | 라이브 브라우저 + Pro 계정 필요 |
+
+테스트 파일(`test/unit/stability-benchmarks.test.mjs`)은 2026-06-08 이후 변경 없으나 v0.1.15 코드 대비 여전히 green.
+
+> 아래 원본 벤치 정의는 그대로 유효하다.
 
 ## Purpose
 

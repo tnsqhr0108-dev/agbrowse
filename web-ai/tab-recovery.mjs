@@ -1,5 +1,5 @@
 // @ts-check
-import { createTab, isTabAlive, getPageByTargetId, waitForPageByTargetId, listManagedTabs } from '../skills/browser/tab-manager.mjs';
+import { createTab, isTabAlive, getPageByTargetId, waitForPageByTargetId, listManagedTabs, closeTab } from '../skills/browser/tab-manager.mjs';
 import { updateSession, getSession, incrementRecoveryCount, listSessions } from './session.mjs';
 import { waitForConversationReady, isProviderUrl } from './navigation-ready.mjs';
 
@@ -224,6 +224,62 @@ export function isPageDeathError(err) {
 /** @typedef {ResolveSessionPageOk | ResolveSessionPageMismatch} ResolveSessionPageResult */
 
 /**
+ * Fail-closed guard for ChatGPT later-session / new-tab recovery targets
+ * (32.3). A safe target is an HTTPS ChatGPT URL that references a CONCRETE
+ * conversation (`/c/<id>`, incl. under a GPT prefix) — never the provider root,
+ * a foreign host, or a traversal/smuggling string. Used by 35.1's new-tab
+ * recovery and any later-session send to avoid landing on the wrong thread.
+ * @param {string|null|undefined} url
+ * @returns {boolean}
+ */
+export function isSafeChatGptConversationUrl(url) {
+    if (typeof url !== 'string' || url === '') return false;
+    if (url.includes('..') || url.includes('\\') || url.includes('\0')) return false;
+    let u;
+    try {
+        u = new URL(url);
+    } catch {
+        return false;
+    }
+    if (u.protocol !== 'https:') return false;
+    if (u.hostname !== 'chatgpt.com' && u.hostname !== 'chat.openai.com') return false;
+    return /\/c\/[A-Za-z0-9_-]+/.test(u.pathname);
+}
+
+/**
+ * New-tab conversation recovery (35.1). Opens a saved ChatGPT conversation URL
+ * in a FRESH tab — the agreed alternative to oracle's sidebar DOM-search
+ * (master plan 36 §2). The 32.3 guard runs FIRST, so an unsafe target never
+ * opens a tab. On URL mismatch the stray tab is closed. Never throws.
+ * @param {{ getPort: () => number }} deps
+ * @param {{ conversationUrl?: string|null }} [opts]
+ * @returns {Promise<{ opened: true, page: any, targetId: string, conversationUrl: string } | { opened: false, reason: string, targetId?: string|null }>}
+ */
+export async function openConversationInNewTab(deps, { conversationUrl } = {}) {
+    if (!isSafeChatGptConversationUrl(conversationUrl)) {
+        return { opened: false, reason: 'unsafe-conversation-url' };
+    }
+    const safeUrl = /** @type {string} */ (conversationUrl);
+    const port = deps.getPort();
+    let targetId = null;
+    try {
+        const newTab = await createTab(port, safeUrl);
+        targetId = newTab.targetId;
+        const newPage = await waitForPageByTargetId(port, targetId).catch(() => null);
+        if (!newPage) return { opened: false, reason: 'page-unavailable', targetId };
+        await waitForConversationReady(newPage, newPage.url()).catch(() => undefined);
+        if (!urlsCompatible(safeUrl, newPage.url())) {
+            await closeTab(port, targetId).catch(() => undefined);
+            return { opened: false, reason: 'conversation-mismatch' };
+        }
+        return { opened: true, page: newPage, targetId, conversationUrl: safeUrl };
+    } catch (err) {
+        if (targetId) await closeTab(port, targetId).catch(() => undefined);
+        return { opened: false, reason: `new-tab-failed:${/** @type {any} */ (err)?.message || 'unknown'}` };
+    }
+}
+
+/**
  * @param {string|null|undefined} storedUrl
  * @param {string|null|undefined} liveUrl
  */
@@ -344,6 +400,22 @@ export async function resolveSessionPage(deps, sessionId, options = {}) {
                 };
             }
         } else {
+            // 32.3 fail-closed: never navigate a ChatGPT session to a non-concrete
+            // target (provider root / foreign host / non-/c/ path) — that would
+            // open a new chat or the wrong thread instead of recovering this one.
+            if (current.vendor === 'chatgpt' && !isSafeChatGptConversationUrl(current.conversationUrl)) {
+                return {
+                    mismatch: true,
+                    page: null,
+                    targetId: /** @type {string} */ (current.targetId),
+                    session: current,
+                    recovered: false,
+                    strategy: 'existing-tab',
+                    warnings: [`refusing to navigate to unsafe ChatGPT target ${current.conversationUrl}; not a concrete /c/<id> conversation`],
+                    url: liveUrl,
+                    conversationUrl: current.conversationUrl,
+                };
+            }
             await page.goto(current.conversationUrl, { waitUntil: 'load', timeout: 30_000 });
             const finalUrl = page.url();
             await waitForConversationReady(page, finalUrl);
