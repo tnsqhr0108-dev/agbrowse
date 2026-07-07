@@ -42,17 +42,27 @@ node_major() {
   node -p "Number(process.versions.node.split('.')[0])"
 }
 
-install_chrome_debian() {
+install_browser_debian() {
   need_cmd sudo
   need_cmd curl
-  need_cmd gpg
-  sudo install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
-    | sudo gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg
-  echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
-    | sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null
-  sudo apt-get update
-  sudo apt-get install -y google-chrome-stable xvfb xauth
+  local arch
+  arch="$(dpkg --print-architecture)"
+  if [ "$arch" = "amd64" ]; then
+    need_cmd gpg
+    sudo install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+      | sudo gpg --dearmor -o /etc/apt/keyrings/google-linux.gpg
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-linux.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+      | sudo tee /etc/apt/sources.list.d/google-chrome.list >/dev/null
+    sudo apt-get update
+    sudo apt-get install -y google-chrome-stable xvfb xauth
+  elif [ "$arch" = "arm64" ]; then
+    sudo apt-get update
+    sudo apt-get install -y chromium-browser chromium xvfb xauth || sudo apt-get install -y chromium-browser xvfb xauth
+  else
+    echo "Unsupported browser install architecture: $arch" >&2
+    exit 1
+  fi
 }
 
 if ! command -v node >/dev/null 2>&1; then
@@ -71,8 +81,10 @@ need_cmd codex
 if [ "$INSTALL_CHROME" -eq 1 ]; then
   if command -v google-chrome-stable >/dev/null 2>&1; then
     echo "google-chrome-stable already installed."
+  elif command -v chromium >/dev/null 2>&1 || command -v chromium-browser >/dev/null 2>&1; then
+    echo "Chromium already installed."
   elif command -v apt-get >/dev/null 2>&1; then
-    install_chrome_debian
+    install_browser_debian
   else
     echo "--install-chrome currently supports Debian/Ubuntu apt hosts only." >&2
     exit 1
@@ -90,6 +102,10 @@ agbrowse skills install --target "$CODEX_HOME_VALUE/skills" --force --json >/dev
 
 if command -v google-chrome-stable >/dev/null 2>&1; then
   export CHROME_BINARY_PATH="${CHROME_BINARY_PATH:-$(command -v google-chrome-stable)}"
+elif command -v chromium >/dev/null 2>&1; then
+  export CHROME_BINARY_PATH="${CHROME_BINARY_PATH:-$(command -v chromium)}"
+elif command -v chromium-browser >/dev/null 2>&1; then
+  export CHROME_BINARY_PATH="${CHROME_BINARY_PATH:-$(command -v chromium-browser)}"
 fi
 
 export CODEX_CONFIG="${CODEX_CONFIG:-"$CODEX_HOME_VALUE/config.toml"}"

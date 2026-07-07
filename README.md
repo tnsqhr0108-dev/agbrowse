@@ -115,6 +115,9 @@ installed:
 bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome
 ```
 
+The bootstrap installs Google Chrome on AMD64 hosts and Chromium on ARM64 hosts
+such as OCI Ampere A1.
+
 From Windows, deploy to an existing SSH host:
 
 ```powershell

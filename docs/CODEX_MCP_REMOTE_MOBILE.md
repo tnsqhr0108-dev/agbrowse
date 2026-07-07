@@ -51,6 +51,10 @@ available:
 bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome
 ```
 
+On AMD64 Debian/Ubuntu hosts, `--install-chrome` installs Google Chrome. On
+ARM64 hosts such as OCI Ampere A1, it installs Chromium and sets
+`CHROME_BINARY_PATH` to the detected browser path.
+
 For a VPS or always-on machine, install Codex and AGBROWSE on that host, sign in
 to Codex, and complete the ChatGPT web login in the browser profile controlled
 by AGBROWSE. Keep the host awake and online. A headless-only VPS still needs a
