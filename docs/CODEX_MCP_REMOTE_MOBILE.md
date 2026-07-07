@@ -44,9 +44,56 @@ npm install -g agbrowse
 bash ./scripts/install-codex-mcp-agbrowse.sh
 ```
 
+For a fresh always-on Linux/SSH host with Node.js 18+ and Codex already
+available:
+
+```bash
+bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome
+```
+
 For a VPS or always-on machine, install Codex and AGBROWSE on that host, sign in
 to Codex, and complete the ChatGPT web login in the browser profile controlled
-by AGBROWSE. Keep the host awake and online.
+by AGBROWSE. Keep the host awake and online. A headless-only VPS still needs a
+visible display path such as a desktop session, SSH X forwarding, or another
+secured remote-display method for the one-time ChatGPT web login and any later
+provider security checks.
+
+## SSH Does Not Replace An Awake Host
+
+SSH is the right way to move the project and shell work onto a server, but SSH
+does not make a powered-off PC keep running Codex. If Codex App on the PC is the
+client that owns the SSH connection, turning that PC off still stops the mobile
+remote-control path.
+
+For phone-first use while the daily PC is off, use one of these layouts:
+
+- Dedicated always-on Mac or Windows host running Codex App, AGBROWSE, browser
+  login, and the `agbrowse_web_ai` MCP server.
+- Dedicated always-on Mac or Windows host running Codex App, connected through
+  SSH to a Linux/VPS project host that has AGBROWSE installed.
+- Linux/VPS SSH host for shell/repository work, with a separate supported Codex
+  App host kept online to expose it to ChatGPT mobile.
+
+Pure Linux SSH is still useful, but it is not by itself a mobile Codex host for
+official ChatGPT mobile remote control.
+
+Example SSH config on the Codex App host:
+
+```text
+Host agbrowse-vps
+  HostName 203.0.113.10
+  User ubuntu
+  IdentityFile ~/.ssh/id_ed25519
+```
+
+Then verify:
+
+```bash
+ssh agbrowse-vps
+```
+
+After that, add the SSH host in Codex App settings and choose the remote project
+folder.
 
 ## Codex Configuration
 

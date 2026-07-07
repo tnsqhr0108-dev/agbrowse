@@ -108,6 +108,13 @@ the connected Codex host, not on the phone. If that host is powered off, use a
 dedicated always-on host or SSH remote environment. See
 [`docs/CODEX_MCP_REMOTE_MOBILE.md`](docs/CODEX_MCP_REMOTE_MOBILE.md).
 
+For a fresh always-on Linux/SSH host with Node.js 18+ and Codex already
+installed:
+
+```bash
+bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome
+```
+
 ## What It Is Good For
 
 - **Browser automation for agents**: navigate, snapshot, click refs, type,
