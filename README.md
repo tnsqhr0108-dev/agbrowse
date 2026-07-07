@@ -132,6 +132,11 @@ includes a devcontainer that installs Chromium, links the local `agbrowse`
 package, and prepares headless smoke checks. See
 [`docs/FREE_REMOTE_ALTERNATIVES.md`](docs/FREE_REMOTE_ALTERNATIVES.md).
 
+For a phone-triggered check while the daily PC is off, run the
+`AGBROWSE Remote Smoke` GitHub Actions workflow. It starts AGBROWSE headlessly
+on a GitHub-hosted runner, opens one URL, and uploads the snapshot/screenshot
+evidence.
+
 ## What It Is Good For
 
 - **Browser automation for agents**: navigate, snapshot, click refs, type,

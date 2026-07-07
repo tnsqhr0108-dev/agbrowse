@@ -10,9 +10,11 @@ CAPTCHA, security checks, or login requirements.
 
 1. Use GitHub Codespaces first for zero-cost remote development and AGBROWSE
    smoke checks.
-2. Use a Hugging Face Space only as an optional lightweight control panel or
+2. Use GitHub Actions manual workflow dispatch when you only need a mobile
+   button to run a headless AGBROWSE smoke check.
+3. Use a Hugging Face Space only as an optional lightweight control panel or
    demo surface.
-3. Use Google Cloud Always Free only if you can create a billing account and can
+4. Use Google Cloud Always Free only if you can create a billing account and can
    tolerate the small `e2-micro` machine shape.
 
 For stable ChatGPT web automation while the daily PC is off, a real always-on
@@ -58,7 +60,36 @@ If Codex CLI is installed in that Codespace, register MCP:
 bash ./scripts/install-codex-mcp-agbrowse.sh
 ```
 
-## Option 2: Hugging Face Space Control Panel
+## Option 2: GitHub Actions Mobile Trigger
+
+Best fit:
+
+- running AGBROWSE from a phone while the daily PC is off
+- opening one public URL in a headless browser
+- collecting status, active tab, snapshot, and screenshot evidence from the
+  workflow log/artifact
+
+Limits:
+
+- it is a short-lived CI job, not an interactive desktop
+- it does not keep a logged-in ChatGPT/Gemini/Grok browser profile
+- it is suitable for general browser smoke checks, not provider web-ai sessions
+
+Use the included workflow:
+
+```text
+GitHub repository
+  -> Actions
+  -> AGBROWSE Remote Smoke
+  -> Run workflow
+  -> enter URL
+```
+
+The workflow is defined at `.github/workflows/agbrowse-remote-smoke.yml`.
+It installs Chromium, starts AGBROWSE in headless mode, navigates to the input
+URL, prints an interactive snapshot, and uploads smoke evidence.
+
+## Option 3: Hugging Face Space Control Panel
 
 Best fit:
 
@@ -80,7 +111,7 @@ cannot configure custom sleep time and is paused after 48 hours of inactivity.
 Use the example under `examples/hf-space-control-panel/` only as a starting
 point. Keep `AGBROWSE_PANEL_TOKEN` set if the Space is public.
 
-## Option 3: Google Cloud Always Free
+## Option 4: Google Cloud Always Free
 
 Best fit:
 
@@ -115,6 +146,11 @@ GitHub repository
   -> npm install/link agbrowse
   -> optional Codex CLI + MCP registration
   -> headless browser smoke checks
+
+GitHub Actions
+  -> manual workflow_dispatch from phone
+  -> short-lived AGBROWSE headless smoke check
+  -> logs and screenshot artifact
 
 Optional Hugging Face Space
   -> lightweight status/control page
