@@ -115,6 +115,14 @@ installed:
 bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome
 ```
 
+From Windows, deploy to an existing SSH host:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-always-on-codex-host.ps1 `
+  -HostAlias agbrowse-vps `
+  -InstallChrome
+```
+
 ## What It Is Good For
 
 - **Browser automation for agents**: navigate, snapshot, click refs, type,

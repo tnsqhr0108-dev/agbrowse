@@ -95,6 +95,27 @@ ssh agbrowse-vps
 After that, add the SSH host in Codex App settings and choose the remote project
 folder.
 
+## Deploy To An Existing SSH Host
+
+When the host is already reachable by SSH from a Codex App machine:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-always-on-codex-host.ps1 `
+  -HostAlias agbrowse-vps `
+  -InstallChrome
+```
+
+The deploy script:
+
+- connects with `ssh <HostAlias>`
+- clones or fast-forwards the AGBROWSE repository on the remote host
+- runs `scripts/bootstrap-always-on-codex-host.sh`
+- registers the `agbrowse_web_ai` MCP server in the remote host's Codex config
+
+It requires the remote host to already have SSH access, Node.js 18+, npm, git,
+bash, and Codex CLI available. It does not buy or create a VPS, and it does not
+complete Codex or ChatGPT login for you.
+
 ## Codex Configuration
 
 The installer appends this MCP server:
