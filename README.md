@@ -44,6 +44,7 @@ registered as a Codex MCP server with `agbrowse web-ai mcp-server`.
 | Codex MCP and mobile remote setup | [`docs/CODEX_MCP_REMOTE_MOBILE.md`](docs/CODEX_MCP_REMOTE_MOBILE.md) | persistent Codex MCP registration guide |
 | Free remote alternatives | [`docs/FREE_REMOTE_ALTERNATIVES.md`](docs/FREE_REMOTE_ALTERNATIVES.md) | Codespaces-first fallback when VPS signup is unavailable |
 | Link feature coverage | [`docs/LINK_FEATURE_COVERAGE.md`](docs/LINK_FEATURE_COVERAGE.md) | DCInside AGBROWSE post and Jawcode feature mapping |
+| Mobile Codex bridge | [`docs/MOBILE_CODEX_BRIDGE.md`](docs/MOBILE_CODEX_BRIDGE.md) | ChatGPT mobile/web, Codex cloud, and MCP bridge architecture |
 | Architecture source | [`structure/INDEX.md`](structure/INDEX.md) | capability and release truth source |
 | Production notes | [`docs/production-readiness.md`](docs/production-readiness.md) | verification and risk checklist |
 
@@ -142,6 +143,12 @@ To verify the DCInside AGBROWSE/Jawcode feature mapping locally:
 
 ```bash
 npm run verify:link-features
+```
+
+To verify the mobile ChatGPT/Codex bridge architecture:
+
+```bash
+npm run verify:mobile-codex-bridge
 ```
 
 ## What It Is Good For

@@ -91,7 +91,9 @@ const checks = [
     ok:
       existsSync(join(root, '.github/workflows/agbrowse-remote-smoke.yml')) &&
       existsSync(join(root, '.devcontainer/devcontainer.json')) &&
-      existsSync(join(root, 'docs/FREE_REMOTE_ALTERNATIVES.md')),
+      existsSync(join(root, 'docs/FREE_REMOTE_ALTERNATIVES.md')) &&
+      existsSync(join(root, 'docs/MOBILE_CODEX_BRIDGE.md')) &&
+      coverageDoc.includes('Mobile Codex bridge'),
   },
   {
     id: 'packaged-support-files',

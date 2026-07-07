@@ -13,6 +13,12 @@ the host where Codex is running. If the host is reachable from the ChatGPT
 mobile app through Codex remote control, mobile prompts can use the host's
 AGBROWSE setup.
 
+For PC-off coding from a phone without maintaining a host, use official Codex
+web/cloud at `https://chatgpt.com/codex` with GitHub connected. For a custom
+ChatGPT mobile tool surface, use a ChatGPT App connector backed by an HTTPS MCP
+server that dispatches work to GitHub Actions, Codespaces, or an always-on
+host. See `docs/MOBILE_CODEX_BRIDGE.md`.
+
 ## What Becomes Persistent
 
 - The MCP registration in `~/.codex/config.toml`.
@@ -159,3 +165,8 @@ is more reliable than relying on shell command resolution.
 
 If the daily PC is off, use a separate always-on PC/VPS/SSH host. MCP cannot
 make a powered-off computer execute browser automation.
+
+If the goal is simply Codex-level coding from a phone while the PC is off, the
+lowest-friction path is official Codex web/cloud plus GitHub. Use the AGBROWSE
+MCP path when the task specifically needs the host's browser profile, local
+tools, or provider-web automation.

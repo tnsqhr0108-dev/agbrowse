@@ -8,7 +8,9 @@ CAPTCHA, security checks, or login requirements.
 
 ## Recommendation
 
-1. Use GitHub Codespaces first for zero-cost remote development and AGBROWSE
+0. Use official Codex web/cloud first when the goal is coding from a phone while
+   the daily PC is off and the project is in GitHub.
+1. Use GitHub Codespaces next for zero-cost remote development and AGBROWSE
    smoke checks.
 2. Use GitHub Actions manual workflow dispatch when you only need a mobile
    button to run a headless AGBROWSE smoke check.
@@ -20,6 +22,8 @@ CAPTCHA, security checks, or login requirements.
 For stable ChatGPT web automation while the daily PC is off, a real always-on
 host is still the correct architecture. Free ephemeral runtimes are not the same
 as a dedicated remote desktop or VPS.
+
+For the full mobile decision tree, see `docs/MOBILE_CODEX_BRIDGE.md`.
 
 ## Option 1: GitHub Codespaces
 
