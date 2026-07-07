@@ -19,6 +19,8 @@
     "structure/",
     "devlog/",
     "vitest.config.mjs",
+    "scripts/install-codex-mcp-agbrowse.ps1",
+    "scripts/install-codex-mcp-agbrowse.sh",
     "scripts/postinstall.mjs"
   ],
   "publishConfig": {

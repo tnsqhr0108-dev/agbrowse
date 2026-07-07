@@ -30,6 +30,8 @@ workflow. It gives an agent a small CLI surface for:
 
 It does not require a long-running MCP server. Each command is a short-lived
 Node process that reconnects to the same Chrome DevTools Protocol endpoint.
+When a persistent Codex tool surface is useful, the same runtime can also be
+registered as a Codex MCP server with `agbrowse web-ai mcp-server`.
 
 ## Public Surface
 
@@ -39,6 +41,7 @@ Node process that reconnects to the same Chrome DevTools Protocol endpoint.
 | Repository | [`lidge-jun/agbrowse`](https://github.com/lidge-jun/agbrowse) | public source |
 | Docs landing page | [`https://lidge-jun.github.io/agbrowse/`](https://lidge-jun.github.io/agbrowse/) | live GitHub Pages site |
 | Developer docs | [`docs/dev/index.html`](docs/dev/index.html) / [`docs/dev/ko/index.html`](docs/dev/ko/index.html) | English and Korean V1 docs |
+| Codex MCP and mobile remote setup | [`docs/CODEX_MCP_REMOTE_MOBILE.md`](docs/CODEX_MCP_REMOTE_MOBILE.md) | persistent Codex MCP registration guide |
 | Architecture source | [`structure/INDEX.md`](structure/INDEX.md) | capability and release truth source |
 | Production notes | [`docs/production-readiness.md`](docs/production-readiness.md) | verification and risk checklist |
 
@@ -80,6 +83,30 @@ agbrowse web-ai poll --vendor chatgpt --session "$SID" --timeout 1800
 Agent rule: observe before acting. Use `status`, `tabs`, `snapshot
 --interactive`, and `web-ai status` before mutating a page. Set
 `AGBROWSE_JSON_ERRORS=1` for parseable failure envelopes.
+
+## Codex MCP Registration
+
+AGBROWSE includes a stdio MCP bridge for Codex:
+
+```bash
+agbrowse web-ai mcp-server
+```
+
+Register it permanently in Codex config:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-codex-mcp-agbrowse.ps1
+```
+
+```bash
+bash ./scripts/install-codex-mcp-agbrowse.sh
+```
+
+After registration, restart Codex or start a new session so the
+`agbrowse_web_ai` MCP tools are loaded. For mobile use, the MCP server runs on
+the connected Codex host, not on the phone. If that host is powered off, use a
+dedicated always-on host or SSH remote environment. See
+[`docs/CODEX_MCP_REMOTE_MOBILE.md`](docs/CODEX_MCP_REMOTE_MOBILE.md).
 
 ## What It Is Good For
 
