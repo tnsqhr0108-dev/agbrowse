@@ -1,0 +1,33 @@
+{
+  "name": "agbrowse free remote",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "postCreateCommand": "bash scripts/bootstrap-codespaces-agbrowse.sh",
+  "forwardPorts": [9222, 9223, 7860],
+  "portsAttributes": {
+    "9222": {
+      "label": "Chrome DevTools Protocol 9222",
+      "onAutoForward": "silent"
+    },
+    "9223": {
+      "label": "AGBROWSE CDP 9223",
+      "onAutoForward": "silent"
+    },
+    "7860": {
+      "label": "Optional HF-style control panel",
+      "onAutoForward": "notify"
+    }
+  },
+  "remoteEnv": {
+    "AGBROWSE_JSON_ERRORS": "1",
+    "CDP_PORT": "9223",
+    "CHROME_BINARY_PATH": "/usr/bin/chromium"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "ms-vscode.vscode-typescript-next"
+      ]
+    }
+  }
+}

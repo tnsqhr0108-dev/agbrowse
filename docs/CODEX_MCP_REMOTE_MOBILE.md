@@ -81,6 +81,12 @@ For phone-first use while the daily PC is off, use one of these layouts:
 Pure Linux SSH is still useful, but it is not by itself a mobile Codex host for
 official ChatGPT mobile remote control.
 
+If a free VPS signup is unavailable, use GitHub Codespaces as the first
+zero-cost fallback for repository work and headless AGBROWSE smoke checks. It
+is not an always-on browser host, but it is enough to edit, test, and register
+MCP inside that remote development environment when Codex CLI is installed
+there. See `docs/FREE_REMOTE_ALTERNATIVES.md`.
+
 Example SSH config on the Codex App host:
 
 ```text

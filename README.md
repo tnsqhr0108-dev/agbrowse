@@ -42,6 +42,7 @@ registered as a Codex MCP server with `agbrowse web-ai mcp-server`.
 | Docs landing page | [`https://lidge-jun.github.io/agbrowse/`](https://lidge-jun.github.io/agbrowse/) | live GitHub Pages site |
 | Developer docs | [`docs/dev/index.html`](docs/dev/index.html) / [`docs/dev/ko/index.html`](docs/dev/ko/index.html) | English and Korean V1 docs |
 | Codex MCP and mobile remote setup | [`docs/CODEX_MCP_REMOTE_MOBILE.md`](docs/CODEX_MCP_REMOTE_MOBILE.md) | persistent Codex MCP registration guide |
+| Free remote alternatives | [`docs/FREE_REMOTE_ALTERNATIVES.md`](docs/FREE_REMOTE_ALTERNATIVES.md) | Codespaces-first fallback when VPS signup is unavailable |
 | Architecture source | [`structure/INDEX.md`](structure/INDEX.md) | capability and release truth source |
 | Production notes | [`docs/production-readiness.md`](docs/production-readiness.md) | verification and risk checklist |
 
@@ -125,6 +126,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-always-
   -HostAlias agbrowse-vps `
   -InstallChrome
 ```
+
+If a free VPS is unavailable, start with GitHub Codespaces. This repository
+includes a devcontainer that installs Chromium, links the local `agbrowse`
+package, and prepares headless smoke checks. See
+[`docs/FREE_REMOTE_ALTERNATIVES.md`](docs/FREE_REMOTE_ALTERNATIVES.md).
 
 ## What It Is Good For
 
