@@ -43,6 +43,7 @@ registered as a Codex MCP server with `agbrowse web-ai mcp-server`.
 | Developer docs | [`docs/dev/index.html`](docs/dev/index.html) / [`docs/dev/ko/index.html`](docs/dev/ko/index.html) | English and Korean V1 docs |
 | Codex MCP and mobile remote setup | [`docs/CODEX_MCP_REMOTE_MOBILE.md`](docs/CODEX_MCP_REMOTE_MOBILE.md) | persistent Codex MCP registration guide |
 | Free remote alternatives | [`docs/FREE_REMOTE_ALTERNATIVES.md`](docs/FREE_REMOTE_ALTERNATIVES.md) | Codespaces-first fallback when VPS signup is unavailable |
+| Link feature coverage | [`docs/LINK_FEATURE_COVERAGE.md`](docs/LINK_FEATURE_COVERAGE.md) | DCInside AGBROWSE post and Jawcode feature mapping |
 | Architecture source | [`structure/INDEX.md`](structure/INDEX.md) | capability and release truth source |
 | Production notes | [`docs/production-readiness.md`](docs/production-readiness.md) | verification and risk checklist |
 
@@ -136,6 +137,12 @@ For a phone-triggered check while the daily PC is off, run the
 `AGBROWSE Remote Smoke` GitHub Actions workflow. It starts AGBROWSE headlessly
 on a GitHub-hosted runner, opens one URL, and uploads the snapshot/screenshot
 evidence.
+
+To verify the DCInside AGBROWSE/Jawcode feature mapping locally:
+
+```bash
+npm run verify:link-features
+```
 
 ## What It Is Good For
 
