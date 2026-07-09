@@ -15,6 +15,7 @@ const BINS = [
   'bin/agbrowse-vision-click.mjs',
 ];
 
+const requiresExecutableMode = process.platform !== 'win32';
 let failed = 0;
 
 for (const rel of BINS) {
@@ -25,7 +26,7 @@ for (const rel of BINS) {
     continue;
   }
   const st = statSync(abs);
-  if (!(st.mode & 0o111)) {
+  if (requiresExecutableMode && !(st.mode & 0o111)) {
     console.error(`✗ not executable: ${rel}`);
     failed += 1;
   }

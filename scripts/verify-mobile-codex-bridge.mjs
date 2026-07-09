@@ -15,6 +15,7 @@ function hasAll(text, patterns) {
 const bridgeDoc = read('docs/MOBILE_CODEX_BRIDGE.md');
 const remoteDoc = read('docs/CODEX_MCP_REMOTE_MOBILE.md');
 const freeDoc = read('docs/FREE_REMOTE_ALTERNATIVES.md');
+const alwaysOnDoc = read('docs/ALWAYS_ON_HOST_RUNBOOK.md');
 const packageJson = read('package.json');
 
 const checks = [
@@ -41,6 +42,15 @@ const checks = [
       hasAll(freeDoc, ['GitHub Actions Mobile Trigger', 'AGBROWSE Remote Smoke']),
   },
   {
+    id: 'always-on-host-runbook',
+    ok:
+      existsSync(join(root, 'docs/ALWAYS_ON_HOST_RUNBOOK.md')) &&
+      existsSync(join(root, 'scripts/verify-always-on-codex-host.mjs')) &&
+      existsSync(join(root, 'scripts/install-agbrowse-systemd-user-service.sh')) &&
+      existsSync(join(root, 'scripts/agbrowse-cdp-service-loop.sh')) &&
+      hasAll(alwaysOnDoc, ['agbrowse-cdp.service', '--headless-smoke', 'Do not expose the CDP port']),
+  },
+  {
     id: 'api-key-boundary',
     ok:
       hasAll(bridgeDoc, ['OPENAI_API_KEY', 'No-API-Key Lane']) &&
@@ -48,7 +58,10 @@ const checks = [
   },
   {
     id: 'packaged-doc',
-    ok: packageJson.includes('"docs/"') && packageJson.includes('"scripts/verify-mobile-codex-bridge.mjs"'),
+    ok:
+      packageJson.includes('"docs/"') &&
+      packageJson.includes('"scripts/verify-mobile-codex-bridge.mjs"') &&
+      packageJson.includes('"scripts/verify-always-on-codex-host.mjs"'),
   },
 ];
 

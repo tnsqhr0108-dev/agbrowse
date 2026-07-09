@@ -6,7 +6,11 @@ param(
     [string]$RepoUrl = "https://github.com/tnsqhr0108-dev/agbrowse.git",
     [string]$Branch = "main",
     [switch]$InstallChrome,
+    [switch]$InstallSystemdService,
     [switch]$SkipAgbrowseInstall,
+    [switch]$Verify,
+    [switch]$HeadlessSmoke,
+    [string]$SmokeUrl = "https://example.com",
     [switch]$DryRun
 )
 
@@ -30,11 +34,33 @@ if ($InstallChrome) {
 if ($SkipAgbrowseInstall) {
     $bootstrapArgs += "--skip-agbrowse-install"
 }
+if ($InstallSystemdService) {
+    $bootstrapArgs += "--install-systemd-service"
+}
+
+if ($HeadlessSmoke) {
+    $Verify = $true
+}
+
+$verifyArgs = @()
+if ($InstallSystemdService) {
+    $verifyArgs += "--require-service"
+}
+if ($HeadlessSmoke) {
+    $verifyArgs += "--headless-smoke"
+    $verifyArgs += "--url"
+    $verifyArgs += $SmokeUrl
+}
 
 $remoteDirQ = Quote-RemotePath $RemoteDir
 $repoUrlQ = Quote-Remote $RepoUrl
 $branchQ = Quote-Remote $Branch
 $bootstrapArgLine = ($bootstrapArgs | ForEach-Object { Quote-Remote $_ }) -join " "
+$verifyArgLine = ($verifyArgs | ForEach-Object { Quote-Remote $_ }) -join " "
+$verifyLine = ""
+if ($Verify) {
+    $verifyLine = "node ./scripts/verify-always-on-codex-host.mjs $verifyArgLine"
+}
 
 $remoteScript = @"
 set -euo pipefail
@@ -58,6 +84,7 @@ else
 fi
 cd $remoteDirQ
 bash ./scripts/bootstrap-always-on-codex-host.sh $bootstrapArgLine
+$verifyLine
 "@
 
 if ($DryRun) {

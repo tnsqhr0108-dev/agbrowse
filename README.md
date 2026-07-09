@@ -42,6 +42,7 @@ registered as a Codex MCP server with `agbrowse web-ai mcp-server`.
 | Docs landing page | [`https://lidge-jun.github.io/agbrowse/`](https://lidge-jun.github.io/agbrowse/) | live GitHub Pages site |
 | Developer docs | [`docs/dev/index.html`](docs/dev/index.html) / [`docs/dev/ko/index.html`](docs/dev/ko/index.html) | English and Korean V1 docs |
 | Codex MCP and mobile remote setup | [`docs/CODEX_MCP_REMOTE_MOBILE.md`](docs/CODEX_MCP_REMOTE_MOBILE.md) | persistent Codex MCP registration guide |
+| Always-on host runbook | [`docs/ALWAYS_ON_HOST_RUNBOOK.md`](docs/ALWAYS_ON_HOST_RUNBOOK.md) | SSH/VPS host bootstrap, systemd service, and verifier |
 | Free remote alternatives | [`docs/FREE_REMOTE_ALTERNATIVES.md`](docs/FREE_REMOTE_ALTERNATIVES.md) | Codespaces-first fallback when VPS signup is unavailable |
 | Link feature coverage | [`docs/LINK_FEATURE_COVERAGE.md`](docs/LINK_FEATURE_COVERAGE.md) | DCInside AGBROWSE post and Jawcode feature mapping |
 | Mobile Codex bridge | [`docs/MOBILE_CODEX_BRIDGE.md`](docs/MOBILE_CODEX_BRIDGE.md) | ChatGPT mobile/web, Codex cloud, and MCP bridge architecture |
@@ -115,19 +116,28 @@ For a fresh always-on Linux/SSH host with Node.js 18+ and Codex already
 installed:
 
 ```bash
-bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome
+bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome --install-systemd-service
+node ./scripts/verify-always-on-codex-host.mjs --require-service --headless-smoke
 ```
 
 The bootstrap installs Google Chrome on AMD64 hosts and Chromium on ARM64 hosts
-such as OCI Ampere A1.
+such as OCI Ampere A1. The optional systemd service keeps a local CDP browser
+running on the host for headless smoke checks and MCP-backed work.
 
 From Windows, deploy to an existing SSH host:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-always-on-codex-host.ps1 `
   -HostAlias agbrowse-vps `
-  -InstallChrome
+  -InstallChrome `
+  -InstallSystemdService `
+  -Verify `
+  -HeadlessSmoke
 ```
+
+This script does not buy or create a VPS. It configures an SSH host that
+already exists and is reachable. See
+[`docs/ALWAYS_ON_HOST_RUNBOOK.md`](docs/ALWAYS_ON_HOST_RUNBOOK.md).
 
 If a free VPS is unavailable, start with GitHub Codespaces. This repository
 includes a devcontainer that installs Chromium, links the local `agbrowse`
@@ -149,6 +159,12 @@ To verify the mobile ChatGPT/Codex bridge architecture:
 
 ```bash
 npm run verify:mobile-codex-bridge
+```
+
+To verify an always-on host after SSH deployment:
+
+```bash
+npm run verify:always-on-host -- --require-service --headless-smoke
 ```
 
 ## What It Is Good For

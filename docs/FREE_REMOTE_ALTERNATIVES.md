@@ -23,7 +23,11 @@ For stable ChatGPT web automation while the daily PC is off, a real always-on
 host is still the correct architecture. Free ephemeral runtimes are not the same
 as a dedicated remote desktop or VPS.
 
-For the full mobile decision tree, see `docs/MOBILE_CODEX_BRIDGE.md`.
+For the full mobile decision tree, see `docs/MOBILE_CODEX_BRIDGE.md`. For the
+SSH/VPS setup path, see `docs/ALWAYS_ON_HOST_RUNBOOK.md`.
+
+Source notes in this document were refreshed against official public docs on
+2026-07-09.
 
 ## Option 1: GitHub Codespaces
 
@@ -43,6 +47,9 @@ Limits:
 Official GitHub docs currently state that personal accounts include free
 Codespaces compute and storage quota, and that personal Free accounts include
 15 GB-month storage and 120 hours compute time per month.
+
+Source:
+`https://docs.github.com/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces`
 
 ### Start
 
@@ -112,6 +119,8 @@ Official Hugging Face docs currently state that default Spaces provide 2 CPU
 cores, 16 GB RAM, and 50 GB non-persistent disk at no charge. Free CPU hardware
 cannot configure custom sleep time and is paused after 48 hours of inactivity.
 
+Source: `https://huggingface.co/docs/hub/en/spaces-gpus`
+
 Use the example under `examples/hf-space-control-panel/` only as a starting
 point. Keep `AGBROWSE_PANEL_TOKEN` set if the Space is public.
 
@@ -131,6 +140,8 @@ Limits:
 Official Google Cloud docs currently describe an Always Free `e2-micro` usage
 quota equivalent to running one eligible VM for the month, plus limits around
 disk and network usage.
+
+Source: `https://docs.cloud.google.com/free/docs/free-cloud-features`
 
 ## What Not To Expect
 

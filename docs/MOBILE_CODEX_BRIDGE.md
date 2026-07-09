@@ -39,6 +39,9 @@ Use this order:
 | ChatGPT App MCP bridge | ChatGPT web/mobile calls MCP tools | Yes if hosted remotely | Can dispatch AGBROWSE jobs to a runner/host | Needs HTTPS MCP hosting and auth |
 | Always-on desktop/VPS | Phone talks to hosted Codex/App/MCP stack | Yes | Best for logged-in provider web automation | Needs a real host and secure remote access |
 
+For the concrete always-on SSH/VPS host setup, use
+`docs/ALWAYS_ON_HOST_RUNBOOK.md`.
+
 ## What The ChatGPT App MCP Bridge Should Expose
 
 A minimal private connector should expose narrow tools:
@@ -132,4 +135,3 @@ npm run verify:mobile-codex-bridge
 The verifier checks that this repository documents the official Codex cloud
 path, Codex mobile remote-control path, ChatGPT App MCP bridge path, existing
 AGBROWSE remote smoke workflow, and the API-key/no-API-key boundary.
-

@@ -54,7 +54,8 @@ For a fresh always-on Linux/SSH host with Node.js 18+ and Codex already
 available:
 
 ```bash
-bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome
+bash ./scripts/bootstrap-always-on-codex-host.sh --install-chrome --install-systemd-service
+node ./scripts/verify-always-on-codex-host.mjs --require-service --headless-smoke
 ```
 
 On AMD64 Debian/Ubuntu hosts, `--install-chrome` installs Google Chrome. On
@@ -67,6 +68,9 @@ by AGBROWSE. Keep the host awake and online. A headless-only VPS still needs a
 visible display path such as a desktop session, SSH X forwarding, or another
 secured remote-display method for the one-time ChatGPT web login and any later
 provider security checks.
+
+For the concrete SSH/VPS host flow, including the user-level systemd service
+and verifier, see `docs/ALWAYS_ON_HOST_RUNBOOK.md`.
 
 ## SSH Does Not Replace An Awake Host
 
@@ -118,7 +122,10 @@ When the host is already reachable by SSH from a Codex App machine:
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy-always-on-codex-host.ps1 `
   -HostAlias agbrowse-vps `
-  -InstallChrome
+  -InstallChrome `
+  -InstallSystemdService `
+  -Verify `
+  -HeadlessSmoke
 ```
 
 The deploy script:
@@ -127,6 +134,8 @@ The deploy script:
 - clones or fast-forwards the AGBROWSE repository on the remote host
 - runs `scripts/bootstrap-always-on-codex-host.sh`
 - registers the `agbrowse_web_ai` MCP server in the remote host's Codex config
+- optionally installs `agbrowse-cdp.service`
+- optionally runs `scripts/verify-always-on-codex-host.mjs`
 
 It requires the remote host to already have SSH access, Node.js 18+, npm, git,
 bash, and Codex CLI available. It does not buy or create a VPS, and it does not

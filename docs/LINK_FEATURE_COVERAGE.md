@@ -24,7 +24,7 @@ OpenAI, ChatGPT, Codex, Gemini, Grok, GitHub, or Hugging Face hosted services.
 | 1-2 code mode | ChatGPT-only code artifact contract with zip extraction and plan-file gate | `agbrowse web-ai code --vendor chatgpt --output-zip result.zip ...` |
 | Search mode | research planning, result normalization, enrichment fetch, browse plan, adaptive URL fetch | `agbrowse research plan --query "..." --json`, `agbrowse fetch <url> --json` |
 | Web manipulation mode | CDP navigation, ref snapshots, click/type/press/scroll, screenshot, console/network, guarded JS evaluate | `agbrowse navigate`, `agbrowse snapshot --interactive`, `agbrowse click e1`, `agbrowse evaluate "document.title"` |
-| Mobile/PC-off smoke checks | GitHub Actions `AGBROWSE Remote Smoke` workflow and Codespaces devcontainer | `.github/workflows/agbrowse-remote-smoke.yml`, `.devcontainer/devcontainer.json` |
+| Mobile/PC-off smoke checks | GitHub Actions `AGBROWSE Remote Smoke` workflow, Codespaces devcontainer, and always-on SSH/VPS host runbook | `.github/workflows/agbrowse-remote-smoke.yml`, `.devcontainer/devcontainer.json`, `docs/ALWAYS_ON_HOST_RUNBOOK.md` |
 | Mobile Codex bridge | official Codex web/cloud first, then ChatGPT mobile remote control or HTTPS MCP connector when host/tools are needed | `docs/MOBILE_CODEX_BRIDGE.md`, `npm run verify:mobile-codex-bridge` |
 | Codex MCP persistence | `agbrowse web-ai mcp-server` and Codex config installers | `npm run test:mcp` |
 | Jawcode IPABCD workflow | local `jawcode-quality-workflow` skill plus MasterBook Jawcode setup docs | MasterBook `docs/AGBROWSE_JAWCODE_CODEX_SETUP.md` |
@@ -86,6 +86,12 @@ Mobile-triggered smoke run:
 ```text
 GitHub -> tnsqhr0108-dev/agbrowse -> Actions
   -> AGBROWSE Remote Smoke -> Run workflow
+```
+
+Always-on SSH/VPS host verification:
+
+```bash
+node scripts/verify-always-on-codex-host.mjs --require-service --headless-smoke
 ```
 
 ## Boundaries

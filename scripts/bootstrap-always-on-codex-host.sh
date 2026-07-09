@@ -5,10 +5,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CODEX_HOME_VALUE="${CODEX_HOME:-"$HOME/.codex"}"
 INSTALL_CHROME=0
 INSTALL_AGBROWSE=1
+INSTALL_SYSTEMD_SERVICE=0
 
 usage() {
   cat <<'USAGE'
-Usage: bootstrap-always-on-codex-host.sh [--install-chrome] [--skip-agbrowse-install]
+Usage: bootstrap-always-on-codex-host.sh [--install-chrome] [--skip-agbrowse-install] [--install-systemd-service]
 
 Prepare an always-on Linux/SSH Codex host for AGBROWSE MCP use.
 
@@ -16,8 +17,9 @@ This script does not create a VPS, sign in to Codex, or sign in to ChatGPT.
 Run it on the always-on host after Node.js 18+ and Codex are available.
 
 Options:
-  --install-chrome        Install google-chrome-stable with apt on Debian/Ubuntu.
-  --skip-agbrowse-install Do not run npm install -g agbrowse.
+  --install-chrome          Install Chrome/Chromium with apt on Debian/Ubuntu.
+  --skip-agbrowse-install   Do not run npm install -g agbrowse.
+  --install-systemd-service Install and start a user-level agbrowse-cdp.service.
 USAGE
 }
 
@@ -25,6 +27,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --install-chrome) INSTALL_CHROME=1 ;;
     --skip-agbrowse-install) INSTALL_AGBROWSE=0 ;;
+    --install-systemd-service) INSTALL_SYSTEMD_SERVICE=1 ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -114,6 +117,10 @@ export CDP_PORT="${CDP_PORT:-9223}"
 
 bash "$SCRIPT_DIR/install-codex-mcp-agbrowse.sh"
 
+if [ "$INSTALL_SYSTEMD_SERVICE" -eq 1 ]; then
+  bash "$SCRIPT_DIR/install-agbrowse-systemd-user-service.sh" --port "$CDP_PORT"
+fi
+
 agbrowse --help >/dev/null
 
 cat <<SUMMARY
@@ -132,6 +139,7 @@ Next manual steps on this always-on host:
    agbrowse start --headed --port "$CDP_PORT"
    agbrowse navigate https://chatgpt.com/
 4. Verify:
+   node "$SCRIPT_DIR/verify-always-on-codex-host.mjs" --headless-smoke
    agbrowse web-ai status --vendor chatgpt --url https://chatgpt.com/ --json
 
 Mobile can use AGBROWSE only while this always-on host stays awake and online.
