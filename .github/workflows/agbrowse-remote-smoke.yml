@@ -36,7 +36,11 @@ jobs:
       - name: Install Chromium for Playwright
         run: |
           npx playwright install chromium --with-deps
-          CHROME_PATH="$(find "$HOME/.cache/ms-playwright" -path '*/chrome-linux/chrome' -type f | head -n 1)"
+          CHROME_PATH="$(find "$HOME/.cache/ms-playwright" \
+            \( -path '*/chrome-linux/chrome' \
+               -o -path '*/chrome-linux64/chrome' \
+               -o -path '*/chrome-headless-shell-linux64/chrome-headless-shell' \) \
+            -type f | head -n 1)"
           if [ -z "$CHROME_PATH" ]; then
             echo "Chromium executable not found under ~/.cache/ms-playwright" >&2
             exit 1
