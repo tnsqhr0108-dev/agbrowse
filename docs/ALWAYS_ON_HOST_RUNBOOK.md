@@ -136,11 +136,19 @@ or copy `~/.browser-agent`; it contains browser profile state.
 
 ## Free Or No-Cost Options
 
-These options were checked against official public docs on 2026-07-09:
+These options were checked against official public docs on 2026-07-10:
 
 - GitHub Codespaces personal accounts include a free monthly quota, but a
   Codespace is not an always-on browser host.
   Source: https://docs.github.com/billing/managing-billing-for-github-codespaces/about-billing-for-github-codespaces
+- AWS Free Tier / Free Plan can provide short-term credits or EC2 micro
+  eligibility depending on the account, but it is not a permanent free VPS and
+  billing guardrails must be configured before running 24/7.
+  Sources: https://aws.amazon.com/free/ and https://aws.amazon.com/ec2/instance-types/t2/
+- Azure Free Account can provide 12-month VM free amounts for eligible
+  burstable VM sizes, but it is also time-limited and not a permanent free
+  browser host.
+  Source: https://azure.microsoft.com/en-us/pricing/free-services
 - Hugging Face free CPU Spaces can run demos/control panels, but free
   `cpu-basic` Spaces sleep after inactivity and are not a secure logged-in
   provider browser host.

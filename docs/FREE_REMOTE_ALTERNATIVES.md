@@ -14,9 +14,11 @@ CAPTCHA, security checks, or login requirements.
    smoke checks.
 2. Use GitHub Actions manual workflow dispatch when you only need a mobile
    button to run a headless AGBROWSE smoke check.
-3. Use a Hugging Face Space only as an optional lightweight control panel or
+3. Use AWS or Azure only when a time-limited free/credit VM is acceptable and
+   billing alerts/spending caps are configured before the VM is started.
+4. Use a Hugging Face Space only as an optional lightweight control panel or
    demo surface.
-4. Use Google Cloud Always Free only if you can create a billing account and can
+5. Use Google Cloud Always Free only if you can create a billing account and can
    tolerate the small `e2-micro` machine shape.
 
 For stable ChatGPT web automation while the daily PC is off, a real always-on
@@ -27,7 +29,7 @@ For the full mobile decision tree, see `docs/MOBILE_CODEX_BRIDGE.md`. For the
 SSH/VPS setup path, see `docs/ALWAYS_ON_HOST_RUNBOOK.md`.
 
 Source notes in this document were refreshed against official public docs on
-2026-07-09.
+2026-07-10.
 
 ## Option 1: GitHub Codespaces
 
@@ -100,7 +102,88 @@ The workflow is defined at `.github/workflows/agbrowse-remote-smoke.yml`.
 It installs Chromium, starts AGBROWSE in headless mode, navigates to the input
 URL, prints an interactive snapshot, and uploads smoke evidence.
 
-## Option 3: Hugging Face Space Control Panel
+## Option 3: AWS Free Tier / Free Plan EC2
+
+Best fit:
+
+- a temporary Linux SSH host for testing the always-on AGBROWSE host scripts
+- short-term PC-off AGBROWSE smoke checks or light Codex CLI work
+- users who are comfortable with AWS billing alarms, budgets, and account
+  cleanup
+
+Limits:
+
+- AWS is not a permanent free VPS replacement
+- current new-account offers can be credit/time based rather than an unlimited
+  always-free instance
+- EC2 micro instances are weak for full headed ChatGPT/Gemini/Grok browser
+  sessions
+- converting or using a paid account can incur charges for VM runtime, storage,
+  snapshots, data transfer, IPv4, or other resources
+
+Official AWS docs currently describe a new Free Tier account as receiving
+credits for a limited period and not charging unless converted to a paid plan.
+AWS EC2 T2 docs also describe `t2.micro` Free Tier eligibility as 750 hours per
+month for one year for new customers. Because account eligibility has changed
+over time, check the AWS Free Tier/EC2 console for the current account before
+running an instance 24/7.
+
+Sources:
+
+- `https://aws.amazon.com/free/`
+- `https://aws.amazon.com/ec2/instance-types/t2/`
+- `https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-free-tier-usage.html`
+
+Recommended AGBROWSE shape:
+
+```text
+Ubuntu EC2 micro instance
+  -> SSH key login only
+  -> billing alert/budget before launch
+  -> deploy-always-on-codex-host.ps1
+  -> verify-always-on-codex-host.mjs --headless-smoke
+```
+
+Use it for smoke and repository work first. Upgrade only if the hosted browser
+is too slow for provider web-ai.
+
+## Option 4: Azure Free Account VM
+
+Best fit:
+
+- a temporary Linux SSH host when AWS or Oracle is not available
+- users who already have Microsoft/Azure account verification available
+- testing AGBROWSE remote host bootstrap under a mainstream cloud provider
+
+Limits:
+
+- Azure VM free amounts are time-limited for new accounts, not a permanent free
+  browser host
+- B-series free VM sizes are small for Chromium and provider web UIs
+- managed disks, outbound bandwidth beyond the free allowance, public IPs, and
+  other resources can still matter for billing
+
+Official Azure docs currently describe free services for the first 12 months,
+always-free services, and virtual-machine free monthly amounts for eligible
+burstable VM sizes on new/free accounts.
+
+Sources:
+
+- `https://azure.microsoft.com/en-us/pricing/free-services`
+- `https://azure.microsoft.com/en-us/pricing/details/virtual-machines/windows/`
+- `https://azure.microsoft.com/en-au/pricing/purchase-options/azure-account`
+
+Recommended AGBROWSE shape:
+
+```text
+Ubuntu B-series Azure VM
+  -> SSH key login only
+  -> spending limit/budget before launch
+  -> deploy-always-on-codex-host.ps1
+  -> verify-always-on-codex-host.mjs --headless-smoke
+```
+
+## Option 5: Hugging Face Space Control Panel
 
 Best fit:
 
@@ -124,7 +207,7 @@ Source: `https://huggingface.co/docs/hub/en/spaces-gpus`
 Use the example under `examples/hf-space-control-panel/` only as a starting
 point. Keep `AGBROWSE_PANEL_TOKEN` set if the Space is public.
 
-## Option 4: Google Cloud Always Free
+## Option 6: Google Cloud Always Free
 
 Best fit:
 
@@ -166,6 +249,12 @@ GitHub Actions
   -> manual workflow_dispatch from phone
   -> short-lived AGBROWSE headless smoke check
   -> logs and screenshot artifact
+
+AWS/Azure free account VM
+  -> temporary SSH host
+  -> billing guardrails first
+  -> AGBROWSE bootstrap and verifier
+  -> not a permanent no-cost guarantee
 
 Optional Hugging Face Space
   -> lightweight status/control page
